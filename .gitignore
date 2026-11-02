@@ -1,0 +1,43 @@
+# つぶやき業務ログ — 漏えい防止の設定（準備資料 17 手順3-2、D-15）
+# 最初のコミットの前に作成。push のたびに git diff --cached --stat で差分を確認する。
+
+# 秘密情報（API キー・鍵・レジストリの認証トークン）
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.npmrc
+
+# 開発ログ・証拠ストア・OTel の出力（本来は作業フォルダの外 ~/tsubuyaki-z3/ に置く。念のため除外）
+*.jsonl
+*.log
+logs/
+otel*/
+
+# データ（SQLite の DB はコミットしない。合成データは生成スクリプトか JSON の元データで管理する）
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# 準備資料・開催前の資料（リポジトリの外に置くルール。FAQ Q4、D-14 訂正、D-19。念のため除外）
+preparation/
+event_records/
+VGDD*仕様書*
+
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+
+# Claude Code の個人設定
+.claude/settings.local.json
+
+# OS
+.DS_Store

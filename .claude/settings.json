@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "additionalDirectories": [
+      "../preparation"
+    ],
+    "deny": [
+      "Edit(../preparation/**)",
+      "Write(../preparation/**)",
+      "Edit(../event_records/**)",
+      "Write(../event_records/**)",
+      "Edit(~/tsubuyaki-worklog/preparation/**)",
+      "Write(~/tsubuyaki-worklog/preparation/**)",
+      "Edit(~/tsubuyaki-worklog/event_records/**)",
+      "Write(~/tsubuyaki-worklog/event_records/**)"
+    ]
+  }
+}
