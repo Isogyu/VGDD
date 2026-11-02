@@ -11,7 +11,11 @@
       "Edit(~/tsubuyaki-worklog/preparation/**)",
       "Write(~/tsubuyaki-worklog/preparation/**)",
       "Edit(~/tsubuyaki-worklog/event_records/**)",
-      "Write(~/tsubuyaki-worklog/event_records/**)"
+      "Write(~/tsubuyaki-worklog/event_records/**)",
+      "Edit(.claude/**)",
+      "Write(.claude/**)",
+      "Edit(CLAUDE.md)",
+      "Write(CLAUDE.md)"
     ]
   }
 }
