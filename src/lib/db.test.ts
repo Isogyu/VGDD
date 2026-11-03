@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { openDb, listUsers, getUser, initializeDb } from "./db";
-import { toJstIso, diffMinutes, formatMdHm } from "./time";
+import { toJstIso, diffMinutes, formatMdHm, formatDuration, formatDelta } from "./time";
 
 describe("db（node:sqlite）", () => {
   it("スキーマを適用し、固定ユーザー3人が入る。再初期化しても増えない", () => {
@@ -40,5 +40,20 @@ describe("time（JST 固定）", () => {
   });
   it("表示用の形", () => {
     expect(formatMdHm("2026-11-03T09:07:00+09:00")).toBe("11/3 09:07");
+  });
+  it("所要時間の表示：1分未満／分／時間と分", () => {
+    expect(formatDuration(0)).toBe("1分未満");
+    expect(formatDuration(1)).toBe("1分");
+    expect(formatDuration(45)).toBe("45分");
+    expect(formatDuration(60)).toBe("1時間0分");
+    expect(formatDuration(240)).toBe("4時間0分");
+    expect(formatDuration(275)).toBe("4時間35分");
+    expect(formatDuration(null)).toBe("—");
+  });
+  it("前回との差の表示", () => {
+    expect(formatDelta(-210)).toBe("前回より 3時間30分 短い");
+    expect(formatDelta(10)).toBe("前回より 10分 長い");
+    expect(formatDelta(0)).toBe("前回と同じ");
+    expect(formatDelta(null)).toBe("");
   });
 });

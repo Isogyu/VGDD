@@ -7,8 +7,8 @@ import { useCallback, useEffect, useState } from "react";
 import { parseCommand, normalizeTaskName } from "@/lib/commands";
 import { removeSubmittedPrefix } from "@/lib/input";
 import type { User } from "@/lib/db";
-import type { WorkSession, Note, KnowledgeHints } from "@/lib/sessions";
-import { formatHm, formatMdHm } from "@/lib/time";
+import type { WorkSession, Note, KnowledgeHints, HistoryItem } from "@/lib/sessions";
+import { formatHm, formatMdHm, formatDuration, formatDelta } from "@/lib/time";
 
 interface ActiveResponse {
   session: WorkSession | null;
@@ -32,6 +32,10 @@ export default function WorkScreen() {
   const [unknown, setUnknown] = useState("");
   const [pending, setPending] = useState<Pending | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [confirmEnd, setConfirmEnd] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [endUnknown, setEndUnknown] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -57,9 +61,13 @@ export default function WorkScreen() {
     window.localStorage.setItem(USER_KEY, userId);
     let cancelled = false;
     (async () => {
-      const r = await fetch(`/api/sessions/active?userId=${encodeURIComponent(userId)}`);
+      const [r, h] = await Promise.all([
+        fetch(`/api/sessions/active?userId=${encodeURIComponent(userId)}`),
+        fetch(`/api/sessions/history?userId=${encodeURIComponent(userId)}&limit=5`),
+      ]);
       if (cancelled) return;
       if (r.ok) setActive((await r.json()) as ActiveResponse);
+      if (h.ok) setHistory(((await h.json()) as { sessions: HistoryItem[] }).sessions);
       if (!cancelled) setLoading(false);
     })();
     return () => {
@@ -71,6 +79,8 @@ export default function WorkScreen() {
   function selectUser(id: string) {
     if (id === userId) return;
     setActive(null);
+    setHistory([]);
+    setConfirmEnd(false);
     setLoading(true);
     setHints(null);
     setPending(null);
@@ -117,7 +127,7 @@ export default function WorkScreen() {
       setPending(null);
       if (d.endedPrevious) {
         const p = d.endedPrevious as WorkSession;
-        setMessage(`「${p.task_name}」を終了しました（${p.duration_min} 分）。`);
+        setMessage(`「${p.task_name}」を終了しました（所要 ${formatDuration(p.duration_min)}）。`);
       }
       reloadActive();
     } finally {
@@ -154,6 +164,40 @@ export default function WorkScreen() {
     }
   }
 
+  /** 作業終了（M3-1）。所要時間を表示する。AI 整理（M4）はここに接続する予定 */
+  async function endWork(submittedText: string) {
+    if (!session) return;
+    setBusy(true);
+    setEnding(true);
+    setMessage(null);
+    try {
+      const r = await fetch(`/api/sessions/${session.id}/end`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, unknown: endUnknown || undefined }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setMessage(`終了できませんでした（${d.error ?? r.status}）`);
+        return;
+      }
+      const s = d.session as WorkSession;
+      const h = d.history as HistoryItem | null;
+      clearSubmitted(submittedText);
+      setConfirmEnd(false);
+      setEndUnknown("");
+      setHints(null);
+      const delta = h?.delta_min != null ? `（${formatDelta(h.delta_min)}）` : "";
+      setMessage(
+        `「${s.task_name}」を終了しました。所要 ${formatDuration(s.duration_min)}${delta}、メモ ${d.noteCount} 件。AI 整理は M4 で接続します`,
+      );
+      reloadActive();
+    } finally {
+      setBusy(false);
+      setEnding(false);
+    }
+  }
+
   /** 本人のメモを削除する（確認のあと）。誤って入れた機密を AI に送る前に消す用途 */
   async function removeNote(noteId: number) {
     setBusy(true);
@@ -180,8 +224,11 @@ export default function WorkScreen() {
       return;
     }
     if (cmd.type === "end") {
-      // 作業終了（M3）は次の繰り返しで保存できるようにする。いまは保存しない
-      setMessage("作業終了はまだ保存されません（M3 で実装します）");
+      if (!session) {
+        setMessage("進行中の作業がありません");
+        return;
+      }
+      void endWork(submitted);
       return;
     }
     void addMemo(cmd.body, submitted);
@@ -411,18 +458,94 @@ export default function WorkScreen() {
                 {formatMdHm(session.started_at)} 開始・経過 <span className="font-mono">{elapsedMin}</span> 分
               </p>
               <p className="text-xs text-zinc-500">{currentUser?.display_name} の作業</p>
+              {ending ? (
+                <p className="text-sm text-zinc-500" role="status">
+                  終了しています…
+                </p>
+              ) : confirmEnd ? (
+                <div className="flex flex-col gap-2 rounded border border-zinc-300 p-2 text-sm dark:border-zinc-700" role="dialog" aria-label="作業終了の確認">
+                  <p>「{session.task_name}」を終了しますか（経過 {elapsedMin} 分）</p>
+                  <label htmlFor="end-unknown" className="text-zinc-600 dark:text-zinc-300">
+                    最後まで分からなかったこと（任意）
+                  </label>
+                  <textarea
+                    id="end-unknown"
+                    className="rounded border border-zinc-300 p-2 dark:border-zinc-700 dark:bg-zinc-900"
+                    rows={2}
+                    value={endUnknown}
+                    onChange={(e) => setEndUnknown(e.target.value)}
+                    placeholder="例：出力形式の正式な条件"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      className="rounded bg-zinc-800 px-3 py-1 text-white dark:bg-zinc-200 dark:text-black"
+                      onClick={() => endWork("")}
+                      disabled={busy}
+                    >
+                      終了する
+                    </button>
+                    <button type="button" className="rounded border px-3 py-1" onClick={() => setConfirmEnd(false)}>
+                      取り消す
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="rounded border border-zinc-400 px-3 py-2 text-sm"
+                  onClick={() => setConfirmEnd(true)}
+                  disabled={busy}
+                >
+                  作業終了
+                </button>
+              )}
             </>
           ) : (
             <p className="text-sm text-zinc-600 dark:text-zinc-300">作業を始めてください。「〇〇の作業開始」と入力するか、作業名を入れて「開始」を押します。</p>
           )}
           <button
             type="button"
-            className="mt-auto rounded border border-dashed border-zinc-400 px-3 py-2 text-sm text-zinc-400"
+            className="rounded border border-dashed border-zinc-400 px-3 py-2 text-sm text-zinc-400"
             disabled
             title="M10 で有効になります"
           >
             いまの理解を整理（M10 で有効）
           </button>
+
+          <section className="mt-auto flex flex-col gap-1 border-t border-zinc-200 pt-3 dark:border-zinc-800">
+            <h2 className="text-sm font-medium text-zinc-500">終了した作業（最新5件）</h2>
+            {history.length === 0 ? (
+              <p className="text-xs text-zinc-500">{loading ? "読み込み中…" : "まだありません"}</p>
+            ) : (
+              <ul className="flex flex-col gap-1 text-sm">
+                {history.map((s) => (
+                  <li key={s.id} className="flex flex-col gap-0.5">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="truncate" title={s.task_name}>
+                        {s.task_name}
+                      </span>
+                      <span className="shrink-0 font-mono text-xs text-zinc-500">
+                        {formatMdHm(s.started_at)} ・ {formatDuration(s.duration_min)}
+                      </span>
+                    </div>
+                    {s.delta_min != null && (
+                      <span
+                        className={`self-end rounded px-1 text-xs ${
+                          s.delta_min < 0
+                            ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100"
+                            : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                        }`}
+                        title="本人の同じ作業名の前回と比べた差。他の人とは比べません"
+                      >
+                        {formatDelta(s.delta_min)}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </aside>
       </div>
     </div>

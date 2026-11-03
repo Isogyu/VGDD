@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { openDb } from "./db";
-import { startSession, getActiveSession, endSession, listNotes, getKnowledgeHints } from "./sessions";
+import { startSession, getActiveSession, endSession, listNotes, getKnowledgeHints, listHistory, getHistoryItem } from "./sessions";
 
 const T0 = "2026-11-03T13:00:00+09:00";
 const T1 = "2026-11-03T13:47:30+09:00";
@@ -68,6 +68,58 @@ describe("endSession（M3 の下地）", () => {
     expect(e).toMatchObject({ status: "ended", ended_at: T1, duration_min: 47 });
     const again = endSession(r.session.id, db, "2026-11-03T18:00:00+09:00");
     expect(again.duration_min).toBe(47);
+  });
+});
+
+describe("listHistory（終了した作業の一覧）", () => {
+  it("終了した作業だけを新しい順に、上限件数で返す", () => {
+    const db = openDb(":memory:");
+    // 開始・終了を明示（終了順は 作業3 > 作業1 > 作業6 > 作業2 > 作業5 > 作業4）
+    const rows: [string, string, string][] = [
+      ["作業1", "2026-11-02T09:00:00+09:00", "2026-11-02T09:30:00+09:00"],
+      ["作業2", "2026-11-01T09:00:00+09:00", "2026-11-01T13:00:00+09:00"],
+      ["作業3", "2026-11-03T08:00:00+09:00", "2026-11-03T08:20:00+09:00"],
+      ["作業4", "2026-10-30T09:00:00+09:00", "2026-10-30T09:05:00+09:00"],
+      ["作業5", "2026-10-31T09:00:00+09:00", "2026-10-31T10:00:00+09:00"],
+      ["作業6", "2026-11-01T14:00:00+09:00", "2026-11-01T14:45:00+09:00"],
+    ];
+    for (const [name, s, e] of rows) {
+      const r = startSession({ userId: "newcomer_a", taskName: name }, db, s);
+      if (!r.ok) throw new Error();
+      endSession(r.session.id, db, e);
+    }
+    expect(startSession({ userId: "newcomer_a", taskName: "進行中" }, db).ok).toBe(true);
+    const h = listHistory("newcomer_a", db, 5);
+    expect(h).toHaveLength(5);
+    expect(h.every((s) => s.status === "ended")).toBe(true);
+    expect(h.map((s) => s.task_name)).toEqual(["作業3", "作業1", "作業6", "作業2", "作業5"]);
+    expect(h.map((s) => s.duration_min)).toEqual([20, 30, 45, 240, 60]);
+    expect(h.every((s) => s.delta_min === null && s.prev_duration_min === null)).toBe(true); // 同じ作業名の前回がない
+    expect(listHistory("newcomer_b", db)).toEqual([]);
+  });
+
+  it("前回との差は、本人の同じ作業名の直前の終了とだけ比べる（他人は比べない）", () => {
+    const db = openDb(":memory:");
+    const run = (user: string, name: string, s: string, e: string) => {
+      const r = startSession({ userId: user, taskName: name }, db, s);
+      if (!r.ok) throw new Error();
+      endSession(r.session.id, db, e);
+      return r.session.id;
+    };
+    run("newcomer_a", "W1", "2026-10-27T10:00:00+09:00", "2026-10-27T14:00:00+09:00"); // 240分
+    run("newcomer_b", "W1", "2026-10-28T10:00:00+09:00", "2026-10-28T10:10:00+09:00"); // 他人の 10分（比べない）
+    const second = run("newcomer_a", "W1", "2026-11-03T13:00:00+09:00", "2026-11-03T13:30:00+09:00"); // 30分
+    run("newcomer_a", "別の作業", "2026-11-03T14:00:00+09:00", "2026-11-03T14:05:00+09:00");
+
+    const h = listHistory("newcomer_a", db);
+    expect(h.map((x) => [x.task_name, x.duration_min, x.prev_duration_min, x.delta_min])).toEqual([
+      ["別の作業", 5, null, null],
+      ["W1", 30, 240, -210],
+      ["W1", 240, null, null],
+    ]);
+    expect(getHistoryItem(second, db)?.delta_min).toBe(-210);
+    // 新人B の履歴は新人A と比べない
+    expect(listHistory("newcomer_b", db)[0].delta_min).toBeNull();
   });
 });
 

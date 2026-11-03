@@ -27,6 +27,24 @@ export function diffMinutes(fromIso: string, toIso: string): number {
   return Math.max(0, Math.floor(ms / 60000));
 }
 
+/** 所要時間の表示：1分未満 → 「1分未満」、60分未満 → 「45分」、それ以上 → 「4時間0分」 */
+export function formatDuration(min: number | null | undefined): string {
+  if (min == null || !Number.isFinite(min)) return "—";
+  if (min < 1) return "1分未満";
+  if (min < 60) return `${Math.floor(min)}分`;
+  const h = Math.floor(min / 60);
+  const m = Math.floor(min % 60);
+  return `${h}時間${m}分`;
+}
+
+/** 前回との差の表示：−210 → 「前回より 3時間30分 短い」、+10 → 「前回より 10分 長い」、0 → 「前回と同じ」 */
+export function formatDelta(deltaMin: number | null | undefined): string {
+  if (deltaMin == null || !Number.isFinite(deltaMin)) return "";
+  if (deltaMin === 0) return "前回と同じ";
+  const abs = Math.abs(deltaMin);
+  return `前回より ${abs < 1 ? "1分未満" : formatDuration(abs)} ${deltaMin < 0 ? "短い" : "長い"}`;
+}
+
 /** 画面表示用：「13:05」 */
 export function formatHm(iso: string): string {
   return iso.slice(11, 16);

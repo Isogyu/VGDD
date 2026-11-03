@@ -87,6 +87,43 @@ export function deleteNote(noteId: number, userId: string, db: DatabaseSync = ge
   return Number(r.changes) === 1;
 }
 
+/** 履歴の1行：前回（本人の、同じ作業名の、直前に終了した作業）との所要時間の差を含む */
+export interface HistoryItem extends WorkSession {
+  /** 本人の同じ作業名の前回の所要時間（分）。前回がなければ null */
+  prev_duration_min: number | null;
+  /** 今回 − 前回（分）。負なら早くなった。前回がなければ null */
+  delta_min: number | null;
+}
+
+/**
+ * 終了した作業の一覧（新しい順）。右側の履歴とデモの「半日 → 30分」の表示に使う。
+ * 前回との差は**本人の同じ作業名の前回**とだけ比べる。他の人との比較は出さない（人事評価に使わない方針、M9-4）。
+ */
+export function listHistory(userId: string, db: DatabaseSync = getDb(), limit = 5): HistoryItem[] {
+  return db
+    .prepare(
+      `SELECT w.id, w.user_id, w.task_name, w.started_at, w.ended_at, w.duration_min, w.status,
+              p.duration_min AS prev_duration_min,
+              CASE WHEN p.duration_min IS NULL THEN NULL ELSE w.duration_min - p.duration_min END AS delta_min
+         FROM work_sessions w
+         LEFT JOIN work_sessions p
+           ON p.id = (SELECT id FROM work_sessions q
+                       WHERE q.user_id = w.user_id AND q.task_name = w.task_name AND q.status = 'ended'
+                         AND (q.ended_at < w.ended_at OR (q.ended_at = w.ended_at AND q.id < w.id))
+                       ORDER BY q.ended_at DESC, q.id DESC LIMIT 1)
+        WHERE w.user_id = ? AND w.status = 'ended'
+        ORDER BY w.ended_at DESC, w.id DESC LIMIT ?`,
+    )
+    .all(userId, limit) as unknown as HistoryItem[];
+}
+
+/** 終了直後の表示用：この作業の前回（本人・同じ作業名）との差 */
+export function getHistoryItem(sessionId: number, db: DatabaseSync = getDb()): HistoryItem | undefined {
+  const s = getSession(sessionId, db);
+  if (!s || s.status !== "ended") return undefined;
+  return listHistory(s.user_id, db, 1000).find((h) => h.id === sessionId);
+}
+
 export type StartResult =
   | { ok: true; session: WorkSession; endedPrevious: WorkSession | null }
   | { ok: false; reason: "active_exists"; active: WorkSession };
