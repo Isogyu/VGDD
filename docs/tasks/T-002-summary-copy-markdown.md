@@ -1,7 +1,7 @@
 ---
 id: T-002
 title: 整理結果のコピー（Markdown）
-status: review
+status: in_progress
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-1, M4-2, M10-2]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -75,3 +75,6 @@ depends_on: [T-000]
 - 2026-11-03T20:56:43+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/app/api/sessions/[id]/previous/route.ts src/components/PreviousSummary.tsx src/lib/sessions.test.ts src/lib/sessions.ts）
 - 20:58 立法補佐：上の差し戻しは鎖の前段（T-001）が統合されなかったための連鎖。中身の判定ではないため回数に数えない
 - 21:02 行政の長：T-001 の修正後の HEAD の上に、同じパッチ（0376a0f と同一）を積み直して再申請（鎖の2段目 `req3-T-002`）。`status: review` に戻す（§2 は変えない）
+
+- 2026-11-03T21:07:40+0900 gate-runner: status → in_progress（ブランチが main を含んでいない（rebase が必要））
+- 21:12 立法補佐：上の差し戻しは gate-runner の記録のコミットで main が進んだため（OBS-019、p0.2.3 で修正）。回数に数えない
