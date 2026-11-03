@@ -35,7 +35,9 @@
       "Edit(~/.claude/hooks/**)",
       "Write(~/.claude/hooks/**)",
       "Edit(~/.claude.json)",
-      "Write(~/.claude.json)"
+      "Write(~/.claude.json)",
+      "Read(.env.local)",
+      "Bash(*.env.local*)"
     ],
     "ask": [
       "Bash(rm *)",
@@ -69,7 +71,7 @@
         "~/.claude.json"
       ],
       "denyRead": [
-        "~/tsubuyaki-z3"
+        "~/tsubuyaki-z3", ".env.local"
       ]
     },
     "network": {
