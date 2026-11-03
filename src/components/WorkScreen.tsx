@@ -4,8 +4,10 @@
 // クライアント側で API を叩く。時刻の文字列はサーバー（JST）のものをそのまま表示する。
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { parseCommand, normalizeTaskName } from "@/lib/commands";
-import { removeSubmittedPrefix } from "@/lib/input";
+import { restoreSubmitted } from "@/lib/input";
 import type { User } from "@/lib/db";
 import type { WorkSession, Note, KnowledgeHints, HistoryItem } from "@/lib/sessions";
 import { formatHm, formatMdHm, formatDuration, formatDelta } from "@/lib/time";
@@ -22,6 +24,7 @@ type Pending = { taskName: string; known: string; unknown: string; active: WorkS
 const USER_KEY = "tsubuyaki.userId";
 
 export default function WorkScreen() {
+  const router = useRouter();
   const [users, setUsers] = useState<User[]>([]);
   const [userId, setUserId] = useState<string>("");
   const [active, setActive] = useState<ActiveResponse | null>(null);
@@ -96,14 +99,24 @@ export default function WorkScreen() {
   }, [reloadActive]);
   const elapsedMin = active?.elapsedMin ?? 0;
 
-  /** 送信が終わったら、送信した文字だけを入力欄から消す（その後に打たれた文字は残す） */
-  function clearSubmitted(submitted: string) {
-    setInput((prev) => removeSubmittedPrefix(prev, submitted));
+  /**
+   * 送信した瞬間に、送信分を入力欄から消す（保存の完了を待たない）。
+   * 1件目の保存中に2件目を打って送信しても結合しないようにするため（2026-11-03 の不具合）。
+   * 失敗したときは restoreSubmitted で戻す。
+   */
+  function takeInput(): string {
+    const submitted = input;
+    setInput("");
+    return submitted;
+  }
+  function giveBack(submitted: string) {
+    setInput((prev) => restoreSubmitted(prev, submitted));
   }
 
-  async function start(taskName: string, force: boolean, submittedText: string = input) {
+  async function start(taskName: string, force: boolean, submittedText: string) {
     setBusy(true);
     setMessage(null);
+    let succeeded = false;
     try {
       const r = await fetch("/api/sessions", {
         method: "POST",
@@ -112,6 +125,8 @@ export default function WorkScreen() {
       });
       const d = await r.json();
       if (r.status === 409) {
+        // 確認ダイアログへ。入力欄は空のまま（作業名は pending に保持）
+        succeeded = true;
         setPending({ taskName, known, unknown, active: d.active as WorkSession });
         return;
       }
@@ -119,8 +134,8 @@ export default function WorkScreen() {
         setMessage(`開始できませんでした（${d.error ?? r.status}）`);
         return;
       }
+      succeeded = true;
       setHints(d.hints as KnowledgeHints);
-      clearSubmitted(submittedText);
       setKnown("");
       setUnknown("");
       setShowKnown(false);
@@ -130,7 +145,10 @@ export default function WorkScreen() {
         setMessage(`「${p.task_name}」を終了しました（所要 ${formatDuration(p.duration_min)}）。`);
       }
       reloadActive();
+    } catch {
+      setMessage("開始できませんでした（通信エラー）");
     } finally {
+      if (!succeeded) giveBack(submittedText);
       setBusy(false);
     }
   }
@@ -138,11 +156,13 @@ export default function WorkScreen() {
   /** 作業中のメモを保存する（M2-1）。保存のたびに機密検査が走り、該当があれば警告を出す（M2-3） */
   async function addMemo(body: string, submittedText: string) {
     if (!session) {
+      giveBack(submittedText);
       setMessage("先に作業を始めてください。例：「月次レポート改修の作業開始」");
       return;
     }
     setBusy(true);
     setMessage(null);
+    let succeeded = false;
     try {
       const r = await fetch(`/api/sessions/${session.id}/notes`, {
         method: "POST",
@@ -154,22 +174,29 @@ export default function WorkScreen() {
         setMessage(`保存できませんでした（${d.error ?? r.status}）`);
         return;
       }
-      clearSubmitted(submittedText);
+      succeeded = true;
       if (d.warning) {
         setMessage(`注意：${d.warning}。保存はしましたが、AI に送る前に確認を求めます。パターンで取りこぼす情報もあります`);
       }
       reloadActive();
+    } catch {
+      setMessage("保存できませんでした（通信エラー）");
     } finally {
+      if (!succeeded) giveBack(submittedText);
       setBusy(false);
     }
   }
 
   /** 作業終了（M3-1）。所要時間を表示する。AI 整理（M4）はここに接続する予定 */
   async function endWork(submittedText: string) {
-    if (!session) return;
+    if (!session) {
+      giveBack(submittedText);
+      return;
+    }
     setBusy(true);
     setEnding(true);
     setMessage(null);
+    let succeeded = false;
     try {
       const r = await fetch(`/api/sessions/${session.id}/end`, {
         method: "POST",
@@ -181,18 +208,21 @@ export default function WorkScreen() {
         setMessage(`終了できませんでした（${d.error ?? r.status}）`);
         return;
       }
+      succeeded = true;
       const s = d.session as WorkSession;
       const h = d.history as HistoryItem | null;
-      clearSubmitted(submittedText);
       setConfirmEnd(false);
       setEndUnknown("");
       setHints(null);
       const delta = h?.delta_min != null ? `（${formatDelta(h.delta_min)}）` : "";
-      setMessage(
-        `「${s.task_name}」を終了しました。所要 ${formatDuration(s.duration_min)}${delta}、メモ ${d.noteCount} 件。AI 整理は M4 で接続します`,
-      );
+      setMessage(`「${s.task_name}」を終了しました。所要 ${formatDuration(s.duration_min)}${delta}、メモ ${d.noteCount} 件。AI 整理に移ります…`);
       reloadActive();
+      // M3-2：終了後は整理結果の画面（S-2）へ移り、そこで自動で AI 整理を始める
+      router.push(`/sessions/${s.id}`);
+    } catch {
+      setMessage("終了できませんでした（通信エラー）");
     } finally {
+      if (!succeeded) giveBack(submittedText);
       setBusy(false);
       setEnding(false);
     }
@@ -213,21 +243,22 @@ export default function WorkScreen() {
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const submitted = input;
-    const cmd = parseCommand(submitted);
-    if (cmd.type === "start") {
-      void start(cmd.taskName, false, submitted);
-      return;
-    }
+    if (busy) return; // 保存中の二重送信は受け付けない（入力欄には打ち続けられる）
+    const cmd = parseCommand(input);
     if (cmd.type === "empty") {
       setMessage(session ? "メモを入れてください" : "作業名を入れてください。例：「月次レポート改修の作業開始」");
       return;
     }
+    if (cmd.type === "end" && !session) {
+      setMessage("進行中の作業がありません");
+      return;
+    }
+    const submitted = takeInput();
+    if (cmd.type === "start") {
+      void start(cmd.taskName, false, submitted);
+      return;
+    }
     if (cmd.type === "end") {
-      if (!session) {
-        setMessage("進行中の作業がありません");
-        return;
-      }
       void endWork(submitted);
       return;
     }
@@ -235,14 +266,14 @@ export default function WorkScreen() {
   }
 
   function onStartButton() {
-    const submitted = input;
-    const cmd = parseCommand(submitted);
-    const taskName = cmd.type === "start" ? cmd.taskName : normalizeTaskName(submitted);
+    if (busy) return;
+    const cmd = parseCommand(input);
+    const taskName = cmd.type === "start" ? cmd.taskName : normalizeTaskName(input);
     if (!taskName) {
       setMessage("作業名を入れてから「開始」を押してください");
       return;
     }
-    void start(taskName, false, submitted);
+    void start(taskName, false, takeInput());
   }
 
   const session = active?.session ?? null;
@@ -522,9 +553,9 @@ export default function WorkScreen() {
                 {history.map((s) => (
                   <li key={s.id} className="flex flex-col gap-0.5">
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="truncate" title={s.task_name}>
+                      <Link href={`/sessions/${s.id}`} className="truncate underline-offset-2 hover:underline" title={`${s.task_name} の記録と AI 整理を見る`}>
                         {s.task_name}
-                      </span>
+                      </Link>
                       <span className="shrink-0 font-mono text-xs text-zinc-500">
                         {formatMdHm(s.started_at)} ・ {formatDuration(s.duration_min)}
                       </span>
