@@ -8,6 +8,9 @@ import { useEffect, useRef, useState } from "react";
 import type { WorkSession, Note, HistoryItem } from "@/lib/sessions";
 import { SUMMARY_KEYS, SUMMARY_LABELS, itemStatus, type Summary, type SummaryKey } from "@/lib/summary-schema";
 import { formatHm, formatMdHm, formatDuration, formatDelta } from "@/lib/time";
+import { useNoteReplay } from "@/lib/use-note-replay";
+import PreviousSummary from "@/components/PreviousSummary";
+import SummaryActions from "@/components/SummaryActions";
 
 const USER_KEY = "tsubuyaki.userId";
 
@@ -36,6 +39,8 @@ export default function SessionView({ sessionId }: { sessionId: number }) {
   const [qIndex, setQIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [answerText, setAnswerText] = useState("");
+  // 整理の待ち時間にメモを順に強調する口（T-003）。強調中のメモの #番号、なければ null
+  const replayIndex = useNoteReplay(data?.notes.length ?? 0, summarizing);
 
   useEffect(() => {
     userIdRef.current = window.localStorage.getItem(USER_KEY) ?? "newcomer_a";
@@ -214,7 +219,7 @@ export default function SessionView({ sessionId }: { sessionId: number }) {
                 <li
                   key={n.id}
                   id={`note-${n.id}`}
-                  className={`flex gap-2 rounded px-1 ${highlight === n.id ? "bg-yellow-100 dark:bg-yellow-900" : ""} ${excludedNote ? "opacity-50" : ""}`}
+                  className={`flex gap-2 rounded px-1 ${highlight === n.id ? "bg-yellow-100 dark:bg-yellow-900" : replayIndex === idx ? "bg-sky-100 dark:bg-sky-900" : ""} ${excludedNote ? "opacity-50" : ""}`}
                 >
                   <span className="shrink-0 font-mono text-zinc-500">#{idx}</span>
                   <span className="shrink-0 font-mono text-zinc-500">{formatHm(n.created_at)}</span>
@@ -235,6 +240,8 @@ export default function SessionView({ sessionId }: { sessionId: number }) {
           <h2 className="text-sm font-medium text-zinc-500">
             AI 整理（原案）{data.summary?.model && <span className="ml-1 text-xs">・{data.summary.model}</span>}
           </h2>
+          {/* 前回との比較の口（T-001）。出すか出さないかは部品が決める */}
+          <PreviousSummary sessionId={session.id} userId={session.user_id} taskName={session.task_name} />
           {summarizing && (
             <p role="status" className="rounded border border-sky-300 bg-sky-50 px-3 py-2 text-sm dark:bg-sky-950">
               整理しています…（10秒ほどかかります）
@@ -288,6 +295,9 @@ export default function SessionView({ sessionId }: { sessionId: number }) {
                   );
                 })}
               </dl>
+
+              {/* 整理結果の操作の口（T-002） */}
+              <SummaryActions summary={summary} notes={notes} session={session} />
 
               {currentQ && (
                 <div className="rounded border border-sky-300 bg-sky-50 p-3 text-sm dark:border-sky-800 dark:bg-sky-950">
