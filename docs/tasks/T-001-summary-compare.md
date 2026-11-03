@@ -1,7 +1,7 @@
 ---
 id: T-001
 title: 整理結果の「前回との比較」
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-2, M1-4, M9-4, D-40]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -76,3 +76,5 @@ S-2（整理結果の画面）で、本人の同じ作業名の**前回**の整�
 - 2026-11-03T20:56:42+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
 - 20:58 オーナーの裁定：judge（APPROVED）と Codex（CHANGES_REQUIRED）の不一致について、Codex の指摘（PreviousSummary が取得結果を sessionId・userId と結び付けず、props の変更時に前の結果＝前のユーザーの記録を含む を再取得中に描きうる。A3 に反する）を採り、差し戻し。立法補佐がコードで指摘の正しさを確認済み（OBS-018）
 - 21:02 行政の長：W1（新しい worktree、main の上）に修正を指示。直し方：取得結果を `{ sessionId, userId, previous }` で持ち、現在の props と一致するときだけ描く。props が変わったら取得が終わるまで `null`。判定は純粋関数として export し、`sessions.test.ts` に「userId を変えた直後に前の結果を描かない」のテストを足す（files_allowed の中）。直した HEAD を1段目にして T-002・T-003 を積み直し（`req3-T-00x`）、`status: review` で再申請（差し戻し1回目。OBS-017・連鎖の分は数えない）
+
+- 2026-11-03T21:07:40+0900 gate-runner: status → merged（main=7ae937d2b2ce judge=APPROVED codex=APPROVED）
