@@ -1,7 +1,7 @@
 ---
 id: T-003
 title: 整理の待ち時間にメモを振り返る表示
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M3-2, M4-1]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -80,3 +80,4 @@ depends_on: [T-000]
 
 - 2026-11-03T21:36:54+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
 - 21:38 オーナーの裁定：judge（APPROVED）と Codex（CHANGES_REQUIRED）の不一致について、Codex の指摘（強調の位置の初期化が active の変化だけで、count が0になって戻ったときに先頭から始まらない。A2 に反する）を採り、差し戻し。影響は小さいが、修正は1か所で条件を確実に満たせるため。立法補佐がコードで確認済み（OBS-021）
+- 21:41 行政の長：W3（新しい worktree、main の上）に修正を指示。直し方：`prevActive` ではなく `running`（`active && count > 0`）の変化を見て index を null に戻す。判定を純粋関数として export し、「active のまま count 3 → 0 → 3 で、再開直後が 1」のテストを足す（`use-note-replay.test.ts`）。T-002 は統合済み（dac4690）なので鎖は T-003 だけ。`status: review` に戻して再申請（§2 は変えない。中身の差し戻し1回目）
