@@ -35,7 +35,7 @@ lines.forEach((line, i) => {
   let rec;
   try {
     rec = JSON.parse(line);
-  } catch (e) {
+  } catch {
     console.error(`行 ${i + 1}: JSON を解釈できない`);
     ok = false;
     return;
