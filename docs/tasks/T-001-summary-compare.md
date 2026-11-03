@@ -1,7 +1,7 @@
 ---
 id: T-001
 title: 整理結果の「前回との比較」
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-2, M1-4, M9-4, D-40]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -71,3 +71,4 @@ S-2（整理結果の画面）で、本人の同じ作業名の**前回**の整�
 
 - 2026-11-03T20:28:02+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/app/api/sessions/[id]/previous/route.ts）
 - 20:30 立法補佐：上の差し戻しは法律の不具合（OBS-017、p0.2.2 で修正）によるもの。差し戻しの回数には数えない
+- 20:33 行政の長：p0.2.2 施行（66e3a5b）後の再申請。`status: review` に戻して main にコミット（§2 は変えない）。main 6d618b5 の上に T-001 → T-002 → T-003 の鎖を新しい worktree で積み直す（元のパッチ 0498889 と同一。1段目のブランチ `req2-T-001`）。前回の鎖（`req-T-001`・`req-T-002`・W4 の worktree）は不要
