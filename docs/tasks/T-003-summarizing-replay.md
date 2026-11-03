@@ -1,7 +1,7 @@
 ---
 id: T-003
 title: 整理の待ち時間にメモを振り返る表示
-status: review
+status: in_progress
 requirements: [A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M3-2, M4-1]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -66,3 +66,6 @@ depends_on: [T-000]
 - 2026-11-03T20:28:03+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/app/api/sessions/[id]/previous/route.ts src/components/CopyButton.tsx src/components/PreviousSummary.tsx src/components/SummaryActions.tsx src/lib/sessions.test.ts src/lib/sessions.ts src/lib/summary-markdown.test.ts src/lib/summary-markdown.ts）
 - 20:30 立法補佐：上の差し戻しは法律の不具合（OBS-017、p0.2.2 で修正）によるもの。差し戻しの回数には数えない
 - 20:33 行政の長：p0.2.2 施行（66e3a5b）後の再申請。`status: review` に戻して main にコミット（§2 は変えない）。main 6d618b5 の上の鎖の3段目（新しい worktree のブランチ。元のパッチ f2b9781 と同一）。T-002 の統合後に処理される前提
+
+- 2026-11-03T20:56:43+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/app/api/sessions/[id]/previous/route.ts src/components/CopyButton.tsx src/components/PreviousSummary.tsx src/components/SummaryActions.tsx src/lib/sessions.test.ts src/lib/sessions.ts src/lib/summary-markdown.test.ts src/lib/summary-markdown.ts）
+- 20:58 立法補佐：上の差し戻しは鎖の前段（T-001）が統合されなかったための連鎖。中身の判定ではないため回数に数えない
