@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // VGDD Phase 1 — Policy Engine（PreToolUse / PostToolUse / PostToolUseFailure / PermissionDenied フック）
-// policy_version: p0.2.0（本稼働。D-45〜D-47、OBS-012）
+// policy_version: p0.2.1（本稼働。D-45〜D-47、OBS-012・OBS-013、誤検知の修正 OBS-014）
 //
 // 役割：
 //   1. PreToolUse：すべてのツール呼び出しの直前に動き、保護パスへの操作を拒否し、判定を証拠ストアに1行記録する（type: tool_call）
@@ -29,6 +29,19 @@
 //   - OBS-013②：作業員の閉じ込め。agent_type が worker・tester、または cwd が .claude/worktrees/ の下にあるときは、
 //     書き込みの対象（Edit・Write・Bash のリダイレクトや cp・mv の先、cd の先）が自分の worktree の中だけのときに許可する
 //
+// p0.2.1 の変更点（p0.2.0 から。OBS-014：S3 の初日に行政の長のセッションで実際に起きた誤検知4件。すべて「止まる側」の誤りで、記録は残っていた）：
+//   ① 保護語の照合を「語の終わり」まで見る：vgdd・.github・preparation・event_records・merge-requests/done は、
+//      直後が「/」か語の区切り（空白・引用符・; | & )・行末）のときだけ一致する。`docs/vgdd-status.md` の中の vgdd は一致しない
+//   ② セグメントの分割（; && || |）を引用符の中では行わない。`grep -E 'a|b' file` は1つのセグメント
+//   ③ リダイレクトの書き込み判定から `2>&1`・`>&2`・`>/dev/null`・`>/dev/stdout`・`>/dev/stderr` を除く（書き込み先ではない）。
+//      作業員の閉じ込めでも /dev/ への出力を「外への書き込み」と見なさない
+//   ④ `git merge` の拒否は `merge` の語が終わるところまで見る。`git merge-base` は読み取りとして扱う（READ_ONLY_HEAD にも追加）
+//   ⑤ OBS-015①（立法補佐の点検）：空白なしのリダイレクト `echo x>.claude/s`・`cat a>>vgdd/x`・`printf x 1>CLAUDE.md` が通っていた
+//      （保護語の直前の区切りに > が含まれず、閉じ込めのパス抽出も > の直後を拾わなかった）。
+//      対策2つ：(a) リダイレクトの先（`>`・`>>`・`N>`・`&>` の直後の語）を取り出し、Edit/Write と同じ judgeWritePath（保護パス・閉じ込め）を直接かける
+//      (b) 保護語の直前の区切りと、閉じ込め・リンク判定のパス抽出に > < | & ; ( を加える
+//   変更しないもの：引用符の中の `>` は引き続き書き込みの気配と見なす（`sh -c "… > CLAUDE.md"` を止めるため）
+//
 // 保証できないこと（README に明記する）：
 //   - Bash の判定は文字列照合。パスの分割・変数展開・別名による回避は完全には防げない。書き込みは sandbox の denyWrite で補う
 //   - 人が承認画面で「許可」を押した操作は止められない（記録は残る）
@@ -40,7 +53,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 
-const POLICY_VERSION = 'p0.2.0'; // OBS-013（リンクの実体で判定、作業員の閉じ込め）を含む
+const POLICY_VERSION = 'p0.2.1'; // OBS-013（リンクの実体で判定、作業員の閉じ込め）と OBS-014（誤検知4件の修正）を含む
 const HOME = os.homedir();
 const Z3 = process.env.VGDD_Z3_DIR || path.join(HOME, 'tsubuyaki-z3');
 const EVIDENCE = process.env.VGDD_EVIDENCE_PATH || path.join(Z3, 'evidence', 'tool_calls.jsonl');
@@ -263,30 +276,69 @@ function preprocessCommand(cmd) {
 }
 
 // 保護パスを指していそうな語（文字列照合。回避の余地は残る）
+// p0.2.1①：語の終わりまで見る。直後が「/」か語の区切り（空白・引用符・; | & )・行末）のときだけ一致する。
+//   `docs/vgdd-status.md` の vgdd（直後が -）や `preparation_notes.md`（直後が _）は一致しない。
+//   `.claude` は従来どおり（`.claude.json` も `.claude` の語として止める。安全側）
+const END_OF_WORD = String.raw`(?=\/|[\s"'\x60;|&)]|$)`; // \x60 はバッククォート
+// 語の直前の区切り。p0.2.1⑤：> < | & ; ( を加える（`echo x>.claude/s` の > の直後も語の始まり）
+const START_OF_WORD = String.raw`(^|[\s"'\x60=/><|&;(])`;
+const tok = (body) => new RegExp(START_OF_WORD + body + END_OF_WORD);
 const BASH_PROTECTED_TOKENS = [
   { re: /tsubuyaki-z3/, noRead: true, label: 'Z3 保護領域' },
   { re: /(~|\$HOME|\$\{HOME\}|\/Users\/[^/\s]+)\/tsub(?!uyaki-worklog\b)/, noRead: true, label: 'Z3 保護領域（グロブの疑い）' },
-  { re: /(^|[\s"'`=/])\.claude(\/|\b)/, noRead: false, label: '.claude' },
+  { re: new RegExp(START_OF_WORD + String.raw`\.claude(\/|\b)`), noRead: false, label: '.claude' },
   { re: /(~|\$HOME|\$\{HOME\}|\/Users\/[^/\s]+)\/\.claude(\/|\b)/, noRead: false, label: 'ユーザー設定 ~/.claude' },
   { re: /(~|\$HOME|\$\{HOME\}|\/Users\/[^/\s]+)\/\.claude\.json/, noRead: false, label: 'ユーザー設定 ~/.claude.json' },
   { re: /CLAUDE\.md/, noRead: false, label: 'CLAUDE.md' },
-  { re: /(^|[\s"'`=/])\.github(\/|\b)/, noRead: false, label: '.github' },
-  { re: /(^|[\s"'`=/])vgdd(\/|\b)/, noRead: false, label: 'vgdd（法律のスクリプト）' },
+  { re: tok(String.raw`\.github`), noRead: false, label: '.github' },
+  { re: tok(String.raw`vgdd`), noRead: false, label: 'vgdd（法律のスクリプト）' },
   { re: /docs\/tasks\/_board\.json/, noRead: false, label: 'docs/tasks/_board.json' },
-  { re: /merge-requests\/done(\/|\b)/, noRead: false, label: 'merge-requests/done' },
-  { re: /(^|[\s"'`=/])(\.\.\/)?preparation(\/|\b)/, noRead: false, label: '準備資料' },
-  { re: /(^|[\s"'`=/])(\.\.\/)?event_records(\/|\b)/, noRead: false, label: '作業記録' },
+  { re: new RegExp(String.raw`merge-requests\/done` + END_OF_WORD), noRead: false, label: 'merge-requests/done' },
+  { re: tok(String.raw`(\.\.\/)?preparation`), noRead: false, label: '準備資料' },
+  { re: tok(String.raw`(\.\.\/)?event_records`), noRead: false, label: '作業記録' },
 ];
 
 // 読み取り専用と見なすコマンドの先頭（各セグメントの先頭に一致すること）
-const READ_ONLY_HEAD = /^\s*(cat|ls|head|tail|wc|grep|rg|diff|stat|file|du|tree|find|jq|less|more|echo|printf|date|pwd|awk|cut|sort|uniq|tr|nl|column|sed\s+-n|git\s+(diff|status|log|show|ls-files|rev-parse|branch|remote|worktree\s+list|config\s+--get|config\s+user\.\w+)|node\s+-e\s+["'][^"']*(?:console\.log|JSON\.parse|require\(['"]\.\/package)|python3?\s+-c\s+["'][^"']*json\.load|bash\s+-n|node\s+--check)/;
+// p0.2.1④：git の読み取り系に merge-base・describe・blame・cat-file・check-ignore・name-rev を追加
+const READ_ONLY_HEAD = /^\s*(cat|ls|head|tail|wc|grep|rg|diff|stat|file|du|tree|find|jq|less|more|echo|printf|date|pwd|awk|cut|sort|uniq|tr|nl|column|sed\s+-n|git\s+(diff|status|log|show|ls-files|rev-parse|branch|remote|worktree\s+list|config\s+--get|config\s+user\.\w+|merge-base|describe|blame|cat-file|check-ignore|name-rev)|node\s+-e\s+["'][^"']*(?:console\.log|JSON\.parse|require\(['"]\.\/package)|python3?\s+-c\s+["'][^"']*json\.load|bash\s+-n|node\s+--check)/;
+
+// 書き込みのリダイレクト（p0.2.1③）：`>`・`>>` のうち、`2>&1`・`>&2`（fd の合流）と /dev/null・/dev/stdout・/dev/stderr への出力は書き込みではない
+const REDIRECT_WRITE = /(?<!<)>>?(?![&>])(?!\s*\/dev\/(?:null|stdout|stderr)\b)/;
 
 // 書き込み・実行の気配があれば読み取り専用とは見なさない
-const WRITE_HINT = /(\bfind\b[^;|&]*\s-(delete|exec|execdir|ok|okdir)\b|\bsed\b[^;|&]*(?:[\/;'"\s]w\s+\S|[\/;'"\s]W\s+\S)|>>?|\btee\b|\bcp\b|\bmv\b|\brm\b|\bmkdir\b|\btouch\b|\bchmod\b|\bchown\b|\bln\b|\binstall\b|\brsync\b|\btruncate\b|\bdd\b|\bsed\s+-i|\bperl\s+-[a-z]*i|\bpython3?\b(?!\s+-c\s+["'][^"']*json\.load)|\bnode\b(?!\s+(-e\s+["'][^"']*(?:console\.log|JSON\.parse|require\(['"]\.\/package)|--check))|\bperl\b|\bruby\b|\b(sh|bash|zsh)\s+-c|\beval\b|\bsource\b|\bxargs\b|\bgit\s+(add|commit|checkout|switch|restore|reset|clean|stash|apply|am|mv|rm|merge|rebase|cherry-pick|update-ref|symbolic-ref)\b|\bopen\b|\bosascript\b)/;
+// p0.2.1③：リダイレクトは REDIRECT_WRITE と同じ条件。p0.2.1④：git のサブコマンドは語の終わりまで見る（merge-base は merge ではない）
+const WRITE_HINT = /(\bfind\b[^;|&]*\s-(delete|exec|execdir|ok|okdir)\b|\bsed\b[^;|&]*(?:[\/;'"\s]w\s+\S|[\/;'"\s]W\s+\S)|(?<!<)>>?(?![&>])(?!\s*\/dev\/(?:null|stdout|stderr)\b)|\btee\b|\bcp\b|\bmv\b|\brm\b|\bmkdir\b|\btouch\b|\bchmod\b|\bchown\b|\bln\b|\binstall\b|\brsync\b|\btruncate\b|\bdd\b|\bsed\s+-i|\bperl\s+-[a-z]*i|\bpython3?\b(?!\s+-c\s+["'][^"']*json\.load)|\bnode\b(?!\s+(-e\s+["'][^"']*(?:console\.log|JSON\.parse|require\(['"]\.\/package)|--check))|\bperl\b|\bruby\b|\b(sh|bash|zsh)\s+-c|\beval\b|\bsource\b|\bxargs\b|\bgit\s+(add|commit|checkout|switch|restore|reset|clean|stash|apply|am|mv|rm|merge|rebase|cherry-pick|update-ref|symbolic-ref)(?![\w-])|\bopen\b|\bosascript\b)/;
 
+/**
+ * ; && || | でセグメントに分割する。p0.2.1②：引用符（' " `）の中では分割しない。
+ * 引用符が閉じていないコマンドは、そのまま1セグメントとして扱う（安全側：先頭の語で読み取り専用かを判定する）。
+ * 単独の & と >& 2>&1 は分割しない（バックグラウンド実行・fd の合流）。
+ */
 function splitSegments(cmd) {
-  // ; && || | で分割（引用符の中は考慮しない：安全側に寄せる）
-  return cmd.split(/\s*(?:;|&&|\|\||\|)\s*/).filter(Boolean);
+  const segs = [];
+  let cur = '';
+  let quote = null;
+  for (let i = 0; i < cmd.length; i++) {
+    const ch = cmd[i];
+    if (quote) {
+      cur += ch;
+      if (ch === '\\' && quote === '"' && i + 1 < cmd.length) { cur += cmd[++i]; continue; }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') { quote = ch; cur += ch; continue; }
+    if (ch === '\\' && i + 1 < cmd.length) { cur += ch + cmd[++i]; continue; }
+    const two = cmd.slice(i, i + 2);
+    if (ch === ';' || two === '&&' || two === '||' || (ch === '|' && two !== '||')) {
+      if (two === '&&' || two === '||') i++;
+      if (cur.trim()) segs.push(cur.trim());
+      cur = '';
+      continue;
+    }
+    cur += ch;
+  }
+  if (cur.trim()) segs.push(cur.trim());
+  return segs;
 }
 
 /** ホームの .git と main を守る：git の対象の向け直し、main への統合・参照の書き換えを拒否 */
@@ -313,7 +365,8 @@ function judgeGitScope(command, git, agentType) {
       }
     }
     // main への統合・参照の書き換え（統合は gate-runner だけが行う。D-45③・D-47①）
-    if (/\bgit\s+merge\b/.test(seg)) return 'git merge は禁止（統合は gate-runner だけが行う）';
+    // p0.2.1④：merge の語の終わりまで見る（git merge-base は読み取り）
+    if (/\bgit\s+merge(?![\w-])/.test(seg)) return 'git merge は禁止（統合は gate-runner だけが行う）';
     if (/\bgit\s+(branch\s+(-f|-D|-d|--force|--delete)\s+\S*\bmain\b|update-ref\s+\S*refs\/heads\/main\b|symbolic-ref\s+HEAD\s+\S*main\b)/.test(seg)) {
       return 'main の参照を書き換えている';
     }
@@ -343,11 +396,13 @@ function judgeConfinedBash(pre, cwd, confine) {
       cur = dest;
       continue;
     }
-    if (!(WRITE_HINT.test(seg) || />/.test(seg))) continue;
-    const tokens = seg.match(/(?:^|[\s=])((?:~|\.{1,2})?\/[^\s'"`;|&<>]+|[^\s'"`;|&<>=-][^\s'"`;|&<>]*\/[^\s'"`;|&<>]*)/g) || [];
+    if (!(WRITE_HINT.test(seg) || REDIRECT_WRITE.test(seg))) continue;
+    // p0.2.1⑤：> < の直後の語も拾う（空白なしのリダイレクト）
+    const tokens = seg.match(/(?:^|[\s=><])((?:~|\.{1,2})?\/[^\s'"`;|&<>]+|[^\s'"`;|&<>=-][^\s'"`;|&<>]*\/[^\s'"`;|&<>]*)/g) || [];
     for (let tok of tokens) {
-      tok = tok.replace(/^[\s=]+/, '');
+      tok = tok.replace(/^[\s=><]+/, '');
       if (!tok || tok.includes('://') || tok.startsWith('-')) continue;
+      if (/^\/dev\/(null|stdout|stderr|tty)$/.test(tok)) continue; // p0.2.1③：デバイスへの出力は外への書き込みではない
       const abs = realish(path.resolve(cur, tok.replace(/^~/, HOME)));
       if (!isInside(abs, confine.root)) {
         return `作業員（${confine.label}）は自分の worktree の外（${abs}）に書けない：「${seg.trim().slice(0, 60)}」`;
@@ -359,10 +414,10 @@ function judgeConfinedBash(pre, cwd, confine) {
 
 /** 保護語と同じ判定を、コマンド中のパスの実体（リンク先）に対しても行う（OBS-013①） */
 function judgeBashSymlinks(pre, cwd, projectDir) {
-  const tokens = pre.match(/(?:^|[\s=])((?:~|\.{1,2})?\/[^\s'"`;|&<>]+|[^\s'"`;|&<>=-][^\s'"`;|&<>]*\/[^\s'"`;|&<>]*)/g) || [];
-  const writeish = WRITE_HINT.test(pre) || />/.test(pre);
+  const tokens = pre.match(/(?:^|[\s=><])((?:~|\.{1,2})?\/[^\s'"`;|&<>]+|[^\s'"`;|&<>=-][^\s'"`;|&<>]*\/[^\s'"`;|&<>]*)/g) || [];
+  const writeish = WRITE_HINT.test(pre) || REDIRECT_WRITE.test(pre);
   for (let tok of tokens) {
-    tok = tok.replace(/^[\s=]+/, '');
+    tok = tok.replace(/^[\s=><]+/, '');
     if (!tok || tok.includes('://') || tok.startsWith('-')) continue;
     const abs = path.resolve(cwd, tok.replace(/^~/, HOME));
     let real;
@@ -381,10 +436,31 @@ function judgeBashSymlinks(pre, cwd, projectDir) {
   return null;
 }
 
+/**
+ * p0.2.1⑤（OBS-015①）：リダイレクトの先を取り出し、Edit/Write と同じ判定（保護パス・Z3・準備資料・作業員の閉じ込め）を直接かける。
+ * 対象：`> f`・`>> f`・`N> f`・`&> f`・`>| f`（空白の有無を問わない。引用符つきも）。`2>&1`・`>&2` は先が & なので対象外。
+ * /dev/null 等のデバイス、変数（$）やグロブ（* ? {）を含む先は解決できないので見ない（文字列照合と sandbox に任せる）。
+ * cwd はコマンドの先頭の cwd で解決する（途中の cd は閉じ込めの判定が別に見る）。
+ */
+const REDIRECT_TARGET_RE = /(?:^|[^<>])(?:\d*>>?|&>>?|>\|)\s*("(?:[^"\\]|\\.)*"|'[^']*'|[^\s'"`;|&<>()]+)/g;
+function judgeRedirectTargets(pre, cwd, projectDir, agentType, confine) {
+  for (const m of pre.matchAll(REDIRECT_TARGET_RE)) {
+    const t = m[1].replace(/^["']|["']$/g, '');
+    if (!t || /^\/dev\/(null|stdout|stderr|tty)$/.test(t) || /[$*?{]/.test(t)) continue;
+    const abs = path.resolve(cwd, t.replace(/^~(?=\/|$)/, HOME));
+    const why = judgeWritePath(abs, projectDir, agentType, confine);
+    if (why) return `リダイレクトの先「${t}」が保護パス（${why}）`;
+  }
+  return null;
+}
+
 function judgeBash(command, git, agentType, cwd, projectDir, confine) {
   const pre = preprocessCommand(command);
   // ln は保護語の有無にかかわらず拒否（シンボリックリンクで保護を迂回する経路を塞ぐ。OBS-013①）
   if (/(^|[\s;&|(])ln(\s|$)/.test(pre)) return { decision: 'deny', reason: 'Bash: ln（リンクの作成）は禁止' };
+  // リダイレクトの先を直接判定（OBS-015①）
+  const rd = judgeRedirectTargets(pre, cwd, projectDir, agentType, confine);
+  if (rd) return { decision: 'deny', reason: `Bash: ${rd}` };
   const gitScope = judgeGitScope(pre, git, agentType);
   if (gitScope) return { decision: 'deny', reason: `Bash: ${gitScope}` };
   const link = judgeBashSymlinks(pre, cwd, projectDir);

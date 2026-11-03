@@ -1,13 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "vgdd.verdict.v1",
-  "title": "VGDD 司法の判定（judge・Codex judge が返す形）",
+  "title": "VGDD 司法の判定（judge・Codex judge が返す形）。vgdd.verdict.v1。OpenAI の構造化出力（strict）の制約に合わせ、全プロパティを required に入れ、任意の項目は null を許す。const は enum",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema", "verdict", "deterministic_audits_passed", "requirements", "findings", "summary"],
   "properties": {
-    "schema": { "const": "vgdd.verdict.v1" },
-    "verdict": { "enum": ["APPROVED", "CHANGES_REQUIRED"] },
+    "schema": { "type": "string", "enum": ["vgdd.verdict.v1"] },
+    "verdict": { "type": "string", "enum": ["APPROVED", "CHANGES_REQUIRED"] },
     "deterministic_audits_passed": { "type": "boolean" },
     "requirements": {
       "type": "array",
@@ -17,7 +16,7 @@
         "required": ["id", "status", "evidence"],
         "properties": {
           "id": { "type": "string" },
-          "status": { "enum": ["met", "not_met", "unverified"] },
+          "status": { "type": "string", "enum": ["met", "not_met", "unverified"] },
           "evidence": { "type": "string" }
         }
       }
@@ -27,10 +26,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["severity", "category", "file", "line", "reason"],
+        "required": ["severity", "category", "file", "line", "requirement_id", "reason"],
         "properties": {
-          "severity": { "enum": ["critical", "major", "minor"] },
-          "category": { "enum": ["requirement", "correctness", "security", "test", "protected_path", "input"] },
+          "severity": { "type": "string", "enum": ["critical", "major", "minor"] },
+          "category": { "type": "string", "enum": ["requirement", "correctness", "security", "test", "protected_path", "input"] },
           "file": { "type": ["string", "null"] },
           "line": { "type": ["integer", "null"] },
           "requirement_id": { "type": ["string", "null"] },

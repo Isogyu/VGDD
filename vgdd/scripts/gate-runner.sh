@@ -100,7 +100,7 @@ NODE
 
 process_request() {
   local req="$1"
-  local task branch sha reqs
+  local task branch sha reqs trel src_main
   task="$(jq -r '.task' "$req")"; branch="$(jq -r '.branch' "$req")"; sha="$(jq -r '.head' "$req")"
   echo "▶ $task（$branch @ $sha）"
   local t; t="$(ticket_path "$task")"
@@ -108,6 +108,12 @@ process_request() {
 
   # 1 整合
   [ "$(front "$t" status)" = "review" ] || { fail "$task" "票の status が review ではない（$(front "$t" status)）"; mv "$req" "$DONE_DIR/"; return; }
+  # p0.2.1（OBS-015②）：基盤の票は main にコミット済みの票の requirements_source を見る。作業ツリーの票だけが ticket なら差し戻す
+  trel="docs/tasks/$(basename "$t")"
+  src_main="$(git -C "$REPO" show "main:$trel" 2>/dev/null | sed -n '/^---$/,/^---$/p' | sed -n 's/^requirements_source: *//p' | head -n 1 | sed 's/ *#.*$//' | tr -d ' ')"
+  if [ "$(front "$t" requirements_source)" = "ticket" ] && [ "$src_main" != "ticket" ]; then
+    fail "$task" "基盤の票（requirements_source: ticket）が main にコミットされていない、または main の票と違う。票は作業前に main にコミットする" "blocked"; mv "$req" "$DONE_DIR/"; return
+  fi
   git -C "$REPO" rev-parse --verify -q "$branch" >/dev/null || { fail "$task" "ブランチ $branch がない" "blocked"; mv "$req" "$DONE_DIR/"; return; }
   local actual; actual="$(git -C "$REPO" rev-parse "$branch")"
   [[ "$actual" == "$sha"* ]] || { fail "$task" "申請の HEAD（$sha）とブランチの HEAD（${actual:0:12}）が違う"; mv "$req" "$DONE_DIR/"; return; }
@@ -153,13 +159,17 @@ process_request() {
   # 6〜9 司法（Claude judge → Codex judge → 不一致 → セキュリティ）
   reqs="$(front_list "$t" requirements | tr '\n' ',' | sed 's/,$//')"
   [ -n "$reqs" ] || reqs="$(front "$t" requirements | tr -d '[]' | tr -d ' ')"
+  # p0.2.1：基盤の票（requirements_source: ticket）は、docs/requirements.md ではなく票の受け入れ条件を要件として渡す（--ticket）。
+  #   judge.sh は main にコミット済みの票（git show main:docs/tasks/…）から節と「- A1.」… の ID を読み、ブランチの票と違えば fail-closed（OBS-015②）
+  local -a reqargs
+  if [ "$src_main" = "ticket" ]; then reqargs=(--ticket "$trel"); else reqargs=(--req "$reqs"); fi
   local jout="$VERDICTS/$task-$sha-judge.json"
-  ( cd "$wt" && "$BIN/judge.sh" --req "$reqs" --base main --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
+  ( cd "$wt" && "$BIN/judge.sh" "${reqargs[@]}" --base main --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
   local jfile; jfile="$(ls -t "$VERDICTS/$task-"*.json 2>/dev/null | grep -v codex | head -n 1)"
   local jv="CHANGES_REQUIRED"; [ -n "$jfile" ] && jv="$(jq -r '.final_verdict' "$jfile")"
   local cv="SKIPPED" cfile=""
   if [ "$NO_CODEX" -eq 0 ]; then
-    ( cd "$wt" && "$BIN/judge-codex.sh" --req "$reqs" --base main --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
+    ( cd "$wt" && "$BIN/judge-codex.sh" "${reqargs[@]}" --base main --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
     cfile="$(ls -t "$VERDICTS/$task-"*-codex-judge.json 2>/dev/null | head -n 1)"
     [ -n "$cfile" ] && cv="$(jq -r '.final_verdict' "$cfile")"
   fi
@@ -181,7 +191,7 @@ process_request() {
   fi
   if [ "$(front "$t" security_review)" = "true" ] && [ "$NO_CODEX" -eq 0 ]; then
     local wt2; wt2="$(mktemp -d "${TMPDIR:-/tmp}/gate-sec-$task-XXXX")"; git -C "$REPO" worktree add --detach "$wt2" "$branch" >/dev/null 2>&1
-    ( cd "$wt2" && "$BIN/judge-codex.sh" --security --req "$reqs" --base main --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
+    ( cd "$wt2" && "$BIN/judge-codex.sh" --security "${reqargs[@]}" --base main --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
     git -C "$REPO" worktree remove --force "$wt2" >/dev/null 2>&1 || true
     local sfile; sfile="$(ls -t "$VERDICTS/$task-"*-codex-security.json 2>/dev/null | head -n 1)"
     [ -n "$sfile" ] && [ "$(jq -r '.final_verdict' "$sfile")" = "APPROVED" ] || { fail "$task" "セキュリティ審査が差し戻し"; mv "$req" "$DONE_DIR/"; return; }

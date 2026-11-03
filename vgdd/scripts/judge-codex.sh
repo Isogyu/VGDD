@@ -6,7 +6,12 @@
 #
 # 使い方:
 #   vgdd/scripts/judge-codex.sh --req M1-1,M1-2 [--base <ref>] [--task T-001] [--out DIR] [--dry-run]
+#   vgdd/scripts/judge-codex.sh --ticket docs/tasks/T-000-xxx.md ...   # 基盤の票（requirements_source: ticket）。judge.sh にそのまま渡る
 #   vgdd/scripts/judge-codex.sh --security --req M6-1 ...   # セキュリティ審査（観点を足す）
+#
+# p0.2.1: スキーマ vgdd.verdict.v1 は OpenAI の構造化出力（strict）の制約に合わせた：全プロパティを required に入れ、
+#         任意の項目は null を許す型にする。const は enum にした。初回（2026-11-03 17:26）は findings.items.required に
+#         requirement_id がなく codex exec がスキーマを拒否して判定なし→fail-closed になった
 #   vgdd/scripts/judge-codex.sh --ux --shots DIR ...        # UX 審査（スクリーンショットの説明文を渡す。画像の添付は Codex の対応次第）
 #
 # 前提: codex CLI がログイン済み（オーナーの契約。学習に使われない設定を 2026-11-03 に確認済み）。
@@ -80,7 +85,7 @@ RAW="$(cat "$LAST" 2>/dev/null || true)"
 rm -f "$LAST"
 
 OUT_FILE="${OUT_DIR}/${TASK}-${HEAD_SHA}-codex-${MODE}.json"
-export RAW AUDIT_STATE TASK BRANCH HEAD_SHA BASE STAMP REQ MODE
+export RAW AUDIT_STATE TASK BRANCH HEAD_SHA BASE STAMP REQ MODE REQ_SOURCE
 node - > "$OUT_FILE" <<'NODE'
 const raw = process.env.RAW || '';
 let verdict = null;
@@ -96,6 +101,7 @@ const record = {
   head: process.env.HEAD_SHA,
   base: process.env.BASE,
   requirements_requested: (process.env.REQ || '').split(',').map(s => s.trim()).filter(Boolean),
+  requirements_source: process.env.REQ_SOURCE || 'docs/requirements.md',
   collected_at: process.env.STAMP,
   codex: verdict,
   parse_ok: !!verdict,
