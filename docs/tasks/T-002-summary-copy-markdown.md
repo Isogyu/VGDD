@@ -1,15 +1,15 @@
 ---
 id: T-002
 title: 整理結果のコピー（Markdown）
-status: ready
+status: review
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-1, M4-2, M10-2]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
 proposal_from: M4 の提案（2026-11-03、M4 のコミット 57a48a9 の直後にオーナー採用）
 estimate_h: 0.3
 time_limit_min: 40
-branch: null           # Claude Code が worktree に付ける worktree-agent-<id>。起動後に行政の長が記入
-worker: null
+branch: worktree-agent-a4f1080afc74ed347   # 作業員の元のブランチ（0376a0f）。申請は main 追従のため cherry-pick した新ブランチ（§6）
+worker: W2
 files_allowed:
   - src/lib/summary-markdown.ts
   - src/lib/summary-markdown.test.ts
@@ -65,3 +65,5 @@ depends_on: [T-000]
 
 （統合後に行政の長が追記）
 - 20:04 立法補佐（Pro）が §2 の受け入れ条件を確認（具体的で検証できる。3票の files_allowed は重ならない）。main に固定（D-49②）
+- 20:07 W2 起動（worktree `agent-a4f1080afc74ed347`、main 99f549a から）。20:10 コミット 0376a0f（4ファイル、+225/−3）。報告：test 96（既存 91＋5）・typecheck・lint 合格。票にない決め事：開始と所要の行は `開始: M/D HH:MM ／ 所要: …`、根拠の番号は小さい順で重複なし、根拠のない項目は「根拠:」の行を出さない、メモ本文の改行は空白に、注意書きは `MARKDOWN_DISCLAIMER` として export。コミットの Co-Authored-By は作業員が自分のモデル名（Opus 5.5）にした。拒否なし
+- 20:13 行政の長が差分を確認（`files_allowed` の4ファイルのみ、禁止語なし、A1〜A6 を確認）。`status: review` で main にコミット。票のコミットで main が進むため、新しい worktree で 0376a0f を cherry-pick したブランチで申請する（README の標準手順）

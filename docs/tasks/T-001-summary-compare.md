@@ -1,15 +1,15 @@
 ---
 id: T-001
 title: 整理結果の「前回との比較」
-status: ready
+status: review
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-2, M1-4, M9-4, D-40]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
 proposal_from: M4 の提案（2026-11-03、M4 のコミット 57a48a9 の直後にオーナー採用）
 estimate_h: 0.5
 time_limit_min: 45
-branch: null           # Claude Code が worktree に付ける worktree-agent-<id>。起動後に行政の長が記入
-worker: null
+branch: worktree-agent-a0c64b050da78ca75   # 作業員の元のブランチ（0498889）。申請は main 追従のため cherry-pick した新ブランチ（§6）
+worker: W1
 files_allowed:
   - src/components/PreviousSummary.tsx           # T-000 が作った差し込み口の中身（props は sessionId・userId・taskName。変えない）
   - src/lib/sessions.ts
@@ -66,3 +66,5 @@ S-2（整理結果の画面）で、本人の同じ作業名の**前回**の整�
 
 （統合後に行政の長が追記）
 - 20:04 立法補佐（Pro）が §2 の受け入れ条件を確認（具体的で検証できる。3票の files_allowed は重ならない）。main に固定（D-49②）
+- 20:07 W1 起動（worktree `agent-a0c64b050da78ca75`、main 99f549a から）。20:10 コミット 0498889（4ファイル、+204/−7）。報告：test 95（既存 91＋4）・typecheck・lint 合格。逸脱：前回の条件は `listHistory`（`ended_at < 前回の ended_at`）ではなく A1 の明記どおり `ended_at < この作業の started_at`。`PreviousSummary` は取得結果の `task_name` が props と一致するときだけ描く（作業の切り替え直後に前の結果が残らないため）。古い整理結果で項目が欠けていれば「記録なし」扱い。API は既存と同じ順で `invalid_id` 400 も返す。拒否1件：ヒアドキュメントでテストを追記して続けて実行する複合コマンドが worktree 隔離の検査で拒否（ファイルは変わらず、Edit で追記）
+- 20:13 行政の長が差分を確認（`files_allowed` の4ファイルのみ、禁止語なし、A1〜A6 を確認）。`status: review` で main にコミット。票のコミットで main が進むため、新しい worktree で 0498889 を cherry-pick したブランチで申請する（README の標準手順）

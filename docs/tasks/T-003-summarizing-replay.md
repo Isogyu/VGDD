@@ -1,15 +1,15 @@
 ---
 id: T-003
 title: 整理の待ち時間にメモを振り返る表示
-status: ready
+status: review
 requirements: [A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M3-2, M4-1]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
 proposal_from: M4 の提案（2026-11-03、M4 のコミット 57a48a9 の直後にオーナー採用）
 estimate_h: 0.3
 time_limit_min: 40
-branch: null           # Claude Code が worktree に付ける worktree-agent-<id>。起動後に行政の長が記入
-worker: null
+branch: worktree-agent-a304c702b5112e003   # 作業員の元のブランチ（f2b9781）。申請は main 追従のため cherry-pick した新ブランチ（§6）
+worker: W3
 files_allowed:
   - src/lib/use-note-replay.ts           # T-000 が作った差し込み口（フック）の中身。関数名・引数・返り値の型は変えない
   - src/lib/use-note-replay.test.ts
@@ -60,3 +60,5 @@ depends_on: [T-000]
 
 （統合後に行政の長が追記）
 - 20:04 立法補佐（Pro）が §2 の受け入れ条件を確認（具体的で検証できる。3票の files_allowed は重ならない）。main に固定（D-49②）
+- 20:07 W3 起動（worktree `agent-a304c702b5112e003`、main 99f549a から）。20:10 コミット f2b9781（2ファイル、+96/−6）。報告：test 97（既存 91＋6）・typecheck・lint 合格。逸脱：最初の 1 は `setTimeout` ではなく返り値を `index ?? 1` にして出す。`active` の切り替えは描画中に前回の値と比べて state を捨てる形（effect 内の同期 setState を避ける）。メモが減って番号が範囲外なら 1 を返す。拒否なし
+- 20:13 行政の長が差分を確認（`files_allowed` の2ファイルのみ、禁止語なし、A1〜A5 を確認）。`status: review` で main にコミット。票のコミットで main が進むため、新しい worktree で f2b9781 を cherry-pick したブランチで申請する（README の標準手順）
