@@ -1,7 +1,7 @@
 ---
 id: T-002
 title: 整理結果のコピー（Markdown）
-status: review
+status: blocked
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-1, M4-2, M10-2]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -79,3 +79,5 @@ depends_on: [T-000]
 - 2026-11-03T21:07:40+0900 gate-runner: status → in_progress（ブランチが main を含んでいない（rebase が必要））
 - 21:12 立法補佐：上の差し戻しは gate-runner の記録のコミットで main が進んだため（OBS-019、p0.2.3 で修正）。回数に数えない
 - 21:14 行政の長：p0.2.3 施行（48c6200）後の再申請。T-001 は統合済み（d4b3f39）。main 48c6200 の上に同じパッチ（0376a0f と同一）を新しい worktree で積み直す（鎖の1段目 `req4-T-002`）。`status: review` に戻す（§2 は変えない）
+
+- 2026-11-03T21:26:26+0900 gate-runner: status → blocked（差し戻しが 3 回に達した。オーナーの判断へ）
