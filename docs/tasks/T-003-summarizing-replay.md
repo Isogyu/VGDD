@@ -1,7 +1,7 @@
 ---
 id: T-003
 title: 整理の待ち時間にメモを振り返る表示
-status: review
+status: in_progress
 requirements: [A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M3-2, M4-1]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -62,3 +62,6 @@ depends_on: [T-000]
 - 20:04 立法補佐（Pro）が §2 の受け入れ条件を確認（具体的で検証できる。3票の files_allowed は重ならない）。main に固定（D-49②）
 - 20:07 W3 起動（worktree `agent-a304c702b5112e003`、main 99f549a から）。20:10 コミット f2b9781（2ファイル、+96/−6）。報告：test 97（既存 91＋6）・typecheck・lint 合格。逸脱：最初の 1 は `setTimeout` ではなく返り値を `index ?? 1` にして出す。`active` の切り替えは描画中に前回の値と比べて state を捨てる形（effect 内の同期 setState を避ける）。メモが減って番号が範囲外なら 1 を返す。拒否なし
 - 20:13 行政の長が差分を確認（`files_allowed` の2ファイルのみ、禁止語なし、A1〜A5 を確認）。`status: review` で main にコミット。票のコミットで main が進むため、新しい worktree で f2b9781 を cherry-pick したブランチで申請する（README の標準手順）
+
+- 2026-11-03T20:28:03+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/app/api/sessions/[id]/previous/route.ts src/components/CopyButton.tsx src/components/PreviousSummary.tsx src/components/SummaryActions.tsx src/lib/sessions.test.ts src/lib/sessions.ts src/lib/summary-markdown.test.ts src/lib/summary-markdown.ts）
+- 20:30 立法補佐：上の差し戻しは法律の不具合（OBS-017、p0.2.2 で修正）によるもの。差し戻しの回数には数えない
