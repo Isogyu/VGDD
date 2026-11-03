@@ -24,7 +24,7 @@
 
 set -euo pipefail
 
-REPO="${HOME}/tsubuyaki-worklog/app"; INTERVAL=30; ONCE=0; NO_CODEX=0
+REPO="${HOME}/tsubuyaki-worklog/app"; INTERVAL=30; ONCE=0; NO_CODEX=0; RUN_MERGED=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2;;
@@ -205,7 +205,8 @@ process_request() {
   fi
 
   # 10 統合（main の checkout。未コミットの変更があれば止める）
-  if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no)" ]; then
+  # p0.2.3：同じ実行の中で gate-runner 自身が書いた票（docs/tasks/）の変更は除いて確かめる（OBS-019）
+  if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no -- . ':(exclude)docs/tasks')" ]; then
     fail "$task" "main の checkout に未コミットの変更がある。オーナーが片付けてから再申請" "review"; return
   fi
   if ! git -C "$REPO" merge --ff-only "$branch" >/dev/null 2>&1; then
@@ -215,7 +216,9 @@ process_request() {
   set_ticket_status "$task" "merged" "main=$merged judge=$jv codex=$cv"
   log_event "merged" "$task" "\"main\":\"$merged\",\"judge\":\"$jv\",\"codex\":\"$cv\""
   update_board
-  git -C "$REPO" add "docs/tasks/" && git -C "$REPO" -c user.name=gate-runner -c user.email=gate-runner@local commit -q -m "gate-runner: $task を統合（judge=$jv, codex=$cv）" || true
+  # p0.2.3：記録のコミットは1回の処理の最後にまとめる。ここでコミットすると main が進み、
+  # 鎖で申請された次の票が「main を含まない」で止まるため（OBS-019）
+  RUN_MERGED="${RUN_MERGED}${task}($jv/$cv) "
   mv "$req" "$DONE_DIR/"
   echo "  ✓ $task を統合: main=$merged"
 }
@@ -227,6 +230,12 @@ while :; do
     process_request "$req" || echo "  ! $req の処理で例外" >&2
   done
   shopt -u nullglob
+  # p0.2.3：この回の記録（統合・差し戻し）を1つのコミットにまとめる
+  if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no -- docs/tasks)" ]; then
+    git -C "$REPO" add "docs/tasks/" && git -C "$REPO" -c user.name=gate-runner -c user.email=gate-runner@local commit -q \
+      -m "gate-runner: 記録（統合: ${RUN_MERGED:-なし}）" || true
+  fi
+  RUN_MERGED=""
   # 事後検知：自分以外のコミットで main が進んでいないか（直接統合の違反の検知）
   LAST_MAIN_FILE="$Z3/evidence/.last_main"
   cur="$(git -C "$REPO" rev-parse HEAD)"
