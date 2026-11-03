@@ -5,6 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { getDb } from "./db";
 import { nowJst, diffMinutes } from "./time";
 import { normalizeTaskName } from "./commands";
+import { detectSensitive } from "./sensitive";
 
 export interface WorkSession {
   id: number;
@@ -154,10 +155,15 @@ export function startSession(
     .run(opts.userId, taskName, startedAt);
   const session = getSession(Number(r.lastInsertRowid), db)!;
 
+  // 開始時の「分かっていること／分からないこと」も、他のメモと同じく機密検査を通す（M2-3・M6-1。司法の指摘 T-M1M3）
   const known = opts.known?.trim();
   const unknown = opts.unknown?.trim();
-  if (known) addNote({ sessionId: session.id, userId: opts.userId, body: known, kind: "known" }, db, startedAt);
-  if (unknown) addNote({ sessionId: session.id, userId: opts.userId, body: unknown, kind: "unknown" }, db, startedAt);
+  const flagsOf = (body: string) => {
+    const flags = detectSensitive(body);
+    return flags.length ? JSON.stringify(flags) : null;
+  };
+  if (known) addNote({ sessionId: session.id, userId: opts.userId, body: known, kind: "known", flagsJson: flagsOf(known) }, db, startedAt);
+  if (unknown) addNote({ sessionId: session.id, userId: opts.userId, body: unknown, kind: "unknown", flagsJson: flagsOf(unknown) }, db, startedAt);
 
   return { ok: true, session, endedPrevious };
 }

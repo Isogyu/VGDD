@@ -53,6 +53,26 @@ describe("startSession（M1-1・M1-3）", () => {
     expect(notes[0]).toMatchObject({ kind: "known", body: "依頼者は経理部", created_at: T0 });
   });
 
+  it("known / unknown も機密検査を通り、該当があれば flags_json が付く（司法の指摘 T-M1M3）", () => {
+    const db = openDb(":memory:");
+    const r = startSession(
+      { userId: "newcomer_a", taskName: "A", known: "依頼者の内線は 03-1234-5678", unknown: "ホクト製菓の担当者が誰か" },
+      db,
+      T0,
+    );
+    if (!r.ok) throw new Error();
+    const notes = listNotes(r.session.id, db);
+    expect(notes).toHaveLength(2);
+    const known = notes.find((n) => n.kind === "known")!;
+    const unknown = notes.find((n) => n.kind === "unknown")!;
+    expect(JSON.parse(known.flags_json!).map((f: { type: string }) => f.type)).toEqual(["phone"]);
+    expect(JSON.parse(unknown.flags_json!).map((f: { type: string }) => f.type)).toEqual(["registered_term"]);
+    // 該当がなければ null
+    const r2 = startSession({ userId: "newcomer_b", taskName: "A", known: "依頼者は経理部" }, db, T0);
+    if (!r2.ok) throw new Error();
+    expect(listNotes(r2.session.id, db)[0].flags_json).toBeNull();
+  });
+
   it("空の作業名は受け付けない", () => {
     const db = openDb(":memory:");
     expect(() => startSession({ userId: "newcomer_a", taskName: "   " }, db)).toThrow();
