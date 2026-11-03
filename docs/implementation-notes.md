@@ -76,3 +76,29 @@
 | 日時 | 対象 | 計画 → 実際 | 理由 | 影響 |
 |---|---|---|---|---|
 | 11/3 14:17 | 採用した提案：前回との差 | （M3 の提案）履歴と終了メッセージに「前回より 3時間30分 短い」。**本人の同じ作業名の直前の終了とだけ比べる** | デモの軸「半日 → 30分」を画面上の数字で示す（D-32①）。他の人との比較は人事評価に使わない方針（M9-4）に反するので出さない（オーナーの判断） | SQL の相関サブクエリで前回を引く。件数が増えても履歴は最新5件なので問題にならない見込み |
+
+## 現在の状態と次の一手（2026-11-03 16:59 更新。会話の圧縮に備えた引き継ぎ）
+
+### 状態（`git branch`・`git status`・`git log` で確認済み）
+
+- ブランチ：main のみ。最新のコミット **e8f5e0b**（VGDD 本稼働 S2：フック p0.2.0、gate-runner、Codex judge、憲法審査、エージェント定義、settings 案 A の原本）。**未 push 5件**（f3dae32 規則 .env.local、41ac2c7 V6 #11〜13、57a48a9 M4、f4cdb23 統治の設計、e8f5e0b S2）
+- 作業ツリー：私の未コミットはなし。オーナーの反映分が未コミット（`.claude/settings.json` の変更＝settings.v2、`.claude/agents/worker.md`・`tester.md`・`constitutional-review.md` の配置）。`.claude/` はオーナーがコミットする
+- **オーナーが反映済み**：p0.2.0（`~/tsubuyaki-z3/hooks/policy.mjs`・`verify-chain.mjs`）、`~/tsubuyaki-z3/bin/`（judge.sh・judge-codex.sh・gate-runner.sh・review-constitution.sh）、エージェント定義3体、`.claude/settings.json` ← `vgdd/settings.v2.json`（案 A）。この時点から `vgdd/` は私から変更できない（変更は差分で提案し、憲法審査とオーナーの承認で反映）
+- アプリ：M1〜M4 実装済み（テスト91件）。M3-2 は S-2 への自動遷移で接続済み。デモ用 fixture W1〜W3 は実 API の出力
+- 統治：`docs/governance.md`（案 A で承認、D-47 の修正込み）。タスク票 T-001〜T-003（`docs/tasks/`）は ready、T-000（差し込み口）は未作成
+- VGDD の検証：V6（13項目）と V7（7項目、法律変更前）は `docs/vgdd-status.md`。V7 では「フック・権限ルールはサブエージェントにも効く」「旧法では worker が worktree に書けない」を確認
+
+### 次の一手（順に）
+
+1. ~~**V7 の再試験**~~ → **17:07 に実施済み**（`docs/vgdd-status.md` §2b「V7 の再試験」）。V7-1・V7-6 成功、拒否は4層で確認。V7-7（Z3 の記録）は 17:12 にオーナー補佐が確認。探針の worktree とブランチはオーナーが片付けた
+2. S3：T-000（SessionView の差し込み口）を行政の長が作り、`merge-requests/T-000.json` を置く → オーナーが gate-runner を `--once` で起動して初回の統合（法律の試運転）
+3. S4：T-001〜T-003 を worker 3体で並行 → 申請 → 統合
+4. M10（いまの理解を整理、質問文の下書き）の計画 → 実装（D-44 の P2）
+5. 残り：S5 Playwright（承認要）、`/governance` ダッシュボードは P5、M5・M6 の残り・M9 は P3〜P4
+
+### 注意（引き継ぎ先へ）
+
+- 報告の前に `git branch`・`git status`・`git log origin/main..HEAD` を実行して状態を確かめる。推測は「推測」と書く
+- `app/` 内のファイルは Edit・Write で書く。テストは `npm test`。`npx` は ask
+- フックは commit 本文の保護語には反応しなくなった（p0.2.0）。コマンド文字列の中の説明文はまだ照合される
+- `.env.local` は読まない・表示しない。実案件の語・実名を書かない
