@@ -133,7 +133,14 @@ process_request() {
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     local okf=0
-    while IFS= read -r a; do [ -n "$a" ] && [[ "$f" == $a ]] && okf=1; done <<< "$allowed"
+    # p0.2.2：files_allowed は文字どおりに照合する。[id] のような Next.js の動的ルートの角かっこを
+    # グロブの文字クラスと解釈しないため。* を含む項目だけをグロブとして扱う（OBS-017）。
+    while IFS= read -r a; do
+      [ -n "$a" ] || continue
+      if [[ "$f" == "$a" ]]; then okf=1
+      elif [[ "$a" == *"*"* ]] && [[ "$f" == $a ]]; then okf=1
+      fi
+    done <<< "$allowed"
     [ "$okf" -eq 1 ] || outside="$outside $f"
   done <<< "$changed"
   [ -z "$outside" ] || { fail "$task" "files_allowed の外を変更している:$outside"; mv "$req" "$DONE_DIR/"; return; }
