@@ -1,7 +1,7 @@
 ---
 id: T-003
 title: 整理の待ち時間にメモを振り返る表示
-status: blocked
+status: in_progress
 requirements: [A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M3-2, M4-1]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -79,3 +79,4 @@ depends_on: [T-000]
 - 21:29 オーナーが差し戻し3回を取り消し（理由：法律の不具合 OBS-017・019 と鎖の連鎖。記録は Z3 の annulments.jsonl）。p0.2.4 施行後の再申請のため status: review に戻す（§2 は変えない）
 
 - 2026-11-03T21:36:54+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
+- 21:38 オーナーの裁定：judge（APPROVED）と Codex（CHANGES_REQUIRED）の不一致について、Codex の指摘（強調の位置の初期化が active の変化だけで、count が0になって戻ったときに先頭から始まらない。A2 に反する）を採り、差し戻し。影響は小さいが、修正は1か所で条件を確実に満たせるため。立法補佐がコードで確認済み（OBS-021）
