@@ -317,4 +317,6 @@ printf '%s' "$INPUT" | codex exec - \
 | 日時 | 内容 |
 |---|---|
 | 2026-11-03 16:11 | 初版（設計案）。`docs/vgdd-operations.md` の内容を取り込み、D-47 の修正と公式ドキュメントの確認結果を反映 |
+| 2026-11-03 16:48 | OBS-013（立法補佐の点検）を p0.2.0 に反映：①対象パスはリンクの実体（realpath。未存在なら存在する親）で判定、`ln` は常に拒否 ②作業員（worker・tester、または cwd が worktree 内）の書き込み・cd は自分の worktree の中だけ。手元試験 46/46 |
+| 2026-11-03 16:40 | S2 の原本を `vgdd/` に書き終えた（p0.2.0・verify-chain・settings.v2・gate-runner・judge-codex・review-constitution・schemas・agents 3体）。手元試験 35/35。OBS-012 の4点（cwd の記録、cwd から git を読む、outcome の記録、commit 本文の除外）を反映。V7 の結果は `docs/vgdd-status.md` §2b |
 | 2026-11-03 16:21 | オーナー承認（案 A）。修正3点：フックの `.claude/` 保護方式（全体保護・worktrees だけ例外・例外内のコピーは保護）と deny に commands/・output-styles/・rules/ を追加、`npx` は ask のまま `--no-install` だけ allow、`docs/tasks/_board.json` を gate-runner 専用の保護パスに |

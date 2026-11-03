@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vgdd.verdict.v1",
+  "title": "VGDD 司法の判定（judge・Codex judge が返す形）",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "verdict", "deterministic_audits_passed", "requirements", "findings", "summary"],
+  "properties": {
+    "schema": { "const": "vgdd.verdict.v1" },
+    "verdict": { "enum": ["APPROVED", "CHANGES_REQUIRED"] },
+    "deterministic_audits_passed": { "type": "boolean" },
+    "requirements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "evidence"],
+        "properties": {
+          "id": { "type": "string" },
+          "status": { "enum": ["met", "not_met", "unverified"] },
+          "evidence": { "type": "string" }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "category", "file", "line", "reason"],
+        "properties": {
+          "severity": { "enum": ["critical", "major", "minor"] },
+          "category": { "enum": ["requirement", "correctness", "security", "test", "protected_path", "input"] },
+          "file": { "type": ["string", "null"] },
+          "line": { "type": ["integer", "null"] },
+          "requirement_id": { "type": ["string", "null"] },
+          "reason": { "type": "string" }
+        }
+      }
+    },
+    "summary": { "type": "string" }
+  }
+}

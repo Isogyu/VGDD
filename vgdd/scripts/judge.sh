@@ -19,7 +19,7 @@
 
 set -euo pipefail
 
-REQ=""; BASE=""; TASK=""; OUT_DIR="${HOME}/tsubuyaki-z3/evidence/verdicts"; DRY=0
+REQ=""; BASE=""; TASK=""; OUT_DIR="${HOME}/tsubuyaki-z3/evidence/verdicts"; DRY=0; EMIT=0; STATE_FILE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --req) REQ="$2"; shift 2;;
@@ -27,6 +27,10 @@ while [ $# -gt 0 ]; do
     --task) TASK="$2"; shift 2;;
     --out) OUT_DIR="$2"; shift 2;;
     --dry-run) DRY=1; shift;;
+    # --emit-input：judge を呼ばず、組み立てた入力だけを標準出力に出す（judge-codex.sh・gate-runner が同じ入力を使うため）
+    --emit-input) EMIT=1; shift;;
+    # --audit-state-file：--emit-input のとき、TASK/BRANCH/HEAD_SHA/BASE/STAMP/REQ/AUDIT_STATE を shell 変数の形で書き出す先
+    --audit-state-file) STATE_FILE="$2"; shift 2;;
     -h|--help) sed -n '2,20p' "$0"; exit 0;;
     *) echo "不明な引数: $1" >&2; exit 64;;
   esac
@@ -122,6 +126,19 @@ ${DIFF_BODY:-（差分なし）}
 上の入力だけを使い、指定の JSON スキーマ（vgdd.verdict.v1）で判定を返してください。
 EOF
 )"
+
+AUDIT_STATE="$(if [ "$AUDIT_RAN" -eq 0 ]; then echo not_run; elif [ "$AUDIT_FAIL" -eq 0 ]; then echo passed; else echo failed; fi)"
+
+if [ "$EMIT" -eq 1 ]; then
+  if [ -n "$STATE_FILE" ]; then
+    {
+      printf 'TASK=%q\nBRANCH=%q\nHEAD_SHA=%q\nBASE=%q\nSTAMP=%q\nREQ=%q\nAUDIT_STATE=%q\n' \
+        "$TASK" "$BRANCH" "$HEAD_SHA" "$BASE" "$STAMP" "$REQ" "$AUDIT_STATE"
+    } > "$STATE_FILE"
+  fi
+  printf '%s' "$INPUT"
+  exit 0
+fi
 
 if [ "$DRY" -eq 1 ]; then
   printf '%s\n' "$INPUT"

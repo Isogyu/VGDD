@@ -36,8 +36,12 @@ coverage/
 *.tsbuildinfo
 npm-debug.log*
 
-# Claude Code の個人設定
+# Claude Code の個人設定と、サブエージェントの worktree（本稼働。docs/governance.md §2.3）
 .claude/settings.local.json
+.claude/worktrees/
+
+# VGDD 統合の申請キュー（行政の長が置き、gate-runner が処理する。コミットしない）
+merge-requests/
 
 # OS
 .DS_Store

@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "additionalDirectories": [
+      "../preparation"
+    ],
+    "blockWritesOutsideWorkingDirectories": true,
+    "deny": [
+      "Edit(../preparation/**)",
+      "Write(../preparation/**)",
+      "Edit(../event_records/**)",
+      "Write(../event_records/**)",
+      "Edit(~/tsubuyaki-worklog/preparation/**)",
+      "Write(~/tsubuyaki-worklog/preparation/**)",
+      "Edit(~/tsubuyaki-worklog/event_records/**)",
+      "Write(~/tsubuyaki-worklog/event_records/**)",
+      "Edit(.claude/settings.json)",
+      "Write(.claude/settings.json)",
+      "Edit(.claude/settings.local.json)",
+      "Write(.claude/settings.local.json)",
+      "Edit(.claude/agents/**)",
+      "Write(.claude/agents/**)",
+      "Edit(.claude/skills/**)",
+      "Write(.claude/skills/**)",
+      "Edit(.claude/hooks/**)",
+      "Write(.claude/hooks/**)",
+      "Edit(.claude/commands/**)",
+      "Write(.claude/commands/**)",
+      "Edit(.claude/output-styles/**)",
+      "Write(.claude/output-styles/**)",
+      "Edit(.claude/rules/**)",
+      "Write(.claude/rules/**)",
+      "Edit(**/.claude/settings.json)",
+      "Write(**/.claude/settings.json)",
+      "Edit(**/.claude/settings.local.json)",
+      "Write(**/.claude/settings.local.json)",
+      "Edit(**/.claude/agents/**)",
+      "Write(**/.claude/agents/**)",
+      "Edit(**/.claude/skills/**)",
+      "Write(**/.claude/skills/**)",
+      "Edit(**/.claude/hooks/**)",
+      "Write(**/.claude/hooks/**)",
+      "Edit(**/.claude/commands/**)",
+      "Write(**/.claude/commands/**)",
+      "Edit(**/.claude/output-styles/**)",
+      "Write(**/.claude/output-styles/**)",
+      "Edit(**/.claude/rules/**)",
+      "Write(**/.claude/rules/**)",
+      "Edit(CLAUDE.md)",
+      "Write(CLAUDE.md)",
+      "Edit(**/CLAUDE.md)",
+      "Write(**/CLAUDE.md)",
+      "Edit(vgdd/**)",
+      "Write(vgdd/**)",
+      "Edit(**/vgdd/**)",
+      "Write(**/vgdd/**)",
+      "Edit(docs/tasks/_board.json)",
+      "Write(docs/tasks/_board.json)",
+      "Edit(**/docs/tasks/_board.json)",
+      "Write(**/docs/tasks/_board.json)",
+      "Edit(.github/**)",
+      "Write(.github/**)",
+      "Edit(**/.github/**)",
+      "Write(**/.github/**)",
+      "Read(~/tsubuyaki-z3/**)",
+      "Edit(~/tsubuyaki-z3/**)",
+      "Write(~/tsubuyaki-z3/**)",
+      "Read(.env.local)",
+      "Read(**/.env.local)",
+      "Bash(git merge *)",
+      "Bash(gh pr merge *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(sudo *)",
+      "Edit(~/.claude/settings.json)",
+      "Write(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.local.json)",
+      "Write(~/.claude/settings.local.json)",
+      "Edit(~/.claude/hooks/**)",
+      "Write(~/.claude/hooks/**)",
+      "Edit(~/.claude.json)",
+      "Write(~/.claude.json)"
+    ],
+    "ask": [
+      "Bash(rm *)",
+      "Bash(git rm *)",
+      "Bash(npm install *)",
+      "Bash(npm i *)",
+      "Bash(npm uninstall *)",
+      "Bash(npx *)",
+      "Bash(git push *)",
+      "Edit(package.json)",
+      "Write(package.json)",
+      "Edit(package-lock.json)",
+      "Write(package-lock.json)"
+    ],
+    "allow": [
+      "Bash(npx --no-install *)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": false,
+    "failIfUnavailable": true,
+    "filesystem": {
+      "denyWrite": [
+        "../preparation",
+        "../event_records",
+        "~/tsubuyaki-z3",
+        "CLAUDE.md",
+        ".claude/settings.json",
+        ".claude/settings.local.json",
+        ".claude/agents",
+        ".claude/skills",
+        ".claude/hooks",
+        ".claude/commands",
+        ".claude/output-styles",
+        ".claude/rules",
+        ".github",
+        "vgdd",
+        "docs/tasks/_board.json",
+        "~/.claude/settings.json",
+        "~/.claude/settings.local.json",
+        "~/.claude/hooks",
+        "~/.claude.json"
+      ],
+      "denyRead": [
+        "~/tsubuyaki-z3",
+        ".env.local"
+      ]
+    },
+    "network": {
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "api.anthropic.com",
+        "github.com",
+        "code.claude.com"
+      ]
+    }
+  },
+  "worktree": {
+    "baseRef": "head"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/tsubuyaki-z3/hooks/policy.mjs",
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/tsubuyaki-z3/hooks/policy.mjs",
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/tsubuyaki-z3/hooks/policy.mjs",
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/tsubuyaki-z3/hooks/policy.mjs",
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
+    ]
+  }
+}
