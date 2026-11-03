@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { parseCommand, normalizeTaskName } from "@/lib/commands";
+import { removeSubmittedPrefix } from "@/lib/input";
 import type { User } from "@/lib/db";
 import type { WorkSession, Note, KnowledgeHints } from "@/lib/sessions";
 import { formatHm, formatMdHm } from "@/lib/time";
@@ -30,6 +31,7 @@ export default function WorkScreen() {
   const [known, setKnown] = useState("");
   const [unknown, setUnknown] = useState("");
   const [pending, setPending] = useState<Pending | null>(null);
+  const [deleting, setDeleting] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -84,7 +86,12 @@ export default function WorkScreen() {
   }, [reloadActive]);
   const elapsedMin = active?.elapsedMin ?? 0;
 
-  async function start(taskName: string, force: boolean) {
+  /** 送信が終わったら、送信した文字だけを入力欄から消す（その後に打たれた文字は残す） */
+  function clearSubmitted(submitted: string) {
+    setInput((prev) => removeSubmittedPrefix(prev, submitted));
+  }
+
+  async function start(taskName: string, force: boolean, submittedText: string = input) {
     setBusy(true);
     setMessage(null);
     try {
@@ -103,7 +110,7 @@ export default function WorkScreen() {
         return;
       }
       setHints(d.hints as KnowledgeHints);
-      setInput("");
+      clearSubmitted(submittedText);
       setKnown("");
       setUnknown("");
       setShowKnown(false);
@@ -118,33 +125,77 @@ export default function WorkScreen() {
     }
   }
 
+  /** 作業中のメモを保存する（M2-1）。保存のたびに機密検査が走り、該当があれば警告を出す（M2-3） */
+  async function addMemo(body: string, submittedText: string) {
+    if (!session) {
+      setMessage("先に作業を始めてください。例：「月次レポート改修の作業開始」");
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      const r = await fetch(`/api/sessions/${session.id}/notes`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId, body }),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setMessage(`保存できませんでした（${d.error ?? r.status}）`);
+        return;
+      }
+      clearSubmitted(submittedText);
+      if (d.warning) {
+        setMessage(`注意：${d.warning}。保存はしましたが、AI に送る前に確認を求めます。パターンで取りこぼす情報もあります`);
+      }
+      reloadActive();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** 本人のメモを削除する（確認のあと）。誤って入れた機密を AI に送る前に消す用途 */
+  async function removeNote(noteId: number) {
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/notes/${noteId}?userId=${encodeURIComponent(userId)}`, { method: "DELETE" });
+      if (!r.ok) setMessage("削除できませんでした");
+      setDeleting(null);
+      reloadActive();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const cmd = parseCommand(input);
+    const submitted = input;
+    const cmd = parseCommand(submitted);
     if (cmd.type === "start") {
-      void start(cmd.taskName, false);
+      void start(cmd.taskName, false, submitted);
       return;
     }
     if (cmd.type === "empty") {
-      setMessage("作業名を入れてください。例：「月次レポート改修の作業開始」");
+      setMessage(session ? "メモを入れてください" : "作業名を入れてください。例：「月次レポート改修の作業開始」");
       return;
     }
-    // メモ（M2）と終了（M3）は次の繰り返しで保存できるようにする。いまは保存しない
-    setMessage(
-      cmd.type === "end"
-        ? "作業終了はまだ保存されません（M3 で実装します）"
-        : "作業中のメモはまだ保存されません（M2 で実装します）",
-    );
+    if (cmd.type === "end") {
+      // 作業終了（M3）は次の繰り返しで保存できるようにする。いまは保存しない
+      setMessage("作業終了はまだ保存されません（M3 で実装します）");
+      return;
+    }
+    void addMemo(cmd.body, submitted);
   }
 
   function onStartButton() {
-    const cmd = parseCommand(input);
-    const taskName = cmd.type === "start" ? cmd.taskName : normalizeTaskName(input);
+    const submitted = input;
+    const cmd = parseCommand(submitted);
+    const taskName = cmd.type === "start" ? cmd.taskName : normalizeTaskName(submitted);
     if (!taskName) {
       setMessage("作業名を入れてから「開始」を押してください");
       return;
     }
-    void start(taskName, false);
+    void start(taskName, false, submitted);
   }
 
   const session = active?.session ?? null;
@@ -178,10 +229,9 @@ export default function WorkScreen() {
             <div className="flex gap-2">
               <input
                 className="flex-1 rounded border border-zinc-300 px-3 py-2 dark:border-zinc-700 dark:bg-zinc-900"
-                placeholder={session ? "作業中のつぶやきを書く（M2 で保存できるようになります）" : "例：月次レポート改修の作業開始"}
+                placeholder={session ? "作業中のつぶやきを書く（例：エラーの原因が分からない）" : "例：月次レポート改修の作業開始"}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                disabled={busy}
                 aria-label="入力"
               />
               <button
@@ -267,7 +317,7 @@ export default function WorkScreen() {
                 <button
                   type="button"
                   className="rounded bg-zinc-800 px-3 py-1 text-white dark:bg-zinc-200 dark:text-black"
-                  onClick={() => start(pending.taskName, true)}
+                  onClick={() => start(pending.taskName, true, "")}
                   disabled={busy}
                 >
                   終了して始める
@@ -312,6 +362,35 @@ export default function WorkScreen() {
                     {n.kind === "known" ? "分かっている" : n.kind === "unknown" ? "分からない" : n.kind === "answer" ? "答え" : "メモ"}
                   </span>
                   <span>{n.body}</span>
+                  {n.flags_json && (
+                    <span
+                      className="shrink-0 rounded bg-amber-100 px-1 text-xs text-amber-900 dark:bg-amber-900 dark:text-amber-100"
+                      title="機密情報らしい文字列を検出。AI に送る前に確認します"
+                    >
+                      要確認
+                    </span>
+                  )}
+                  {deleting === n.id ? (
+                    <span className="ml-auto flex shrink-0 gap-1 text-xs">
+                      <span className="text-zinc-500">削除しますか</span>
+                      <button type="button" className="rounded bg-red-700 px-1 text-white" onClick={() => removeNote(n.id)} disabled={busy}>
+                        削除
+                      </button>
+                      <button type="button" className="rounded border px-1" onClick={() => setDeleting(null)}>
+                        取り消す
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="ml-auto shrink-0 text-xs text-zinc-400 hover:text-red-700"
+                      onClick={() => setDeleting(n.id)}
+                      aria-label={`メモ「${n.body.slice(0, 10)}」を削除`}
+                      title="このメモを削除"
+                    >
+                      ✕
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

@@ -18,13 +18,27 @@ const W1_ENDED_AT = "2026-10-27T14:00:00+09:00";
 export interface SeedResult {
   inserted: boolean;
   sessionId: number;
+  /** reset で消した行数（表ごと） */
+  reset?: Record<string, number>;
 }
 
-export function seedDemo(db: DatabaseSync = getDb()): SeedResult {
+/** デモ用テーブルの全行を消す（開発時のみ。users は残す）。デモのやり直し用 */
+export function resetDemoData(db: DatabaseSync = getDb()): Record<string, number> {
+  const counts: Record<string, number> = {};
+  // 外部キーの順（子 → 親）
+  for (const table of ["shared_knowledge", "session_summaries", "notes", "work_sessions"]) {
+    const r = db.prepare(`DELETE FROM ${table}`).run();
+    counts[table] = Number(r.changes);
+  }
+  return counts;
+}
+
+export function seedDemo(db: DatabaseSync = getDb(), opts: { reset?: boolean } = {}): SeedResult {
+  const reset = opts.reset ? resetDemoData(db) : undefined;
   const existing = db
     .prepare("SELECT id FROM work_sessions WHERE user_id = 'newcomer_a' AND task_name = ? AND started_at = ?")
     .get(DEMO_TASK_W1, W1_STARTED_AT) as { id: number } | undefined;
-  if (existing) return { inserted: false, sessionId: existing.id };
+  if (existing) return { inserted: false, sessionId: existing.id, reset };
 
   // 進行中の作業があると開始できないので、デモ用は force なしで入れられるときだけ入れる
   const r = startSession({ userId: "newcomer_a", taskName: DEMO_TASK_W1 }, db, W1_STARTED_AT);
@@ -70,5 +84,5 @@ export function seedDemo(db: DatabaseSync = getDb()): SeedResult {
     "2026-10-27T14:10:00+09:00",
   );
 
-  return { inserted: true, sessionId: sid };
+  return { inserted: true, sessionId: sid, reset };
 }

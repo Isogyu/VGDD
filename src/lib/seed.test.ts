@@ -30,6 +30,21 @@ describe("seedDemo（M7 の前倒し・最小分）", () => {
     expect(b.teamKnowledge).toHaveLength(1);
   });
 
+  it("reset：進行中の作業があっても、全行を消してから入れ直せる（users は残る）", () => {
+    const db = openDb(":memory:");
+    seedDemo(db);
+    // 進行中の作業がある → 通常の seed は失敗しない（既に入っているので何もしない）が、入れ直しは 409 相当で止まる
+    startSession({ userId: "newcomer_a", taskName: "別の作業" }, db);
+    expect(db.prepare("SELECT count(*) c FROM work_sessions").get()).toEqual({ c: 2 });
+
+    const r = seedDemo(db, { reset: true });
+    expect(r.inserted).toBe(true);
+    expect(r.reset).toEqual({ shared_knowledge: 1, session_summaries: 1, notes: 4, work_sessions: 2 });
+    expect(db.prepare("SELECT count(*) c FROM work_sessions").get()).toEqual({ c: 1 });
+    expect(db.prepare("SELECT count(*) c FROM users").get()).toEqual({ c: 3 });
+    expect(getKnowledgeHints("newcomer_a", DEMO_TASK_W1, db).teamKnowledge).toHaveLength(1);
+  });
+
   it("デモの作業は終了済みなので、新人A はすぐ次の作業を始められる", () => {
     const db = openDb(":memory:");
     seedDemo(db);

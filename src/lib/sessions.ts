@@ -78,6 +78,15 @@ export function listNotes(sessionId: number, db: DatabaseSync = getDb()): Note[]
   return db.prepare("SELECT * FROM notes WHERE session_id = ? ORDER BY id").all(sessionId) as unknown as Note[];
 }
 
+/**
+ * メモの削除（本人のメモだけ。07 §3「本人が削除できる」）。
+ * 誤って入れた機密情報を AI に送る前に消す用途。削除できたら true、本人のものでない・存在しないなら false
+ */
+export function deleteNote(noteId: number, userId: string, db: DatabaseSync = getDb()): boolean {
+  const r = db.prepare("DELETE FROM notes WHERE id = ? AND user_id = ?").run(noteId, userId);
+  return Number(r.changes) === 1;
+}
+
 export type StartResult =
   | { ok: true; session: WorkSession; endedPrevious: WorkSession | null }
   | { ok: false; reason: "active_exists"; active: WorkSession };
