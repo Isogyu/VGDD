@@ -1,12 +1,12 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-03T21:35:46.107+09:00",
+  "generated_at": "2026-11-03T21:47:06.757+09:00",
   "totals": {
     "tickets": 4,
-    "merged": 3,
-    "rejected": 11,
+    "merged": 4,
+    "rejected": 12,
     "blocked": 0,
-    "disagreements": 1
+    "disagreements": 2
   },
   "tickets": [
     {
@@ -39,11 +39,11 @@
     {
       "id": "T-003",
       "title": "整理の待ち時間にメモを振り返る表示",
-      "status": "review",
+      "status": "merged",
       "estimate_h": 0.3,
-      "returns": 4,
-      "merged_at": null,
-      "disagreements": 0
+      "returns": 5,
+      "merged_at": "2026-11-03T21:47:06+0900",
+      "disagreements": 1
     }
   ]
 }
