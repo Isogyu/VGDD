@@ -74,13 +74,14 @@ for id in "${IDS[@]}"; do
 done
 
 # ---- 決定論的監査（package.json にあるものだけ実行。出力は末尾 40 行） -----------
-AUDIT_TEXT=""; AUDIT_FAIL=0
+AUDIT_TEXT=""; AUDIT_FAIL=0; AUDIT_RAN=0
 run_audit() { # name, command...
   local name="$1"; shift
   local out rc
   set +e
   out="$("$@" 2>&1)"; rc=$?
   set -e
+  AUDIT_RAN=1
   [ "$rc" -eq 0 ] || AUDIT_FAIL=1
   AUDIT_TEXT+="### ${name}  exit=${rc}"$'\n'"$(printf '%s\n' "$out" | tail -n 40)"$'\n\n'
 }
@@ -107,7 +108,7 @@ collected_at: ${STAMP}
 ## 要件（判定対象の受け入れ基準）
 ${REQ_TEXT}
 ## 決定論的監査の結果
-deterministic_audits_passed: $([ "$AUDIT_FAIL" -eq 0 ] && echo true || echo false)
+deterministic_audits_passed: $(if [ "$AUDIT_RAN" -eq 0 ]; then echo "not_run（未実行＝合格ではない）"; elif [ "$AUDIT_FAIL" -eq 0 ]; then echo true; else echo false; fi)
 
 ${AUDIT_TEXT}
 ## 差分の統計
@@ -124,7 +125,7 @@ EOF
 
 if [ "$DRY" -eq 1 ]; then
   printf '%s\n' "$INPUT"
-  echo "--- dry-run: judge は呼んでいない。監査の不合格=${AUDIT_FAIL} ---" >&2
+  echo "--- dry-run: judge は呼んでいない。監査 実行=${AUDIT_RAN} 不合格=${AUDIT_FAIL} ---" >&2
   exit 0
 fi
 
@@ -135,7 +136,7 @@ RAW="$(printf '%s' "$INPUT" | claude -p --agent judge --output-format json --max
 # ---- 出力の取り出しと、決定論的監査による上書き -------------------------------
 mkdir -p "$OUT_DIR"
 OUT_FILE="${OUT_DIR}/${TASK}-${HEAD_SHA}.json"
-export RAW AUDIT_FAIL TASK BRANCH HEAD_SHA BASE STAMP REQ
+export RAW AUDIT_FAIL AUDIT_RAN TASK BRANCH HEAD_SHA BASE STAMP REQ
 node - > "$OUT_FILE" <<'NODE'
 const raw = process.env.RAW || '';
 let text = raw;
@@ -144,6 +145,9 @@ let verdict = null;
 const m = text.match(/\{[\s\S]*\}/);
 if (m) { try { verdict = JSON.parse(m[0]); } catch {} }
 const auditFail = process.env.AUDIT_FAIL === '1';
+const auditRan = process.env.AUDIT_RAN === '1';
+// 未実行は合格ではない（judge の指摘 2026-11-03：未実行と合格を区別する）
+const auditState = !auditRan ? 'not_run' : (auditFail ? 'failed' : 'passed');
 const record = {
   type: 'verdict',
   task_id: process.env.TASK,
@@ -154,7 +158,8 @@ const record = {
   collected_at: process.env.STAMP,
   judge: verdict,
   judge_parse_ok: !!verdict,
-  deterministic_audits_passed: !auditFail,
+  deterministic_audits: auditState,
+  deterministic_audits_passed: auditState === 'passed',
   final_verdict: null,
   overridden_by_deterministic_audit: false,
   note: null,
@@ -162,10 +167,12 @@ const record = {
 if (!verdict) {
   record.final_verdict = 'CHANGES_REQUIRED';
   record.note = 'judge の出力を JSON として解釈できない（fail-closed）';
-} else if (auditFail && verdict.verdict === 'APPROVED') {
+} else if (auditState !== 'passed' && verdict.verdict === 'APPROVED') {
   record.final_verdict = 'CHANGES_REQUIRED';
   record.overridden_by_deterministic_audit = true;
-  record.note = '決定論的監査が不合格のため、LLM の APPROVED を取り消した（仕様 §4：LLM は不合格を足すだけ）';
+  record.note = auditState === 'failed'
+    ? '決定論的監査が不合格のため、LLM の APPROVED を取り消した（仕様 §4：LLM は不合格を足すだけ）'
+    : '決定論的監査が未実行（package.json や scripts がない）のため、LLM の APPROVED を取り消した（未実行は合格ではない）';
 } else if (verdict.verdict === 'APPROVED' || verdict.verdict === 'CHANGES_REQUIRED') {
   record.final_verdict = verdict.verdict;
 } else {
