@@ -1,8 +1,10 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "permissions": {
     "additionalDirectories": [
       "../preparation"
     ],
+    "blockWritesOutsideWorkingDirectories": true,
     "deny": [
       "Edit(../preparation/**)",
       "Write(../preparation/**)",
@@ -15,7 +17,83 @@
       "Edit(.claude/**)",
       "Write(.claude/**)",
       "Edit(CLAUDE.md)",
-      "Write(CLAUDE.md)"
+      "Write(CLAUDE.md)",
+      "Read(~/tsubuyaki-z3/**)",
+      "Edit(~/tsubuyaki-z3/**)",
+      "Write(~/tsubuyaki-z3/**)",
+      "Edit(.github/**)",
+      "Write(.github/**)",
+      "Bash(git merge *)",
+      "Bash(gh pr merge *)",
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(sudo *)",
+      "Edit(~/.claude/settings.json)",
+      "Write(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.local.json)",
+      "Write(~/.claude/settings.local.json)",
+      "Edit(~/.claude/hooks/**)",
+      "Write(~/.claude/hooks/**)",
+      "Edit(~/.claude.json)",
+      "Write(~/.claude.json)"
+    ],
+    "ask": [
+      "Bash(rm *)",
+      "Bash(git rm *)",
+      "Bash(npm install *)",
+      "Bash(npm i *)",
+      "Bash(npm uninstall *)",
+      "Bash(npx *)",
+      "Bash(git push *)",
+      "Edit(package.json)",
+      "Write(package.json)",
+      "Edit(package-lock.json)",
+      "Write(package-lock.json)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "allowUnsandboxedCommands": false,
+    "failIfUnavailable": true,
+    "filesystem": {
+      "denyWrite": [
+        "../preparation",
+        "../event_records",
+        "~/tsubuyaki-z3",
+        "CLAUDE.md",
+        ".claude",
+        ".github",
+        "~/.claude/settings.json",
+        "~/.claude/settings.local.json",
+        "~/.claude/hooks",
+        "~/.claude.json"
+      ],
+      "denyRead": [
+        "~/tsubuyaki-z3"
+      ]
+    },
+    "network": {
+      "allowedDomains": [
+        "registry.npmjs.org",
+        "api.anthropic.com",
+        "github.com",
+        "code.claude.com"
+      ]
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node ~/tsubuyaki-z3/hooks/policy.mjs",
+            "timeout": 10,
+            "onFailure": "block"
+          }
+        ]
+      }
     ]
   }
 }
