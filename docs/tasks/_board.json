@@ -1,10 +1,10 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-03T21:07:40.164+09:00",
+  "generated_at": "2026-11-03T21:35:46.107+09:00",
   "totals": {
     "tickets": 4,
-    "merged": 2,
-    "rejected": 7,
+    "merged": 3,
+    "rejected": 11,
     "blocked": 0,
     "disagreements": 1
   },
@@ -30,10 +30,10 @@
     {
       "id": "T-002",
       "title": "整理結果のコピー（Markdown）",
-      "status": "review",
+      "status": "merged",
       "estimate_h": 0.3,
-      "returns": 2,
-      "merged_at": null,
+      "returns": 4,
+      "merged_at": "2026-11-03T21:35:46+0900",
       "disagreements": 0
     },
     {
@@ -41,7 +41,7 @@
       "title": "整理の待ち時間にメモを振り返る表示",
       "status": "review",
       "estimate_h": 0.3,
-      "returns": 2,
+      "returns": 4,
       "merged_at": null,
       "disagreements": 0
     }

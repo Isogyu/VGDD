@@ -1,7 +1,7 @@
 ---
 id: T-002
 title: 整理結果のコピー（Markdown）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-1, M4-2, M10-2]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -82,3 +82,5 @@ depends_on: [T-000]
 
 - 2026-11-03T21:26:26+0900 gate-runner: status → blocked（差し戻しが 3 回に達した。オーナーの判断へ）
 - 21:29 オーナーが差し戻し3回を取り消し（理由：法律の不具合 OBS-017・019 と鎖の連鎖。記録は Z3 の annulments.jsonl）。p0.2.4 施行後の再申請のため status: review に戻す（§2 は変えない）
+
+- 2026-11-03T21:35:46+0900 gate-runner: status → merged（main=dac469070944 judge=APPROVED codex=APPROVED）
