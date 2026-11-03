@@ -1,0 +1,49 @@
+{
+  "schema": "vgdd.board.v1",
+  "generated_at": "2026-11-03T18:09:05.393+09:00",
+  "totals": {
+    "tickets": 4,
+    "merged": 1,
+    "rejected": 1,
+    "blocked": 0,
+    "disagreements": 0
+  },
+  "tickets": [
+    {
+      "id": "T-000",
+      "title": "S-2 の差し込み口（T-001〜T-003 を並行にするための空の部品）",
+      "status": "merged",
+      "estimate_h": 0.2,
+      "returns": 1,
+      "merged_at": "2026-11-03T18:09:05+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-001",
+      "title": "整理結果の「前回との比較」",
+      "status": "ready",
+      "estimate_h": 0.5,
+      "returns": 0,
+      "merged_at": null,
+      "disagreements": 0
+    },
+    {
+      "id": "T-002",
+      "title": "整理結果のコピー（Markdown）",
+      "status": "ready",
+      "estimate_h": 0.3,
+      "returns": 0,
+      "merged_at": null,
+      "disagreements": 0
+    },
+    {
+      "id": "T-003",
+      "title": "整理の待ち時間にメモを振り返る表示",
+      "status": "ready",
+      "estimate_h": 0.3,
+      "returns": 0,
+      "merged_at": null,
+      "disagreements": 0
+    }
+  ]
+}

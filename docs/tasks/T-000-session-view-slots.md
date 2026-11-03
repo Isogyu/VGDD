@@ -1,7 +1,7 @@
 ---
 id: T-000
 title: S-2 の差し込み口（T-001〜T-003 を並行にするための空の部品）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2 の完了条件（基盤の票。docs/requirements.md の ID では満たせない）
 requirements_source: ticket               # judge.sh・judge-codex.sh は docs/requirements.md ではなく §2 を要件として渡す（p0.2.1）
 proposal_from: docs/governance.md §8（2026-11-03 オーナー承認。案 A）
@@ -70,3 +70,5 @@ T-001（前回との比較）・T-002（Markdown でコピー）・T-003（整�
 - 2026-11-03T17:26:14+0900 gate-runner: status → in_progress（judge=CHANGES_REQUIRED, codex=CHANGES_REQUIRED（両方が差し戻し））
 - 17:28 オーナーの報告：初回の gate-runner は差し戻し。judge は「票の要件 M4-2・M3-2 は差し込み口では満たせない」と判定（正しい。票の要件の付け方の誤り）。Codex は `verdict.schema.json` が OpenAI の構造化出力の制約（`findings.items` の `required` に全プロパティが要る。`requirement_id` が欠落）で拒否され、判定なし → fail-closed。判定は Z3（オーナー補佐が確認）。対応：①要件を A1〜A6 に書き直し `requirements_source: ticket` を付けた（この票）②法律 p0.2.1 の改正案（スキーマの strict 対応、`--ticket`、フックの誤検知4件）を行政の長が差分で提案 → 立法補佐の点検・憲法審査 → オーナーが反映 → 再申請（ブランチ・HEAD ebba9a1 は変更なし）
 - 18:02 立法補佐（Pro）が §2 の受け入れ条件 A1〜A6 を確認（実装の前の 17:17 に作られた条件で、検証できる内容）。憲法審査の注意（D-49②）に従い、立法補佐が status: review で main にコミットした
+
+- 2026-11-03T18:09:05+0900 gate-runner: status → merged（main=e3c3da3328df judge=APPROVED codex=APPROVED）
