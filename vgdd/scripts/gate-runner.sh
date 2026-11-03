@@ -118,10 +118,21 @@ process_request() {
   local actual; actual="$(git -C "$REPO" rev-parse "$branch")"
   [[ "$actual" == "$sha"* ]] || { fail "$task" "申請の HEAD（$sha）とブランチの HEAD（${actual:0:12}）が違う"; mv "$req" "$DONE_DIR/"; return; }
   local returns; returns="$(grep -c 'gate-runner: status → in_progress' "$t" || true)"
+  # p0.2.4：オーナーが取り消した差し戻し（法律の不具合・鎖の連鎖によるもの）は数えない。取り消しの記録は Z3 にあり、行政は書けない（OBS-020）
+  local annulled; annulled="$(grep -c "\"task\":\"$task\"" "$Z3/evidence/annulments.jsonl" 2>/dev/null || true)"; annulled="${annulled:-0}"
+  returns=$(( returns - annulled )); [ "$returns" -ge 0 ] || returns=0
   [ "$returns" -lt "$MAX_RETURNS" ] || { fail "$task" "差し戻しが $MAX_RETURNS 回に達した。オーナーの判断へ" "blocked"; mv "$req" "$DONE_DIR/"; return; }
 
   # 2 rebase 済み
-  git -C "$REPO" merge-base --is-ancestor main "$branch" || { fail "$task" "ブランチが main を含んでいない（rebase が必要）"; mv "$req" "$DONE_DIR/"; return; }
+  # p0.2.4：main がブランチより先に進んでいても、その差が gate-runner 自身の記録のコミット（docs/tasks/ だけを変える）だけなら受け付ける（OBS-020）
+  local behind_ok=0
+  if ! git -C "$REPO" merge-base --is-ancestor main "$branch"; then
+    local mb; mb="$(git -C "$REPO" merge-base main "$branch")"
+    local others; others="$(git -C "$REPO" log --format='%an' "$mb..main" | grep -vc '^gate-runner$' || true)"
+    local otherfiles; otherfiles="$(git -C "$REPO" diff --name-only "$mb" main | grep -vc '^docs/tasks/' || true)"
+    if [ "$others" -eq 0 ] && [ "$otherfiles" -eq 0 ]; then behind_ok=1
+    else fail "$task" "ブランチが main を含んでいない（rebase が必要）"; mv "$req" "$DONE_DIR/"; return; fi
+  fi
 
   # 3 差分の範囲
   local changed; changed="$(git -C "$REPO" diff --name-only "main...$branch")"
@@ -209,7 +220,10 @@ process_request() {
   if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no -- . ':(exclude)docs/tasks')" ]; then
     fail "$task" "main の checkout に未コミットの変更がある。オーナーが片付けてから再申請" "review"; return
   fi
-  if ! git -C "$REPO" merge --ff-only "$branch" >/dev/null 2>&1; then
+  # p0.2.4：記録のコミットだけ遅れている場合は、衝突しない統合コミット（--no-ff）で取り込む
+  if [ "$behind_ok" -eq 1 ]; then
+    git -C "$REPO" -c user.name=gate-runner -c user.email=gate-runner@local merge --no-ff -q -m "gate-runner: $task を統合（記録のコミットの後）" "$branch" >/dev/null 2>&1 || { git -C "$REPO" merge --abort >/dev/null 2>&1; fail "$task" "統合できない（衝突）"; mv "$req" "$DONE_DIR/"; return; }
+  elif ! git -C "$REPO" merge --ff-only "$branch" >/dev/null 2>&1; then
     fail "$task" "fast-forward できない（main が進んだ）。rebase が必要"; mv "$req" "$DONE_DIR/"; return
   fi
   local merged; merged="$(git -C "$REPO" rev-parse --short=12 HEAD)"
