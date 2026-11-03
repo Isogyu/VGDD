@@ -1,7 +1,7 @@
 ---
 id: T-003
 title: 整理の待ち時間にメモを振り返る表示
-status: blocked
+status: review
 requirements: [A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M3-2, M4-1]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -76,3 +76,4 @@ depends_on: [T-000]
 - 21:14 行政の長：p0.2.3 施行（48c6200）後の再申請。`req4-T-002` の上に同じパッチ（f2b9781 と同一）を積み直す（鎖の2段目。新しい worktree のブランチ）。`status: review` に戻す（§2 は変えない）
 
 - 2026-11-03T21:26:26+0900 gate-runner: status → blocked（差し戻しが 3 回に達した。オーナーの判断へ）
+- 21:29 オーナーが差し戻し3回を取り消し（理由：法律の不具合 OBS-017・019 と鎖の連鎖。記録は Z3 の annulments.jsonl）。p0.2.4 施行後の再申請のため status: review に戻す（§2 は変えない）
