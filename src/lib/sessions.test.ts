@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { openDb } from "./db";
-import { startSession, getActiveSession, endSession, listNotes, getKnowledgeHints, listHistory, getHistoryItem } from "./sessions";
+import { startSession, getActiveSession, endSession, listNotes, getKnowledgeHints, listHistory, getHistoryItem, getPreviousSummary } from "./sessions";
+import type { PreviousSummary as PreviousSummaryData } from "./sessions";
+import { selectPreviousToRender, type FetchedPrevious } from "@/components/PreviousSummary";
 
 const T0 = "2026-11-03T13:00:00+09:00";
 const T1 = "2026-11-03T13:47:30+09:00";
@@ -198,5 +200,106 @@ describe("getKnowledgeHints（M1-4）", () => {
     const h = getKnowledgeHints("newcomer_a", "開発環境", db);
     expect(h.pastStruggles).toEqual([]);
     expect(h.teamKnowledge).toEqual([]);
+  });
+});
+
+describe("getPreviousSummary（T-001：前回との比較）", () => {
+  type Db = ReturnType<typeof openDb>;
+  const TASK = "月次レポートの集計";
+
+  /** 終了済みの作業を1件作り、id を返す */
+  function endedSession(db: Db, userId: string, taskName: string, startedAt: string, endedAt: string): number {
+    const r = startSession({ userId, taskName }, db, startedAt);
+    if (!r.ok) throw new Error();
+    endSession(r.session.id, db, endedAt);
+    return r.session.id;
+  }
+
+  /** parseStoredSummary が読める形の整理結果を1件入れる */
+  function addSummary(db: Db, sessionId: number, struggle: string, learning: string, createdAt: string) {
+    db.prepare("INSERT INTO session_summaries (session_id, json, model, created_at) VALUES (?, ?, 'demo', ?)").run(
+      sessionId,
+      JSON.stringify({
+        schema: "tsubuyaki.summary.v1",
+        struggle: { text: struggle, evidence_note_ids: [1], inferred: false, status: "evidenced" },
+        learning: { text: learning, evidence_note_ids: [], inferred: false, status: "none" },
+      }),
+      createdAt,
+    );
+  }
+
+  it("①前回がなければ null（初めての作業）", () => {
+    const db = openDb(":memory:");
+    const r = startSession({ userId: "newcomer_a", taskName: TASK }, db, T0);
+    if (!r.ok) throw new Error();
+    expect(getPreviousSummary(r.session.id, db)).toBeNull();
+  });
+
+  it("②他人の同じ作業名の記録（終了・整理済み）だけなら null（他人の記録は使わない、M9-4）", () => {
+    const db = openDb(":memory:");
+    const others = endedSession(db, "newcomer_b", TASK, "2026-11-01T10:00:00+09:00", "2026-11-01T11:00:00+09:00");
+    addSummary(db, others, "新人B のつまずき", "新人B の学び", "2026-11-01T11:01:00+09:00");
+    const r = startSession({ userId: "newcomer_a", taskName: TASK }, db, T0);
+    if (!r.ok) throw new Error();
+    expect(getPreviousSummary(r.session.id, db)).toBeNull();
+  });
+
+  it("③自分の同じ作業名の終了済み2件（整理結果あり）→ 直前の1件が返る", () => {
+    const db = openDb(":memory:");
+    const first = endedSession(db, "newcomer_a", TASK, "2026-11-01T10:00:00+09:00", "2026-11-01T14:00:00+09:00");
+    addSummary(db, first, "集計の列の意味が分からなかった", "なし", "2026-11-01T14:01:00+09:00");
+    const second = endedSession(db, "newcomer_a", TASK, "2026-11-02T10:00:00+09:00", "2026-11-02T11:00:00+09:00");
+    addSummary(db, second, "古い版の手順書を見てしまった", "なし", "2026-11-02T11:01:00+09:00");
+    // 別の作業名の記録は前回に数えない
+    const other = endedSession(db, "newcomer_a", "別の作業", "2026-11-02T12:00:00+09:00", "2026-11-02T12:30:00+09:00");
+    addSummary(db, other, "別の作業のつまずき", "なし", "2026-11-02T12:31:00+09:00");
+
+    const r = startSession({ userId: "newcomer_a", taskName: TASK }, db, T0);
+    if (!r.ok) throw new Error();
+    expect(getPreviousSummary(r.session.id, db)).toEqual({
+      session_id: second,
+      task_name: TASK,
+      ended_at: "2026-11-02T11:00:00+09:00",
+      struggle: { text: "古い版の手順書を見てしまった", status: "evidenced" },
+      learning: { text: "なし", status: "none" },
+    });
+    // 2回目から見た前回は1回目
+    expect(getPreviousSummary(second, db)?.struggle.text).toBe("集計の列の意味が分からなかった");
+  });
+
+  it("前回はあるが整理結果がなければ null", () => {
+    const db = openDb(":memory:");
+    endedSession(db, "newcomer_a", TASK, "2026-11-01T10:00:00+09:00", "2026-11-01T11:00:00+09:00");
+    const r = startSession({ userId: "newcomer_a", taskName: TASK }, db, T0);
+    if (!r.ok) throw new Error();
+    expect(getPreviousSummary(r.session.id, db)).toBeNull();
+  });
+});
+
+describe("selectPreviousToRender（T-001：取得結果を sessionId・userId と結び付ける、OBS-018）", () => {
+  const previous: PreviousSummaryData = {
+    session_id: 1,
+    task_name: "月次レポートの集計",
+    ended_at: "2026-11-02T11:00:00+09:00",
+    struggle: { text: "新人A のつまずき", status: "evidenced" },
+    learning: { text: "なし", status: "none" },
+  };
+  const fetchedForA: FetchedPrevious = { sessionId: 10, userId: "newcomer_a", previous };
+
+  it("取得結果がまだない（取得中）なら null", () => {
+    expect(selectPreviousToRender(null, 10, "newcomer_a")).toBeNull();
+  });
+
+  it("userId を変えた直後（state は前のユーザーの結果）なら null", () => {
+    expect(selectPreviousToRender(fetchedForA, 10, "newcomer_b")).toBeNull();
+  });
+
+  it("sessionId を変えた直後（state は前の作業の結果）なら null", () => {
+    expect(selectPreviousToRender(fetchedForA, 11, "newcomer_a")).toBeNull();
+  });
+
+  it("sessionId・userId が一致すれば取得した previous を返す（前回なしの null もそのまま）", () => {
+    expect(selectPreviousToRender(fetchedForA, 10, "newcomer_a")).toBe(previous);
+    expect(selectPreviousToRender({ sessionId: 10, userId: "newcomer_a", previous: null }, 10, "newcomer_a")).toBeNull();
   });
 });

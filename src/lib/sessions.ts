@@ -6,6 +6,7 @@ import { getDb } from "./db";
 import { nowJst, diffMinutes } from "./time";
 import { normalizeTaskName } from "./commands";
 import { detectSensitive } from "./sensitive";
+import { parseStoredSummary, itemStatus, type ItemStatus, type SummaryItem } from "./summary-schema";
 
 export interface WorkSession {
   id: number;
@@ -123,6 +124,61 @@ export function getHistoryItem(sessionId: number, db: DatabaseSync = getDb()): H
   const s = getSession(sessionId, db);
   if (!s || s.status !== "ended") return undefined;
   return listHistory(s.user_id, db, 1000).find((h) => h.id === sessionId);
+}
+
+/** S-2 の「前回との比較」（T-001）：前回の整理結果のうち、つまずきと学びだけ */
+export interface PreviousSummary {
+  session_id: number;
+  task_name: string;
+  ended_at: string;
+  struggle: { text: string; status: ItemStatus };
+  learning: { text: string; status: ItemStatus };
+}
+
+/** 保存済みの項目を「本文と状態」に直す。項目が欠けている古いデータは「記録なし」として扱う */
+function toPreviousItem(item: SummaryItem | undefined): { text: string; status: ItemStatus } {
+  if (!item || typeof item !== "object" || typeof item.text !== "string") return { text: "", status: "none" };
+  const normalized: SummaryItem = {
+    ...item,
+    evidence_note_ids: Array.isArray(item.evidence_note_ids) ? item.evidence_note_ids : [],
+  };
+  return { text: item.text, status: itemStatus(normalized) };
+}
+
+/**
+ * この作業の「前回」の整理結果（つまずき・学び）を返す。
+ * 前回＝本人（同じ user_id）・同じ作業名・終了済みで、ended_at がこの作業の started_at より前のうち最新のもの
+ * （listHistory の「前回」と同じ並び順：ended_at の新しい順、同時刻なら id の大きい順）。
+ * 他の人の記録は使わない（M9-4）。前回がない、または前回に整理結果がない・読めないときは null。
+ */
+export function getPreviousSummary(sessionId: number, db: DatabaseSync = getDb()): PreviousSummary | null {
+  const s = getSession(sessionId, db);
+  if (!s) return null;
+  const prev = db
+    .prepare(
+      `SELECT id, task_name, ended_at FROM work_sessions
+        WHERE user_id = ? AND task_name = ? AND status = 'ended' AND id <> ?
+          AND ended_at IS NOT NULL AND ended_at < ?
+        ORDER BY ended_at DESC, id DESC LIMIT 1`,
+    )
+    .get(s.user_id, s.task_name, s.id, s.started_at) as { id: number; task_name: string; ended_at: string } | undefined;
+  if (!prev) return null;
+
+  // 整理結果は最新の1件（getLatestSummary と同じく id の大きいもの）
+  const row = db
+    .prepare("SELECT json FROM session_summaries WHERE session_id = ? ORDER BY id DESC LIMIT 1")
+    .get(prev.id) as { json: string } | undefined;
+  if (!row) return null;
+  const summary = parseStoredSummary(row.json);
+  if (!summary) return null;
+
+  return {
+    session_id: prev.id,
+    task_name: prev.task_name,
+    ended_at: prev.ended_at,
+    struggle: toPreviousItem(summary.struggle),
+    learning: toPreviousItem(summary.learning),
+  };
 }
 
 export type StartResult =
