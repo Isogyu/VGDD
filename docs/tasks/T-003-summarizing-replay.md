@@ -2,48 +2,61 @@
 id: T-003
 title: 整理の待ち時間にメモを振り返る表示
 status: ready
-requirements: [M3-2, M4-1]
+requirements: [A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
+requirements_source: ticket
+related_requirements: [M3-2, M4-1]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
 proposal_from: M4 の提案（2026-11-03、M4 のコミット 57a48a9 の直後にオーナー採用）
 estimate_h: 0.3
-branch: task/T-003-summarizing-replay
+time_limit_min: 40
+branch: null           # Claude Code が worktree に付ける worktree-agent-<id>。起動後に行政の長が記入
 worker: null
 files_allowed:
-  - src/lib/use-note-replay.ts           # T-000 が作った差し込み口（フック）の中身
+  - src/lib/use-note-replay.ts           # T-000 が作った差し込み口（フック）の中身。関数名・引数・返り値の型は変えない
   - src/lib/use-note-replay.test.ts
 files_forbidden:
-  - src/components/SessionView.tsx       # 差し込み口は T-000 で作成済み。触らない
+  - src/components/SessionView.tsx       # 差し込み口は T-000 で作成済み。触らない（返した番号の li に薄い青を付ける口がある）
   - .claude/**
   - CLAUDE.md
   - .github/**
   - vgdd/**
   - docs/requirements.md
-depends_on: []
+  - docs/tasks/**
+  - merge-requests/**
+  - package.json
+  - package-lock.json
+depends_on: [T-000]
 ---
 
 ## 1. 目的
 
-「整理しています…」の約10秒の間に、左のメモを上から順に軽く強調して「AI が読み込んでいる」感を出す。デモ動画で待ち時間が間延びしない。審査：デモ25。
+「整理しています…」の約10秒の間に、左のメモを上から順に軽く強調して「AI が読み込んでいる」感を出す。デモ動画で待ち時間が間延びしない。審査：デモ25。SessionView は T-000 で、`useNoteReplay` が返した番号の `li` に `bg-sky-100` を付ける口を作ってある（根拠の黄色 `bg-yellow-100` が付くときは付けない）。
 
 ## 2. 受け入れ条件
 
-- A1. 整理中（summarizing が true）の間だけ、メモが上から順に1件ずつ約0.8秒間隔で強調される。最後まで行ったら先頭に戻る
-- A2. 整理が終わる、または失敗すると強調は消える
-- A3. 根拠の #番号を押したときの黄色の強調（既存）と見た目がぶつからない（整理中は根拠ボタンがないので両立する）
-- A4. `prefers-reduced-motion` のときは強調を動かさない（固定の「読み込み中」表示にする）
+- A1. `src/lib/use-note-replay.ts` に純粋関数 `nextReplayIndex(current: number | null, count: number): number | null` を export する：`count <= 0` なら `null`。`current` が `null` なら `1`。`current < count` なら `current + 1`。`current >= count` なら `1`（末尾で先頭に戻る）
+- A2. `useNoteReplay(count: number, active: boolean): number | null`（T-000 の形を変えない）は、`active` が `true` かつ `count > 0` のとき、呼ばれた直後の描画で `1` を返し、以後 **`REPLAY_INTERVAL_MS`（export、値は 800）ミリ秒ごと**に A1 の順で番号を進める。`active` が `false`、または `count` が `0` のときは常に `null`
+- A3. `active` が `true` から `false` に変わる（整理が終わる・失敗する）と、次の描画で `null` に戻る。interval は effect の cleanup で必ず消す（unmount 後に setState しない）
+- A4. `window.matchMedia("(prefers-reduced-motion: reduce)").matches` が `true` のときは、`active` の間 **`1` のまま動かさない**（interval を作らない）。`matchMedia` がない環境（テスト）では動くものとして扱う
+- A5. `src/lib/use-note-replay.test.ts` に `nextReplayIndex` のテストを **4件以上**（`count` 0・`null` から・途中・末尾で先頭に戻る）と、`REPLAY_INTERVAL_MS === 800` の確認。`npm run -s test`（既存 91 件＋追加分）・`npm run -s typecheck`・`npm run -s lint` がすべて通る。差分は `files_allowed` の2ファイルだけ（`SessionView.tsx` は変えない）
 
 ## 3. 開発用テスト
 
-- 純粋なロジック（次に強調する番号の計算）を小さな関数に切り出してテストする。描画は Pro のユーザー評価で確認
+- `use-note-replay.test.ts`：A5。フックの描画（interval）はテストしない。ユーザー役が統合後に「整理しています…」の間に薄い青が上から順に動くことを確認する
+- 既存のテストは `@testing-library/react` を使っていない。**依存の追加はしない**（フックのテストは書かない）
 
 ## 4. 手順の案
 
-- `use-note-replay.ts`（T-000 が「常に null を返す」形で用意済み。`useNoteReplay(count: number, active: boolean): number | null` は強調中のメモ番号を返す）の中身を書く。`setInterval` は effect の中で作り、cleanup で消す。React Compiler の lint（effect 内の setState）に注意：interval のコールバック内の setState は許される
-- 番号の計算（次に強調する番号、末尾で先頭に戻る）は純粋関数に切り出してテストする。`SessionView.tsx` は T-000 で、返された番号の `li` に薄い色のクラスを付ける口を作ってあるので触らない
+1. `npm ci --cache "$TMPDIR/npm-cache"` を最初に1回（`npm install` は使わない）
+2. `use-note-replay.ts`：`"use client"` は不要（client 部品から呼ばれる）。`useState<number | null>(null)` と `useEffect`。effect の中で `active && count > 0` なら `setIndex(1)`（**effect 内の同期的な setState は React Compiler の lint `react-hooks/set-state-in-effect` に当たる**ので、`setTimeout(…, 0)` で次のティックにするか、`useState` の初期値と `key` で代える等、lint が通る形にする。interval のコールバック内の `setIndex(prev => nextReplayIndex(prev, count))` は許される）。cleanup で `clearInterval`・`clearTimeout` と `setIndex(null)` は不要（`active` の変化は effect が再実行されるので、`active` が false の分岐で `setTimeout(() => setIndex(null), 0)` か、返り値を `active ? index : null` にする）
+3. reduced motion は effect の中で `typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches` で判定
+4. T-000 のコメント（「T-003 が中身を書く差し込み口…」）は、実装後に「T-003 で実装」と書き換えてよい
+5. コミットは1つ。メッセージの先頭は `T-003: `
 
 ## 5. 統合審査
 
-決定論的な監査＋ judge（`--req M3-2`）＋ Codex judge。T-000 の統合後なら、T-001・T-002 と**並行可**。
+決定論的な監査（`npm test`・`typecheck`・`lint`）＋ judge ＋ Codex judge。要件は `requirements_source: ticket` により **main にコミット済みのこの票の §2（A1〜A5）**（`--ticket`）。T-001・T-002 と**並行可**。
 
 ## 6. 記録
 
 （統合後に行政の長が追記）
+- 20:04 立法補佐（Pro）が §2 の受け入れ条件を確認（具体的で検証できる。3票の files_allowed は重ならない）。main に固定（D-49②）

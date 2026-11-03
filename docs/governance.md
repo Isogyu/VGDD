@@ -75,6 +75,7 @@
 - **worktree の `.claude/settings.json`**：リポジトリのコピーで、サブエージェントは設定を main の checkout から読むので効かない。ただし統合すると main の設定が変わるため、gate-runner は差分に `.claude/**` が含まれていれば拒否する
 - **`.env.local`**：`.worktreeinclude` を置かない。worker は API キーを持たない（テストは mock、M4 は demo モード）
 - **同時数**：起動時に `CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=5`（作業員4＋テスト担当1）。worker は前面で起こす（バックグラウンドはツールが少ない）
+- **main への追従（2026-11-03 18:04 に判明、オーナー決定）**：main が進んで作業ブランチが main を含まなくなったとき、作業員の worktree で `git rebase main` を実行すると、main の変更に `vgdd/**`・`.claude/agents/**` が含まれていれば sandbox の denyWrite に止まる（`unable to unlink old 'vgdd/…': Operation not permitted`。衝突ではない。T-000 の再申請で確認）。行政の長も同じ sandbox の中なので同じ。**標準の手順は「新しい worktree ＋ cherry-pick」**：行政の長が新しい worker を `isolation: worktree`（`baseRef: head` で main の HEAD から作られる）で起こし、元のコミットを `git cherry-pick <sha>` させる（`vgdd/` を書かない経路）。新しい HEAD で申請し、旧 worktree とブランチはオーナーが片付ける
 
 ### 2.4 S1：V7 の試験計画（フックと sandbox がサブエージェントにも効くか。D-42・D-47④の条件）
 
