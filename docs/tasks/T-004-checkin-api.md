@@ -1,7 +1,7 @@
 ---
 id: T-004
 title: 「いまの理解を整理」の API と4区分への並べ替え（M10-1 の裏側）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M10-1, M4-5, D-40]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -80,3 +80,4 @@ depends_on: []
 - 22:13 オーナーの解釈：A3 の「answers がある」は「1件以上の要素がある」の意味で、空の配列は答えなしと同じに扱う。立法補佐が A3 の文面を明確にした（票の文面の曖昧さが判定の不一致の原因。OBS-024）。この差し戻しは回数に数えない
 
 - 2026-11-04T22:26:17+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
+- 22:28 立法補佐：上の差し戻しは法律の不具合（OBS-025、p0.3.0a で修正）と、その連鎖によるもの。回数に数えない。再申請のため review に
