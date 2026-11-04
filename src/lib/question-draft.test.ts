@@ -84,7 +84,6 @@ describe("buildQuestionDraft（T-006）", () => {
     expect(section(draft, "未確認のこと")).toEqual([
       "- 判断の理由：影響範囲が小さいと判断した（AI の推測）",
       "- 未解決：他の一覧画面にも同じ比較関数があるか（AI の推測）",
-      "- 他の一覧画面にも同じ比較関数があるか",
       "- 比較関数をどこで差し替えるか分からない",
     ]);
     expect(section(draft, "聞きたいこと")).toEqual(["- 比較関数を共通化してよいか"]);
@@ -115,6 +114,41 @@ describe("buildQuestionDraft（T-006）", () => {
     expect(section(draft, "いま理解していること")).toEqual(["- （まだ確認できたことがありません）"]);
     expect(section(draft, "試したこと")).toEqual(["- （まだありません）"]);
     expect(section(draft, "未確認のこと")).toEqual(["- （なし）"]);
+  });
+
+  it("T-008 ①：本文「なし。メモには書かれていない」（evidence 空・status なし）の項目は【未確認のこと】に出ない", () => {
+    const summary: Summary = {
+      ...makeSummary(),
+      cause: item("なし。メモには書かれていない", []), // status なし → isNoneText で none
+      decision_reason: item("なし。メモには書かれていない", []),
+      unresolved: item("なし。メモには書かれていない", []),
+    };
+    const draft = buildQuestionDraft({ taskName: TASK, summary, notes: NOTES });
+    expect(section(draft, "未確認のこと")).toEqual(["- 比較関数をどこで差し替えるか分からない"]);
+    expect(draft).not.toContain("書かれていない");
+  });
+
+  it("T-008 ②：unresolved が inferred のとき、【未確認のこと】の「未解決」の行は1回だけ", () => {
+    const draft = buildQuestionDraft({ taskName: TASK, summary: makeSummary(), notes: NOTES });
+    const rows = section(draft, "未確認のこと");
+    expect(rows.filter((l) => l.includes("他の一覧画面にも同じ比較関数があるか"))).toEqual([
+      "- 未解決：他の一覧画面にも同じ比較関数があるか（AI の推測）",
+    ]);
+    // evidenced なら本文だけの1行、none なら出さない
+    const evidenced = buildQuestionDraft({
+      taskName: TASK,
+      summary: { ...makeSummary(), unresolved: item("共通化の可否", [12], "evidenced") },
+      notes: NOTES,
+    });
+    expect(section(evidenced, "未確認のこと").filter((l) => l.includes("共通化の可否"))).toEqual(["- 共通化の可否"]);
+  });
+
+  it("T-008 ③：同じ文の行は2回出ない（unknown のメモが重なっても1回）", () => {
+    const notes = [...NOTES, note(14, "比較関数をどこで差し替えるか分からない", "unknown")];
+    const draft = buildQuestionDraft({ taskName: TASK, summary: makeSummary(), notes });
+    const rows = section(draft, "未確認のこと");
+    expect(rows.filter((l) => l === "- 比較関数をどこで差し替えるか分からない")).toHaveLength(1);
+    expect(new Set(rows).size).toBe(rows.length);
   });
 
   it("登録語句（顧客名）を含む ask_human から作った下書きは detectSensitive が registered_term を返す（M10-3）", () => {

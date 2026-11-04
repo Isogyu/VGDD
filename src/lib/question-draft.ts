@@ -38,18 +38,22 @@ export function buildQuestionDraft(input: { taskName: string; summary: Summary; 
   lines.push(heading("試したこと"));
   lines.push(itemStatus(summary.tried) !== "none" ? `- ${summary.tried.text}` : "- （まだありません）", "");
 
-  // ④ 未確認のこと：AI の推測の項目 → 未解決 → 「分からないこと」のメモ
+  // ④ 未確認のこと：AI の推測の項目 → 未解決（1行だけ） → 「分からないこと」のメモ。none の項目は出さない
   lines.push(heading("未確認のこと"));
   const unconfirmed: string[] = [];
   for (const key of SUMMARY_KEYS) {
-    if (key === "ask_human") continue;
+    if (key === "ask_human" || key === "unresolved") continue;
     if (itemStatus(summary[key]) === "inferred") unconfirmed.push(`- ${SUMMARY_LABELS[key]}：${summary[key].text}（AI の推測）`);
   }
-  if (itemStatus(summary.unresolved) !== "none") unconfirmed.push(`- ${summary.unresolved.text}`);
+  const unresolvedStatus = itemStatus(summary.unresolved);
+  if (unresolvedStatus === "inferred") unconfirmed.push(`- ${SUMMARY_LABELS.unresolved}：${summary.unresolved.text}（AI の推測）`);
+  else if (unresolvedStatus === "evidenced") unconfirmed.push(`- ${summary.unresolved.text}`);
   for (const note of notes) {
     if (note.kind === "unknown") unconfirmed.push(`- ${note.body}`);
   }
-  lines.push(...(unconfirmed.length > 0 ? unconfirmed : ["- （なし）"]), "");
+  // 同じ文の行は1回だけ（最初に出た位置を残す）
+  const unique = Array.from(new Set(unconfirmed));
+  lines.push(...(unique.length > 0 ? unique : ["- （なし）"]), "");
 
   // ⑤ 聞きたいこと
   lines.push(heading("聞きたいこと"));

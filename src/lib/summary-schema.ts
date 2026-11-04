@@ -78,8 +78,37 @@ export interface SummaryItem {
 /** 「記録なし」を表す本文（根拠がなく、内容を述べていない） */
 const NONE_TEXT = /^(なし|該当なし|特になし|記録なし|不明|（?記録がない）?|メモ(には|からは|に)?(書かれていない|分からない|確認できない)[。．]?)$/u;
 
+/** 「なし」等で始まり、直後が句読点か文末（例：「なし。メモには書かれていない」） */
+const NONE_PREFIX = /^(なし|該当なし|特になし|記録なし|不明)([。．、，：:]|$)/u;
+
+/** 記録がないことを述べる語（「ではない」は入れない：内容を述べる否定文と区別するため） */
+const NONE_PHRASES = ["書かれていない", "記録がない", "記録はない", "メモにない", "言及がない", "触れられていない", "確認できない"];
+
+/** 該当語を含む文を none とみなす長さの上限 */
+const NONE_PHRASE_MAX_LENGTH = 60;
+
+/**
+ * 該当語の後ろに続いてよい文字（A2 ③の列挙どおり）：。 ． 、 ， ： : ！ ？ ! ? と空白の0個以上の並びだけ。
+ * これ以外の文字（絵文字・記号・かっこ・ほかの句読点）が1つでも続けば none にしない
+ */
+const TRAILING_SYMBOLS = /^[。．、，：:！？!?\s]*$/u;
+
+/**
+ * 60 文字以内で、該当語を含み、かつ該当語で文が終わる（後ろは句点などの記号だけ）か。
+ * 「原因はメモに書かれていないが、権限の設定が関係している可能性がある」のように、
+ * 該当語の後ろに内容が続く文は推測を述べているので false（「記録なし」に隠さない）。
+ */
+function endsWithNonePhrase(text: string): boolean {
+  if (text.length > NONE_PHRASE_MAX_LENGTH) return false;
+  return NONE_PHRASES.some((phrase) => {
+    const at = text.lastIndexOf(phrase);
+    return at !== -1 && TRAILING_SYMBOLS.test(text.slice(at + phrase.length));
+  });
+}
+
 export function isNoneText(text: string): boolean {
-  return NONE_TEXT.test(text.trim());
+  const t = text.trim();
+  return NONE_TEXT.test(t) || NONE_PREFIX.test(t) || endsWithNonePhrase(t);
 }
 
 /** 保存済みの古いデータ（status なし）にも使える状態の判定 */
