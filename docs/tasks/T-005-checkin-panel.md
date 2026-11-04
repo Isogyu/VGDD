@@ -1,15 +1,15 @@
 ---
 id: T-005
 title: S-1 の「いまの理解を整理」ボタンと4区分の表示（M10-1 の画面）
-status: ready
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M10-1, M4-5, D-40]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
 proposal_from: M10（要件 §5、P-1'。D-40 の4区分と1問ずつの質問（⑤）。2026-11-04 D-55 の順番「M10 →」）
 estimate_h: 0.7
 time_limit_min: 60
-branch: null
-worker: null
+branch: worktree-agent-ab1057c7c9f36132d   # 作業員の元のブランチ（f5576dc）。申請は main 追従のため cherry-pick した鎖のブランチ（§6）
+worker: W2
 files_allowed:
   - src/components/UnderstandingPanel.tsx      # 新設：ボタン・結果の4区分・追加の質問・送信前の確認
   - src/components/WorkScreen.tsx              # 無効のボタンを部品に置き換える。ほかの動きは変えない
@@ -67,3 +67,5 @@ depends_on: []
 
 （統合後に行政の長が追記）
 - 21:52 立法補佐（Pro）が §2 の受け入れ条件を確認（関数名・応答の形・判定の順・テスト件数まで具体的で検証できる。T-004〜T-006 の files_allowed は重ならない。T-007 は T-004〜T-006 の後）。main に固定（D-49②）
+- 21:54 W2 起動（worktree `agent-ab1057c7c9f36132d`、main 9a9481d から）。21:5x コミット f5576dc（2ファイル、+250/−8）。報告：test 114（変更なし）・typecheck・lint 合格。手順の案との差：答えを送って 409 `flagged_notes` が返っても答えを失わないよう `pendingAnswers` を足した。「該当メモを除いて送る」は票どおり `confirmFlagged` なし（S-2 は付けている）。気づき：ユーザー切替で前の結果が残る可能性（`selectUser` が `active` を null にして部品が外れるため実害なしと行政の長が判断。`key={session.id}` は次の改善候補）。拒否1件：自分の worktree への `git -C` がフックで止まった（回避せず）
+- 21:59 行政の長が差分を確認（`files_allowed` の2ファイルのみ、禁止語なし、A1〜A7 を確認。T-004 の API は未統合のため実行時の確認は統合後のユーザー役）。`status: review` で main にコミット。鎖の2段目

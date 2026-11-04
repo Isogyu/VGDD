@@ -1,7 +1,7 @@
 ---
 id: T-004
 title: 「いまの理解を整理」の API と4区分への並べ替え（M10-1 の裏側）
-status: ready
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M10-1, M4-5, D-40]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -9,8 +9,8 @@ proposal_from: M10（要件 §5、P-1'。D-40 の4区分、D-44 の P2。2026-11
 estimate_h: 0.5
 time_limit_min: 45
 security_review: true          # 新しい API ルート（governance §3.1 の 9 ③）
-branch: null
-worker: null
+branch: worktree-agent-ac11a91bf6763b495   # 作業員の元のブランチ（fb4afbc）。申請は main 追従のため cherry-pick した鎖のブランチ（§6）
+worker: W1
 files_allowed:
   - src/lib/understanding.ts                   # 新設：整理結果を4区分に並べ替える純粋関数
   - src/lib/understanding.test.ts              # 新設
@@ -73,3 +73,5 @@ depends_on: []
 
 （統合後に行政の長が追記）
 - 21:52 立法補佐（Pro）が §2 の受け入れ条件を確認（関数名・応答の形・判定の順・テスト件数まで具体的で検証できる。T-004〜T-006 の files_allowed は重ならない。T-007 は T-004〜T-006 の後）。main に固定（D-49②）
+- 21:53 W1 起動（worktree `agent-ac11a91bf6763b495`、main 9a9481d から）。21:5x コミット fb4afbc（3ファイル、+207）。報告：test 119（既存 114＋5）・typecheck・lint 合格。解釈：`answers: []` は「なし」扱い（400 にしない）。追加の export：`FACT_KEYS`・`NOT_IN_NOTES_TEXT`。Co-Authored-By は作業員が自分のモデル名（Opus 5.5）にした。拒否1件：自分の worktree への `git -C <worktree>` がフックに「作業フォルダ以外」として止められた（回避せず `-C` なしで実行。OBS 候補）
+- 21:59 行政の長が差分を確認（`files_allowed` の3ファイルのみ、禁止語なし、A1〜A7 を確認）。`status: review` で main にコミット。鎖 T-004 → T-005 → T-006 を新しい worktree で積んで申請
