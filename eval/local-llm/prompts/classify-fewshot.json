@@ -1,0 +1,10 @@
+{
+  "_comment": "分類の few-shot（評価の10件とは別の文。user→assistant の順に messages に並べる）。すべて合成データ",
+  "examples": [
+    { "text": "テストが1件だけ落ちる。原因が分からない", "label": "struggle" },
+    { "text": "ログの出力を増やして、落ちる直前の値を見てみた", "label": "tried" },
+    { "text": "日付の比較で時刻を落としていなかったのが原因だった。比較の前に正規化する", "label": "learning" },
+    { "text": "命名は既存のファイルに合わせることにした。統一の方が読みやすい", "label": "decision" },
+    { "text": "権限の設定は先輩に聞くしかない。チャットで質問して待っている", "label": "waiting" }
+  ]
+}
