@@ -4,6 +4,7 @@
 // S-2 の整理結果（8項目）の直後に置く操作（Markdown でコピーなど）のための部品。
 
 import CopyButton from "@/components/CopyButton";
+import QuestionDraft from "@/components/QuestionDraft";
 import type { Note, WorkSession } from "@/lib/sessions";
 import { summaryToMarkdown } from "@/lib/summary-markdown";
 import type { Summary } from "@/lib/summary-schema";
@@ -16,5 +17,11 @@ export interface SummaryActionsProps {
 
 export default function SummaryActions(props: SummaryActionsProps) {
   const text = summaryToMarkdown(props.summary, props.notes, props.session);
-  return <CopyButton text={text} label="Markdown でコピー" />;
+  // Markdown のコピーと質問文の下書き（T-006）を横に並べる。下書きの枠は折り返して下に広がる
+  return (
+    <div className="flex flex-wrap gap-2">
+      <CopyButton text={text} label="Markdown でコピー" />
+      <QuestionDraft summary={props.summary} notes={props.notes} session={props.session} />
+    </div>
+  );
 }
