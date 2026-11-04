@@ -24,6 +24,9 @@ REPO="${HOME}/tsubuyaki-worklog/app"; Z3="${VGDD_Z3_DIR:-${HOME}/tsubuyaki-z3}"
 # p0.3.1：この裁判所（sandbox の外・オーナーの権限）が実行する git は、リポジトリのフックと fsmonitor を読まない（OBS-033）。
 #   作業員が共有の .git/config に設定を書いても、ここでは使われない。さらに .git/config の要約をオーナーの基準値と照合し、違えば止める
 git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.sshCommand=ssh "$@"; }
+# p0.3.1a：macOS には timeout コマンドがないため、perl の alarm で時間の上限を付ける（V8 の試し実行で判明）。
+#   上限を過ぎると SIGALRM で作業員の claude を止める（終了コード 142）
+run_with_timeout() { local secs="$1"; shift; perl -e 'alarm shift; exec @ARGV or exit 127' "$secs" "$@"; }
 check_git_config() {
   local base="$Z3/evidence/git-config.baseline" cur
   cur="$(shasum -a 256 "$REPO/.git/config" | cut -c1-64)"
@@ -130,7 +133,7 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
   local limit; limit="$(front "$t" time_limit_min)"; limit="${limit:-45}"
   local out="$LOGS/${task}-${attempt}.json"
   log "▶ ${task} 作業員を起動（試行 ${attempt}、上限 ${limit}+10 分、worktree ${wt}）"
-  ( cd "$wt" && timeout "$(( (limit + 10) * 60 ))" claude -p --agent worker --output-format json --max-turns 80 \
+  ( cd "$wt" && run_with_timeout "$(( (limit + 10) * 60 ))" claude -p --agent worker --output-format json --max-turns 80 \
       "$(worker_prompt "$task" "$trel" "$extra")" ) > "$out" 2> "$LOGS/${task}-${attempt}.err" || true
   local tok; tok="$(jq -r '(.usage.input_tokens // 0) + (.usage.output_tokens // 0)' "$out" 2>/dev/null || echo 0)"
   TOK_TOTAL=$(( TOK_TOTAL + tok ))
