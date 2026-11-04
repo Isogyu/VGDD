@@ -91,8 +91,8 @@
 | オーナーの停止 | `~/tsubuyaki-z3/night/STOP` がある |
 | 時刻 | `until` を過ぎた |
 | gate-runner が止まっている | pid ファイル／`pgrep -f gate-runner.sh` で見えない。**runner は gate-runner を起こさない**（起こすのはオーナー。別プロセスの独立を守る） |
-| 違反の検知 | `gate_events.jsonl` に `main_advanced_outside_gate`（runner 自身の `night-runner` 名のコミット以外）が出た |
-| 拒否の急増 | `tool_calls.jsonl` の直近 10 分の `deny` が 30 件を超えた（作業員が拒否に当たり続けている＝票の設計か法律の不具合。朝に人が見る） |
+| 違反の検知 | **この夜の運転の開始より後に**、`gate_events.jsonl` に `main_advanced_outside_gate`（runner 自身の `night-runner` 名のコミット以外）が出た（p0.3.1b。夜の前の立法のコミットは数えない） |
+| 拒否の急増 | `tool_calls.jsonl` の直近 10 分の `deny`（時刻は `timestamp` の項目で見る。p0.3.1b） が 30 件を超えた（作業員が拒否に当たり続けている＝票の設計か法律の不具合。朝に人が見る） |
 | 連続の失敗 | 2票続けて前検査か司法で落ちた |
 | 容量 | 空きが `min_free_gb` 未満 |
 | 利用上限 | `claude -p` の出力に利用上限・レート制限の文言、または非 0 の終了コードが 3 回続く |

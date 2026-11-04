@@ -66,6 +66,7 @@ MIN_FREE_GB="$(lim min_free_gb 3)"
 ts() { date +%Y-%m-%dT%H:%M:%S%z; }
 log() { echo "[$(ts)] $*"; }
 RUN_ID="night-$DATE-$$"
+RUN_START="$(ts)"   # p0.3.1b：この夜の運転の開始。これより前の記録は止める条件に数えない（OBS-037）
 STARTED=0; MERGED=0; REJECTED=0; BLOCKED=0; SKIPPED=0; TOK_TOTAL=0; FAIL_STREAK=0; STOP_REASON=""
 declare -a NOTES=()
 note() { NOTES+=("$1"); log "$1"; }
@@ -95,13 +96,14 @@ returns_of() { grep -c 'gate-runner: status → in_progress' "$1" 2>/dev/null ||
 # ---- 止める条件（1つでも当たれば新しい票を取らない） ---------------------------------------------------
 free_gb() { df -g "$REPO" | awk 'NR==2 {print $4}'; }
 gate_alive() { pgrep -f 'gate-runner.sh' >/dev/null 2>&1; }
-deny_recent() { # 直近10分の deny の件数
+deny_recent() { # 直近10分の deny の件数（p0.3.1b：証拠ストアの時刻の項目は timestamp。以前は .ts を読み、いつも 0 件だった。OBS-038）
   [ -f "$TOOLCALLS" ] || { echo 0; return; }
   local since; since="$(date -v-10M +%Y-%m-%dT%H:%M 2>/dev/null || date -d '-10 min' +%Y-%m-%dT%H:%M)"
-  tail -n 2000 "$TOOLCALLS" | jq -r --arg s "$since" 'select(.decision=="deny" and (.ts // "") >= $s) | 1' 2>/dev/null | wc -l | tr -d ' '
+  tail -n 2000 "$TOOLCALLS" | jq -r --arg s "$since" 'select(.decision=="deny" and (.timestamp // "") >= $s) | 1' 2>/dev/null | wc -l | tr -d ' '
 }
-outside_gate() { [ -f "$EVENTS" ] && grep -q '"type":"main_advanced_outside_gate"' "$EVENTS" && \
-  tail -n 200 "$EVENTS" | jq -r 'select(.type=="main_advanced_outside_gate") | .author // ""' | grep -v -q 'night-runner'; }
+outside_gate() { # p0.3.1b：この夜の運転の開始より後の記録だけを見る（夜の前の立法のコミットで止まらない。OBS-037）
+  [ -f "$EVENTS" ] && grep -q '"type":"main_advanced_outside_gate"' "$EVENTS" && \
+  tail -n 200 "$EVENTS" | jq -r --arg s "$RUN_START" 'select(.type=="main_advanced_outside_gate" and (.ts // "") >= $s) | .author // ""' | grep -v -q 'night-runner'; }
 judge_calls_tonight() { find "$VERDICTS" -name '*.json' -newer "$QUEUE" 2>/dev/null | wc -l | tr -d ' '; }
 past_until() { [ "$(date +%H:%M)" \> "$UNTIL" ] && [ "$(date +%H)" -lt 12 ]; }
 should_stop() {
