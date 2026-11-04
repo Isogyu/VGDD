@@ -51,6 +51,19 @@ function denyKind(reason) {
   return 'other';
 }
 
+// p0.3.0：チェックポイントとの照合（末尾の切り詰め・差し替えの検出。D-56③）
+const cpFile = path.join(path.dirname(file), 'checkpoints.jsonl');
+const cpProblems = [];
+if (fs.existsSync(cpFile)) {
+  const base = path.basename(file);
+  for (const l of fs.readFileSync(cpFile, 'utf8').split('\n').filter(Boolean)) {
+    let cp; try { cp = JSON.parse(l); } catch { cpProblems.push('チェックポイントの行を解釈できない'); continue; }
+    if (cp.file !== base) continue;
+    if (lines.length < cp.count) { cpProblems.push(`${cp.ts}: 件数 ${lines.length} がチェックポイントの ${cp.count} より少ない（切り詰めの疑い）`); continue; }
+    const h = crypto.createHash('sha256').update(lines[cp.count - 1], 'utf8').digest('hex');
+    if (h !== cp.last_sha256) cpProblems.push(`${cp.ts}: ${cp.count} 行目のハッシュがチェックポイントと違う（差し替えの疑い）`);
+  }
+}
 lines.forEach((line, i) => {
   let rec;
   try {
@@ -120,7 +133,8 @@ if (summaryJson) {
     allow_without_outcome: allowWithoutOutcome,
   };
   console.log(JSON.stringify(out, null, 2));
-  process.exit(ok ? 0 : 1);
+  if (cpProblems.length) { ok = false; for (const p of cpProblems) console.error('チェックポイント: ' + p); } else if (fs.existsSync(cpFile)) { console.error('チェックポイント: OK'); }
+process.exit(ok ? 0 : 1);
 }
 
 console.log(`ファイル: ${file}`);
@@ -138,4 +152,5 @@ if (denies.length) {
   for (const d of denies) console.log(`  ${d.event_id} ${d.timestamp} [${d.agent}] ${d.operation}: ${d.reason}`);
 }
 console.log(ok ? 'ハッシュチェーン: OK（改ざん・欠落なし）' : 'ハッシュチェーン: NG');
+if (cpProblems.length) { ok = false; for (const p of cpProblems) console.error('チェックポイント: ' + p); } else if (fs.existsSync(cpFile)) { console.error('チェックポイント: OK'); }
 process.exit(ok ? 0 : 1);

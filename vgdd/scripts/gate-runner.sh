@@ -24,6 +24,7 @@
 
 set -euo pipefail
 
+export VGDD_AUDIT_WRAP="${VGDD_Z3_DIR:-${HOME}/tsubuyaki-z3}/bin/sandboxed-run.sh"  # p0.3.0：judge.sh の監査も sandbox の中
 REPO="${HOME}/tsubuyaki-worklog/app"; INTERVAL=30; ONCE=0; NO_CODEX=0; RUN_MERGED=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -116,6 +117,7 @@ process_request() {
   fi
   git -C "$REPO" rev-parse --verify -q "$branch" >/dev/null || { fail "$task" "ブランチ $branch がない" "blocked"; mv "$req" "$DONE_DIR/"; return; }
   local actual; actual="$(git -C "$REPO" rev-parse "$branch")"
+  # p0.3.0：以後の検査・判定・統合は、この完全な SHA（$actual）に固定する。ブランチ名は使わない（OBS-023②）
   [[ "$actual" == "$sha"* ]] || { fail "$task" "申請の HEAD（$sha）とブランチの HEAD（${actual:0:12}）が違う"; mv "$req" "$DONE_DIR/"; return; }
   local returns; returns="$(grep -c 'gate-runner: status → in_progress' "$t" || true)"
   # p0.2.4：オーナーが取り消した差し戻し（法律の不具合・鎖の連鎖によるもの）は数えない。取り消しの記録は Z3 にあり、行政は書けない（OBS-020）
@@ -126,8 +128,8 @@ process_request() {
   # 2 rebase 済み
   # p0.2.4：main がブランチより先に進んでいても、その差が gate-runner 自身の記録のコミット（docs/tasks/ だけを変える）だけなら受け付ける（OBS-020）
   local behind_ok=0
-  if ! git -C "$REPO" merge-base --is-ancestor main "$branch"; then
-    local mb; mb="$(git -C "$REPO" merge-base main "$branch")"
+  if ! git -C "$REPO" merge-base --is-ancestor main "$actual"; then
+    local mb; mb="$(git -C "$REPO" merge-base main "$actual")"
     local others; others="$(git -C "$REPO" log --format='%an' "$mb..main" | grep -vc '^gate-runner$' || true)"
     local otherfiles; otherfiles="$(git -C "$REPO" diff --name-only "$mb" main | grep -vc '^docs/tasks/' || true)"
     if [ "$others" -eq 0 ] && [ "$otherfiles" -eq 0 ]; then behind_ok=1
@@ -135,7 +137,7 @@ process_request() {
   fi
 
   # 3 差分の範囲
-  local changed; changed="$(git -C "$REPO" diff --name-only "main...$branch")"
+  local changed; changed="$(git -C "$REPO" diff --name-only "main...$actual")"
   if printf '%s\n' "$changed" | grep -Eq "$PROTECTED_RE"; then
     fail "$task" "保護パスへの変更が含まれている: $(printf '%s\n' "$changed" | grep -E "$PROTECTED_RE" | tr '\n' ' ')" "blocked"; mv "$req" "$DONE_DIR/"; return
   fi
@@ -157,18 +159,25 @@ process_request() {
   [ -z "$outside" ] || { fail "$task" "files_allowed の外を変更している:$outside"; mv "$req" "$DONE_DIR/"; return; }
 
   # 4 秘密情報・実名
-  if git -C "$REPO" diff "main...$branch" | grep -nE 'sk-ant-api03-[A-Za-z0-9]{40,}|BEGIN (RSA|OPENSSH|PRIVATE)|@gmail\.com|password *=|AKIA[0-9A-Z]{16}' >/dev/null; then
+  if git -C "$REPO" diff "main...$actual" | grep -nE 'sk-ant-api03-[A-Za-z0-9]{40,}|BEGIN (RSA|OPENSSH|PRIVATE)|@gmail\.com|password *=|AKIA[0-9A-Z]{16}' >/dev/null; then
     fail "$task" "秘密情報らしい文字列が差分にある" "blocked"; mv "$req" "$DONE_DIR/"; return
   fi
-  if [ -f "$Z3/eval/banned-terms.txt" ] && git -C "$REPO" diff "main...$branch" | grep -nFf "$Z3/eval/banned-terms.txt" >/dev/null; then
+  if [ -f "$Z3/eval/banned-terms.txt" ] && git -C "$REPO" diff "main...$actual" | grep -nFf "$Z3/eval/banned-terms.txt" >/dev/null; then
     fail "$task" "実案件・実名の語が差分にある（Z3 の一覧に一致）" "blocked"; mv "$req" "$DONE_DIR/"; return
   fi
 
   # 5 決定論的な監査（一時 worktree）
   local wt; wt="$(mktemp -d "${TMPDIR:-/tmp}/gate-$task-XXXX")"
-  git -C "$REPO" worktree add --detach "$wt" "$branch" >/dev/null 2>&1
+  git -C "$REPO" worktree add --detach "$wt" "$actual" >/dev/null 2>&1
   local audit_ok=1
-  ( cd "$wt" && npm ci --no-fund --no-audit >/dev/null 2>&1 && npm run -s test >/dev/null 2>&1 && npm run -s typecheck >/dev/null 2>&1 && npm run -s lint >/dev/null 2>&1 ) || audit_ok=0
+  # p0.3.0：作業員の書いたコード（テスト・設定・npm のスクリプト）は sandbox-exec の中で実行する（OBS-023①）。
+  # 書き込みは一時 worktree と一時領域だけ、Z3・.env.local は読めない、テストの間はネットワークなし
+  local SBX="$BIN/sandboxed-run.sh"
+  [ -x "$SBX" ] || { git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true; fail "$task" "sandboxed-run.sh がない（fail-closed）" "blocked"; mv "$req" "$DONE_DIR/"; return; }
+  ( cd "$wt" && "$SBX" --dir "$wt" --net -- npm ci --no-fund --no-audit >/dev/null 2>&1 \
+      && "$SBX" --dir "$wt" -- npm run -s test >/dev/null 2>&1 \
+      && "$SBX" --dir "$wt" -- npm run -s typecheck >/dev/null 2>&1 \
+      && "$SBX" --dir "$wt" -- npm run -s lint >/dev/null 2>&1 ) || audit_ok=0
   if [ "$audit_ok" -ne 1 ]; then
     git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true
     fail "$task" "決定論的な監査（test/typecheck/lint）が不合格"; mv "$req" "$DONE_DIR/"; return
@@ -208,7 +217,7 @@ process_request() {
     printf '\n- %s gate-runner: judge と Codex が minor の指摘で分かれた。厳しい側の指摘を残して統合（judge=%s, codex=%s）\n' "$(ts)" "$jv" "$cv" >> "$t"
   fi
   if [ "$(front "$t" security_review)" = "true" ] && [ "$NO_CODEX" -eq 0 ]; then
-    local wt2; wt2="$(mktemp -d "${TMPDIR:-/tmp}/gate-sec-$task-XXXX")"; git -C "$REPO" worktree add --detach "$wt2" "$branch" >/dev/null 2>&1
+    local wt2; wt2="$(mktemp -d "${TMPDIR:-/tmp}/gate-sec-$task-XXXX")"; git -C "$REPO" worktree add --detach "$wt2" "$actual" >/dev/null 2>&1
     ( cd "$wt2" && "$BIN/judge-codex.sh" --security "${reqargs[@]}" --base main --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
     git -C "$REPO" worktree remove --force "$wt2" >/dev/null 2>&1 || true
     local sfile; sfile="$(ls -t "$VERDICTS/$task-"*-codex-security.json 2>/dev/null | head -n 1)"
@@ -222,8 +231,8 @@ process_request() {
   fi
   # p0.2.4：記録のコミットだけ遅れている場合は、衝突しない統合コミット（--no-ff）で取り込む
   if [ "$behind_ok" -eq 1 ]; then
-    git -C "$REPO" -c user.name=gate-runner -c user.email=gate-runner@local merge --no-ff -q -m "gate-runner: $task を統合（記録のコミットの後）" "$branch" >/dev/null 2>&1 || { git -C "$REPO" merge --abort >/dev/null 2>&1; fail "$task" "統合できない（衝突）"; mv "$req" "$DONE_DIR/"; return; }
-  elif ! git -C "$REPO" merge --ff-only "$branch" >/dev/null 2>&1; then
+    git -C "$REPO" -c user.name=gate-runner -c user.email=gate-runner@local merge --no-ff -q -m "gate-runner: $task を統合（記録のコミットの後）" "$actual" >/dev/null 2>&1 || { git -C "$REPO" merge --abort >/dev/null 2>&1; fail "$task" "統合できない（衝突）"; mv "$req" "$DONE_DIR/"; return; }
+  elif ! git -C "$REPO" merge --ff-only "$actual" >/dev/null 2>&1; then
     fail "$task" "fast-forward できない（main が進んだ）。rebase が必要"; mv "$req" "$DONE_DIR/"; return
   fi
   local merged; merged="$(git -C "$REPO" rev-parse --short=12 HEAD)"
@@ -250,6 +259,11 @@ while :; do
       -m "gate-runner: 記録（統合: ${RUN_MERGED:-なし}）" || true
   fi
   RUN_MERGED=""
+  # p0.3.0：証拠ストアのチェックポイント（件数と末尾の行のハッシュ）。末尾の切り詰めを verify-chain で検出する（D-56③）
+  for lf in "$Z3/evidence/tool_calls.jsonl" "$EVENTS"; do
+    [ -s "$lf" ] || continue
+    printf '{"ts":"%s","file":"%s","count":%s,"last_sha256":"%s"}\n' "$(ts)" "$(basename "$lf")" "$(wc -l < "$lf" | tr -d ' ')" "$(tail -n 1 "$lf" | tr -d '\n' | shasum -a 256 | cut -c1-64)" >> "$Z3/evidence/checkpoints.jsonl"
+  done
   # 事後検知：自分以外のコミットで main が進んでいないか（直接統合の違反の検知）
   LAST_MAIN_FILE="$Z3/evidence/.last_main"
   cur="$(git -C "$REPO" rev-parse HEAD)"

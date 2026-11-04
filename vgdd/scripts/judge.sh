@@ -129,7 +129,9 @@ run_audit() { # name, command...
   local name="$1"; shift
   local out rc
   set +e
-  out="$("$@" 2>&1)"; rc=$?
+  # p0.3.0：gate-runner から呼ばれたときは、作業員のコードを sandbox の中で実行する（OBS-023①）
+  if [ -n "${VGDD_AUDIT_WRAP:-}" ]; then out="$("$VGDD_AUDIT_WRAP" --dir "$PWD" -- "$@" 2>&1)"; rc=$?
+  else out="$("$@" 2>&1)"; rc=$?; fi
   set -e
   AUDIT_RAN=1
   [ "$rc" -eq 0 ] || AUDIT_FAIL=1
