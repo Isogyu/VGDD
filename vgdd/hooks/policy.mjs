@@ -53,7 +53,7 @@ import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
 
-const POLICY_VERSION = 'p0.2.1'; // OBS-013（リンクの実体で判定、作業員の閉じ込め）と OBS-014（誤検知4件の修正）を含む
+const POLICY_VERSION = 'p0.3.1'; // OBS-013（リンクの実体で判定、作業員の閉じ込め）と OBS-014（誤検知4件の修正）を含む
 const HOME = os.homedir();
 const Z3 = process.env.VGDD_Z3_DIR || path.join(HOME, 'tsubuyaki-z3');
 const EVIDENCE = process.env.VGDD_EVIDENCE_PATH || path.join(Z3, 'evidence', 'tool_calls.jsonl');
@@ -363,6 +363,15 @@ function judgeGitScope(command, git, agentType) {
       if (!(dir === '.' || dir === './' || dir === '$PWD' || dir === '"$PWD"')) {
         return `git -C ${dir} で作業フォルダ以外のリポジトリを対象にしている（ホームの .git と main を守るため）`;
       }
+    }
+    // p0.3.1：git の設定の書き換えを拒否（OBS-033）。共有の .git/config に core.hooksPath・core.fsmonitor 等を書かれると、
+    //   sandbox の外で動く gate-runner・夜間ランナーの git の操作で、作業員の用意したスクリプトがオーナーの権限で実行されうる。
+    //   読み取り（--get・--list・-l・--get-all・--get-regexp・--show-origin）だけ許す。-c による一時的な上書きも、危険な鍵は拒否
+    if (/\bgit\s+config\b/.test(seg) && !/\bgit\s+config\s+(--get(-all|-regexp)?|--list|-l|--show-origin|--show-scope)\b/.test(seg)) {
+      return 'git config の書き換えは禁止（共有の git の設定は裁判所の動作に影響するため。OBS-033）';
+    }
+    if (/\bgit\s+(-c\s+\S+\s+)*-c\s+(core\.(hooksPath|fsmonitor|sshCommand|pager|editor|askPass)|filter\.|diff\.\S+\.textconv|alias\.)/i.test(seg)) {
+      return 'git -c による危険な設定（hooksPath・fsmonitor・filter など）は禁止（OBS-033）';
     }
     // main への統合・参照の書き換え（統合は gate-runner だけが行う。D-45③・D-47①）
     // p0.2.1④：merge の語の終わりまで見る（git merge-base は読み取り）

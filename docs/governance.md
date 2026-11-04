@@ -31,6 +31,9 @@
 | ユーザー・評価 | user-evaluator | `vgdd/scripts/user-eval.sh` → Claude API（SDK、オーナーの環境で実行） | Sonnet 5.5 | API キー | ツールなし。画像と記録だけ | 人物・シナリオ・スクリーンショット・記録 | 「再現手順・期待・実際・重さ」の一覧（D-43 の形） |
 | ユーザー・UX 審査 | Codex UX | `judge-codex.sh --ux` | Codex | Codex | 読み取り専用 | スクリーンショットと手順 | 使いにくさの指摘 |
 | 裁判所の執行 | gate-runner | `vgdd/scripts/gate-runner.sh`（原本）→ `~/tsubuyaki-z3/bin/gate-runner.sh`（実行用。オーナーがコピー） | — | — | **sandbox の外、オーナーの権限**。Z3 に書ける。main に統合できる唯一の主体 | `merge-requests/` の申請、票、ブランチ | 判定（Z3）、統合、票の更新、`docs/tasks/_board.json` |
+| 行政の長・夜間の代行 | night-runner | `vgdd/scripts/night-runner.sh`（原本）→ `~/tsubuyaki-z3/bin/`（D-55③。`docs/harness.md`） | —（スクリプト） | — | **sandbox の外、オーナーの権限**。承認済みのキュー（Z3）を読み、作業員を headless で起こし、票の status と §6 だけを main にコミットし、申請を置く。**実装しない・判定しない・merge しない** | `~/tsubuyaki-z3/night/queue.json`、票、`gate_events.jsonl` | worktree と `night/T-NNN` ブランチ、`merge-requests/`、`night/summary-<date>.json` |
+| 行政・作業員（夜間） | worker（headless） | `claude -p --agent worker`。cwd は `.claude/worktrees/night-T-NNN`（フックの閉じ込めは cwd で効く。p0.2.0 OBS-013②） | Opus 5.5 | Max | 昼と同じ。ask は無人では拒否（fail-closed） | 票1枚 | ブランチへのコミット、報告（JSON） |
+| 書記（朝刊） | morning-report | `vgdd/scripts/morning-report.mjs`：集計（決定論的）→ ローカル LLM（lfm3・qwen3:4b-instruct。分類・言い換え）→ Claude（`claude -p`。文章） | lfm3／Sonnet 相当 | Max（Claude）、手元（ローカル） | ツールなし。**決めない**（D-52）。入力は Z3 の集計だけ | 一晩の記録 | `night/reports/<date>.md`（人が読んで `docs/night/` に写す） |
 
 同時に動くのは「作業員 最大4＋テスト担当1」。司法は判定のときだけ短時間。ユーザー役は区切りごと。gate-runner は常駐（ポーリング）だが、判定のときだけ API を使う。
 
@@ -100,7 +103,7 @@ V6 と同じ方法（実際に試して「保証できる／できない」を�
 ### 3.1 条件（gate-runner が順に検査する。1つでも落ちれば統合しない）
 
 1. 申請（`merge-requests/T-NNN.json`）の票が存在し、`status: review`、ブランチの HEAD が申請の SHA と一致する
-2. ブランチが main を含む（rebase 済み）。含まなければ `needs_rebase` で差し戻す
+2. **統合キュー**（p0.3.1 案、D-55③）：ブランチが main を含んでいればそのまま。含んでいなければ、gate-runner が一時 worktree で **main に申請の SHA を試しに merge**（`--no-ff`、コミットは一時 worktree の中だけ）して「候補のコミット」を作る。衝突すれば `needs_rebase` で差し戻す。以後の検査・判定（3〜9）は候補のコミットに対して行い、差分の範囲（3）は `main...<申請の SHA>` で見る。**鎖で積まなくてよい**：各票は main から分岐し、前の票が止まっても後ろの票は止まらない
 3. `git diff main...task/T-NNN --name-only` が票の `files_allowed` の中だけ。**`.claude/**`・`CLAUDE.md`・`.github/**`・`vgdd/**`・`docs/requirements.md`・`merge-requests/**` が含まれていれば即拒否**（憲法の保護）
 4. 差分に秘密情報らしい文字列・実名の形がない（既存の push 前の grep と同じ。Z3 の実名リストも照合）
 5. gate 用の一時 worktree で `npm ci`（lockfile に変更があれば拒否）→ `npm test` → `npm run typecheck` → `npm run lint`（決定論的な監査）
@@ -108,7 +111,7 @@ V6 と同じ方法（実際に試して「保証できる／できない」を�
 7. `judge-codex.sh --req … --base main`（同じ入力）→ APPROVED
 8. judge と Codex の不一致（D-47③）：**critical・major の判断が分かれたときだけ** `blocked` にしてオーナーが裁定。minor だけの違いなら、厳しい側の指摘を票の §6 に残して統合する。不一致の件数を Z3 に記録する
 9. 票が `security_review: true`（M6・M9・依存の変更）なら `judge-codex.sh --security` も APPROVED であること
-10. すべて合格 → gate-runner が **main の checkout で `git merge --ff-only task/T-NNN`** → 票の `status: merged`、§6 に判定 ID と時刻を追記して gate-runner の名でコミット → 申請を `merge-requests/done/` に移す → `docs/tasks/_board.json` を更新
+10. すべて合格 → gate-runner が **main の checkout で `git merge --ff-only <検査した候補のコミット>`**（候補は main を親に持つので常に fast-forward。検査した木と統合される木が同じ。p0.3.0 の SHA の固定はそのまま）→ 票の `status: merged`、§6 に判定 ID と時刻を追記して gate-runner の名でコミット → 申請を `merge-requests/done/` に移す → `docs/tasks/_board.json` を更新。**1件統合するたびに、残りの申請は次の周回で最新の main と組み合わせて 2〜10 をやり直す**（前の票の統合で候補が変わるため。files_allowed が重ならなければ衝突しない）
 
 ### 3.2 エージェントが main に直接統合できないことの強制（3層）
 
@@ -117,7 +120,7 @@ V6 と同じ方法（実際に試して「保証できる／できない」を�
 | 権限ルール | `Bash(git merge *)`・`Bash(gh pr merge *)`・`Bash(git push --force*)` は deny（いまもある）。`git push` は ask |
 | フック p0.2.0 | Bash の `git merge`・`git rebase` を main 上で実行する形、`git checkout main`・`git switch main` に続く書き込み、`git branch -f main`・`git update-ref refs/heads/main` を拒否。worktree の中からの `git -C <main>` 等は isolation の検査も拒否 |
 | sandbox | main の checkout の `.git` は共有なので git 自体は動く。だからこそフックと権限で `main` への参照更新を止める |
-| 事後の検知 | gate-runner は申請の処理前に `git log main` を見て、自分の統合以外のコミットが main に増えていれば**警告を Z3 に書き、オーナーに通知**（違反の検知。防ぐのは上の3層） |
+| 事後の検知 | gate-runner は申請の処理前に `git log main` を見て、自分の統合以外のコミットが main に増えていれば**警告を Z3 に書き、オーナーに通知**（違反の検知。防ぐのは上の3層）。例外は author が `gate-runner` と **`night-runner`**（夜間ハーネスの票の status のコミットだけ。差分が `docs/tasks/T-*.md` 以外に及べば例外にしない。D-55③） |
 
 限界：Bash の文字列照合は回避できる余地が残る（V6 の限界と同じ）。`main` の保護は「フック＋権限＋事後検知」で、OS レベルの保証ではない。README に書く。
 
@@ -313,10 +316,25 @@ printf '%s' "$INPUT" | codex exec - \
 | S5 | Playwright の導入（承認）とペルソナ1本、`user-eval.sh` | 0.5h | Max＋オーナー |
 | S6 | `/governance` は P5 の票 | — | — |
 
+## 11. 夜間ハーネス＋朝刊（D-55③。設計は `docs/harness.md`）
+
+- **行政の長の夜間の代行**：`night-runner.sh`（オーナー権限、sandbox の外）が、オーナーが Z3 に置いて承認したキュー（`~/tsubuyaki-z3/night/queue.json`。写した時点が承認。D-37③）の順に、`unattended: true` の票だけを配る。実装は昼と同じ `worker`（headless、cwd は `.claude/worktrees/night-T-NNN`）。判定と統合は gate-runner（昼と同じ法律）。**夜間だから緩める規則はない**
+- **runner が main に書けるもの**：票の `status` と §6 の行だけ（`night-runner` の名でコミット）。§2（受け入れ条件）は触らない。ソースに触らない。merge・push はしない
+- **統合キュー**（§3.1 の 2・10）：各票は main から分岐したまま申請する（鎖で積まない）。gate-runner が申請ごとに「最新の main ＋ 申請の SHA」の候補を一時 worktree で作って検査・判定し、合格なら候補を fast-forward で統合する。1件統合するたびに残りは最新の main と組み合わせて検査し直す。**前の票が差し戻されても後ろの票は止まらない**（files_allowed が重ならない限り衝突しない）。runner の status のコミットで main が進んでも申請は落ちないので、申請は複数同時に置ける。作業員は並行（既定 2、最大 4）
+- **上限（決定論的）**：並行数・1晩の票数・時刻・1票と1晩のトークン・司法の呼び出し回数・空き容量。**止める条件**：STOP ファイル、時刻、gate-runner の停止、`main_advanced_outside_gate`、拒否の急増、連続の失敗、容量、利用上限の文言、予算。止まるのは「新しい票を取らない」だけで、統合は gate-runner が続ける
+- **差し戻し**：前検査（gate-runner の段階 1〜4 を runner が先に見る）か司法で落ちたら、理由を添えて作業員に**1回だけ**やり直させる。2回目で止めて朝刊へ。回数は gate-runner が数える（上限 3）。`blocked` は朝にオーナーが裁定
+- **朝刊**：`morning-report.mjs` が「集計（決定論的）→ ローカル LLM（分類・言い換え。参考）→ Claude（固定の見出しで文章）」の3段で `night/reports/<date>.md` を書く。書記は決めない（D-52）。人が読んで `docs/night/` に写す
+- **未試験**：V8（`docs/harness.md` §9）で、閉じ込め・前検査・申請・停止・朝刊を1晩 1〜2 時間で確かめてから本番にする（D-37「最初の晩は試験運転」）
+
+
+> **p0.3.1 での変更（憲法審査 OBS-035②、オーナーの決定 2026-11-05）**：夜間の gate-runner は `--hold` で動かし、**判定に合格しても統合しない**。合格した候補を Z3 の `held.jsonl` に記録し、朝にオーナーが画面と判定を確かめて `vgdd/scripts/release.sh T-NNN …` で統合する（約束9・11：1機能ごとにオーナーが見て選ぶ）。release.sh は、今の main と申請の SHA から組み直し、入る変更が夜に判定した変更と一字一句同じであることと、組み合わせた木の監査（sandbox の中）を確かめてから統合する。
+
 ## 更新履歴
 
 | 日時 | 内容 |
 |---|---|
+| 2026-11-04 22:2x（案） | **統合キュー**（p0.3.1 案。オーナーの指示 22:10）：§3.1 の 2 と 10 を改正。main を含まない申請は gate-runner が「最新の main ＋ 申請の SHA」の候補を一時 worktree で作って検査し、候補を fast-forward で統合。鎖で積まない。前の票が止まっても後ろは止まらない。`vgdd/scripts/gate-runner.sh` の差分は scratchpad |
+| 2026-11-04 2x:xx（案） | 夜間ハーネス（D-55③）：§1 に night-runner・夜間の worker・書記の行、§3.2 の事後検知に `night-runner` の例外、§11 を追加。`vgdd/scripts/night-runner.sh`・`morning-report.mjs` を新設（未試験）。票の front matter に `unattended` |
 | 2026-11-03 16:11 | 初版（設計案）。`docs/vgdd-operations.md` の内容を取り込み、D-47 の修正と公式ドキュメントの確認結果を反映 |
 | 2026-11-03 16:48 | OBS-013（立法補佐の点検）を p0.2.0 に反映：①対象パスはリンクの実体（realpath。未存在なら存在する親）で判定、`ln` は常に拒否 ②作業員（worker・tester、または cwd が worktree 内）の書き込み・cd は自分の worktree の中だけ。手元試験 46/46 |
 | 2026-11-03 16:40 | S2 の原本を `vgdd/` に書き終えた（p0.2.0・verify-chain・settings.v2・gate-runner・judge-codex・review-constitution・schemas・agents 3体）。手元試験 35/35。OBS-012 の4点（cwd の記録、cwd から git を読む、outcome の記録、commit 本文の除外）を反映。V7 の結果は `docs/vgdd-status.md` §2b |

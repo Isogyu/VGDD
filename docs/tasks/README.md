@@ -18,6 +18,7 @@ proposal_from: M4 の提案（2026-11-03 オーナー採用）
 estimate_h: 0.5
 branch: task/T-001-summary-compare
 worker: null           # 割り当てた作業員（W1〜W4）。並行中の衝突を見るため
+unattended: false      # true なら夜間ハーネスが無人で回してよい票（オーナーの判断が要らない。依存の追加・push・削除・要件の変更を伴わない）。既定 false。オーナーが票ごとに決める（D-55③）
 files_allowed:         # この票で触ってよいファイル。他の票と重ならないように行政の長が分ける
   - src/components/SessionView.tsx
   - src/lib/sessions.ts
@@ -48,4 +49,5 @@ depends_on: []
 - main への統合は gate-runner（`vgdd/scripts/gate-runner.sh`。sandbox の外でオーナーが起動）だけが行う。条件：決定論的な監査の合格、judge の APPROVED、Codex judge の APPROVED（重大な指摘で分かれたらオーナー）
 - **main が進んで作業ブランチが main を含まなくなったら、worktree で `git rebase main` はしない**（main の変更に `vgdd/**`・`.claude/**` が含まれると sandbox に止まる。T-000 で確認）。標準の手順：行政の長が新しい worker を `isolation: worktree`（main の HEAD から作られる）で起こし、元のコミットを `git cherry-pick` させて新しい HEAD で申請する
 - 依存パッケージの追加・削除・push は作業員にはできない（ask。行政の長がオーナーに申請する）
-- 票の `status` は行政の長だけが変える
+- 票の `status` は行政の長だけが変える（夜間は `night-runner` が代行する。`status` と §6 の行だけ。D-55③、`docs/harness.md`）
+- 夜間ハーネスが取る票は `unattended: true` かつ `requirements_source: ticket` かつ `depends_on` がすべて `merged` のものだけ。キュー（順番）はオーナーが Z3 に置いて承認する

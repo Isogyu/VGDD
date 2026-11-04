@@ -12,25 +12,39 @@
 #
 # 1申請の流れ（1つでも落ちれば統合しない。判定は Z3 の evidence/verdicts/ と gate_events.jsonl に残る）:
 #   1 申請と票の整合（status: review、HEAD が一致）
-#   2 ブランチが main を含む（rebase 済み）
+#   2 統合キュー（p0.3.1 案）：main を含まないブランチは、一時 worktree で「最新の main ＋ 申請の SHA」の候補を作る（衝突なら needs_rebase）。
+#     以後の検査・判定・統合は候補に対して行う。鎖で積まなくてよく、前の票が止まっても後ろの票は止まらない
 #   3 差分が票の files_allowed の中だけ。保護パスが含まれていれば即拒否
 #   4 秘密情報らしい文字列・実名の形がない
 #   5 一時 worktree で npm ci → npm test → typecheck → lint
 #   6 judge.sh（Claude）→ 7 judge-codex.sh（Codex）→ 8 不一致の扱い（critical・major が分かれたら blocked）
 #   9 security_review の票は judge-codex.sh --security も
-#  10 合格なら main で git merge --ff-only → 票を merged に、§6 に記録、_board.json を更新、申請を done/ に移す
+#  10 合格なら main で git merge --ff-only <候補> → 票を merged に、§6 に記録、_board.json を更新、申請を done/ に移す。
+#     1件統合するたびに、残りの申請は次の周回で最新の main と組み合わせて 2〜10 をやり直す
 #
 # 前提: jq、node、npm、codex（--no-codex でなければ）。main の checkout に未コミットの変更がないこと。
 
 set -euo pipefail
 
 export VGDD_AUDIT_WRAP="${VGDD_Z3_DIR:-${HOME}/tsubuyaki-z3}/bin/sandboxed-run.sh"  # p0.3.0：judge.sh の監査も sandbox の中
-REPO="${HOME}/tsubuyaki-worklog/app"; INTERVAL=30; ONCE=0; NO_CODEX=0; RUN_MERGED=""
+REPO="${HOME}/tsubuyaki-worklog/app"; INTERVAL=30; ONCE=0; NO_CODEX=0; RUN_MERGED=""; HOLD=0
+Z3="${VGDD_Z3_DIR:-${HOME}/tsubuyaki-z3}"
+
+# p0.3.1：この裁判所（sandbox の外・オーナーの権限）が実行する git は、リポジトリのフックと fsmonitor を読まない（OBS-033）。
+#   作業員が共有の .git/config に設定を書いても、ここでは使われない。さらに .git/config の要約をオーナーの基準値と照合し、違えば止める
+git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.sshCommand=ssh "$@"; }
+check_git_config() {
+  local base="$Z3/evidence/git-config.baseline" cur
+  cur="$(shasum -a 256 "$REPO/.git/config" | cut -c1-64)"
+  if [ ! -f "$base" ]; then echo "git の設定の基準値がない（$base）。オーナーが vgdd/scripts/git-baseline.sh で作る（fail-closed）" >&2; exit 70; fi
+  [ "$cur" = "$(cat "$base")" ] || { echo "共有の .git/config が基準値から変わっている。オーナーが確かめるまで止める（fail-closed。OBS-033）" >&2; exit 70; }
+}
 while [ $# -gt 0 ]; do
   case "$1" in
     --repo) REPO="$2"; shift 2;;
     --interval) INTERVAL="$2"; shift 2;;
     --once) ONCE=1; shift;;
+    --hold) HOLD=1; shift;;   # p0.3.1：夜間。判定までで統合しない（朝にオーナーが release.sh で承認して統合する）
     --no-codex) NO_CODEX=1; shift;;
     *) echo "不明な引数: $1" >&2; exit 64;;
   esac
@@ -125,20 +139,32 @@ process_request() {
   returns=$(( returns - annulled )); [ "$returns" -ge 0 ] || returns=0
   [ "$returns" -lt "$MAX_RETURNS" ] || { fail "$task" "差し戻しが $MAX_RETURNS 回に達した。オーナーの判断へ" "blocked"; mv "$req" "$DONE_DIR/"; return; }
 
-  # 2 rebase 済み
-  # p0.2.4：main がブランチより先に進んでいても、その差が gate-runner 自身の記録のコミット（docs/tasks/ だけを変える）だけなら受け付ける（OBS-020）
-  local behind_ok=0
-  if ! git -C "$REPO" merge-base --is-ancestor main "$actual"; then
-    local mb; mb="$(git -C "$REPO" merge-base main "$actual")"
-    local others; others="$(git -C "$REPO" log --format='%an' "$mb..main" | grep -vc '^gate-runner$' || true)"
-    local otherfiles; otherfiles="$(git -C "$REPO" diff --name-only "$mb" main | grep -vc '^docs/tasks/' || true)"
-    if [ "$others" -eq 0 ] && [ "$otherfiles" -eq 0 ]; then behind_ok=1
-    else fail "$task" "ブランチが main を含んでいない（rebase が必要）"; mv "$req" "$DONE_DIR/"; return; fi
+  # 2 統合キュー（p0.3.1 案、D-55③）：ブランチが main を含んでいなくても差し戻さない。
+  #   一時 worktree で「最新の main に申請の SHA を merge した候補のコミット」を作り、以後の検査・判定（3〜9）と統合（10）は
+  #   その候補に対して行う。候補は main を親に持つので、統合は常に fast-forward（検査した木＝統合される木。p0.3.0 の SHA の固定は保つ）。
+  #   衝突すれば needs_rebase で差し戻す。鎖で積まなくてよく、前の票が止まっても後ろの票は止まらない（OBS-019・OBS-024 の連鎖の解消）。
+  #   p0.2.4 の「記録のコミットだけ遅れている」場合もこの経路で吸収する。
+  local candidate="$actual" main_sha; main_sha="$(git -C "$REPO" rev-parse main)"
+  local wt; wt="$(mktemp -d "${TMPDIR:-/tmp}/gate-$task-XXXX")"
+  if git -C "$REPO" merge-base --is-ancestor main "$actual"; then
+    git -C "$REPO" worktree add --detach "$wt" "$actual" >/dev/null 2>&1
+  else
+    git -C "$REPO" worktree add --detach "$wt" main >/dev/null 2>&1
+    if ! git -C "$wt" -c user.name=gate-runner -c user.email=gate-runner@local merge --no-ff --no-edit -q \
+         -m "gate-runner: $task を main ${main_sha:0:12} と組み合わせた候補（申請 ${actual:0:12}）" "$actual" >/dev/null 2>&1; then
+      git -C "$wt" merge --abort >/dev/null 2>&1 || true
+      git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true
+      fail "$task" "main と衝突する（needs_rebase。files_allowed が重なる票が先に統合された可能性）"; mv "$req" "$DONE_DIR/"; return
+    fi
+    candidate="$(git -C "$wt" rev-parse HEAD)"
+    log_event "candidate" "$task" "\"request\":\"${actual:0:12}\",\"main\":\"${main_sha:0:12}\",\"candidate\":\"${candidate:0:12}\""
   fi
+  # 以後、差分の範囲（3・4）は申請の SHA の変更分（main...$actual）で見る。監査・判定・統合は候補の木（$wt、$candidate）で行う
 
   # 3 差分の範囲
   local changed; changed="$(git -C "$REPO" diff --name-only "main...$actual")"
   if printf '%s\n' "$changed" | grep -Eq "$PROTECTED_RE"; then
+    git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true
     fail "$task" "保護パスへの変更が含まれている: $(printf '%s\n' "$changed" | grep -E "$PROTECTED_RE" | tr '\n' ' ')" "blocked"; mv "$req" "$DONE_DIR/"; return
   fi
   local allowed; allowed="$(front_list "$t" files_allowed)"
@@ -156,19 +182,19 @@ process_request() {
     done <<< "$allowed"
     [ "$okf" -eq 1 ] || outside="$outside $f"
   done <<< "$changed"
-  [ -z "$outside" ] || { fail "$task" "files_allowed の外を変更している:$outside"; mv "$req" "$DONE_DIR/"; return; }
+  [ -z "$outside" ] || { git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true; fail "$task" "files_allowed の外を変更している:$outside"; mv "$req" "$DONE_DIR/"; return; }
 
   # 4 秘密情報・実名
   if git -C "$REPO" diff "main...$actual" | grep -nE 'sk-ant-api03-[A-Za-z0-9]{40,}|BEGIN (RSA|OPENSSH|PRIVATE)|@gmail\.com|password *=|AKIA[0-9A-Z]{16}' >/dev/null; then
+    git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true
     fail "$task" "秘密情報らしい文字列が差分にある" "blocked"; mv "$req" "$DONE_DIR/"; return
   fi
   if [ -f "$Z3/eval/banned-terms.txt" ] && git -C "$REPO" diff "main...$actual" | grep -nFf "$Z3/eval/banned-terms.txt" >/dev/null; then
+    git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true
     fail "$task" "実案件・実名の語が差分にある（Z3 の一覧に一致）" "blocked"; mv "$req" "$DONE_DIR/"; return
   fi
 
-  # 5 決定論的な監査（一時 worktree）
-  local wt; wt="$(mktemp -d "${TMPDIR:-/tmp}/gate-$task-XXXX")"
-  git -C "$REPO" worktree add --detach "$wt" "$actual" >/dev/null 2>&1
+  # 5 決定論的な監査（段階 2 で作った一時 worktree ＝ 候補の木）
   local audit_ok=1
   # p0.3.0：作業員の書いたコード（テスト・設定・npm のスクリプト）は sandbox-exec の中で実行する（OBS-023①）。
   # 書き込みは一時 worktree と一時領域だけ、Z3・.env.local は読めない、テストの間はネットワークなし
@@ -213,6 +239,10 @@ process_request() {
   if [ "$jv" != "APPROVED" ] && [ "$cv" != "APPROVED" ]; then
     fail "$task" "judge=$jv, codex=$cv（両方が差し戻し）"; mv "$req" "$DONE_DIR/"; return
   fi
+  # p0.3.1：セキュリティ審査の不合格は、不一致の扱い・オーナーの裁定より先に止める（裁定はセキュリティ審査に効かない。憲法審査の指摘①）
+  if [ "$sv" != "SKIPPED" ] && [ "$sv" != "APPROVED" ]; then
+    fail "$task" "セキュリティ審査が差し戻し"; mv "$req" "$DONE_DIR/"; return
+  fi
   if [ "$NO_CODEX" -eq 0 ] && [ "$jv" != "$cv" ]; then
     # 不一致：critical・major の有無が分かれたら blocked。minor だけなら厳しい側の指摘を票に残して統合（D-47③）
     local jsev csev
@@ -220,12 +250,30 @@ process_request() {
     csev="$(jq -r '[.codex.findings[]? | select(.severity=="critical" or .severity=="major")] | length' "$cfile" 2>/dev/null || echo 0)"
     log_event "disagreement" "$task" "\"judge\":\"$jv\",\"codex\":\"$cv\",\"judge_major\":$jsev,\"codex_major\":$csev"
     if [ "$jsev" -gt 0 ] || [ "$csev" -gt 0 ]; then
-      fail "$task" "judge と Codex の判定が重大な指摘で分かれた（judge=$jv/$jsev 件, codex=$cv/$csev 件）。オーナーの裁定へ" "blocked"; mv "$req" "$DONE_DIR/"; return
+      # p0.3.1：オーナーの裁定（Z3 の rulings.jsonl。行政は書けない）が、この票のこの申請の SHA について「統合」なら、理由を記録して進める（D-59①）。
+      #   裁定は申請の SHA に結び付く（後から差し替えた申請には効かない）。監査の不合格・セキュリティ審査の不合格・保護パスには効かない
+      local ruling; ruling="$(jq -c --arg t "$task" --arg s "$actual" 'select(.task==$t and .sha==$s and .decision=="merge")' "$Z3/evidence/rulings.jsonl" 2>/dev/null | tail -n 1)"
+      if [ -n "$ruling" ]; then
+        log_event "owner_ruling" "$task" "\"sha\":\"${actual:0:12}\",\"judge\":\"$jv\",\"codex\":\"$cv\",\"ruling\":$ruling"
+        printf '\n- %s gate-runner: judge と Codex が分かれたが、オーナーの裁定（統合）により進める：%s\n' "$(ts)" "$(printf '%s' "$ruling" | jq -r '.reason')" >> "$t"
+      else
+        fail "$task" "judge と Codex の判定が重大な指摘で分かれた（judge=$jv/$jsev 件, codex=$cv/$csev 件）。オーナーの裁定へ" "blocked"; mv "$req" "$DONE_DIR/"; return
+      fi
+    else
+      printf '\n- %s gate-runner: judge と Codex が minor の指摘で分かれた。厳しい側の指摘を残して統合（judge=%s, codex=%s）\n' "$(ts)" "$jv" "$cv" >> "$t"
     fi
-    printf '\n- %s gate-runner: judge と Codex が minor の指摘で分かれた。厳しい側の指摘を残して統合（judge=%s, codex=%s）\n' "$(ts)" "$jv" "$cv" >> "$t"
   fi
-  if [ "$sv" != "SKIPPED" ] && [ "$sv" != "APPROVED" ]; then
-    fail "$task" "セキュリティ審査が差し戻し"; mv "$req" "$DONE_DIR/"; return
+
+  # p0.3.1：--hold（夜間）では統合しない。合格した候補を Z3 に記録し、朝にオーナーが release.sh で確かめて統合する（約束9・11）
+  if [ "$HOLD" -eq 1 ]; then
+    git -C "$REPO" update-ref "refs/vgdd/held/$task" "$candidate"   # 候補のコミットを残しておくための参照（中身の照合は Z3 の記録で行う）
+    jq -nc --arg ts "$(ts)" --arg t "$task" --arg r "$actual" --arg c "$candidate" --arg m "$main_sha" --arg j "$jv" --arg x "$cv" \
+      '{ts:$ts,task:$t,request:$r,candidate:$c,main_at_check:$m,judge:$j,codex:$x}' >> "$Z3/evidence/held.jsonl"
+    log_event "held" "$task" "\"request\":\"${actual:0:12}\",\"candidate\":\"${candidate:0:12}\",\"judge\":\"$jv\",\"codex\":\"$cv\""
+    set_ticket_status "$task" "review" "判定に合格（judge=$jv codex=$cv）。夜間のため統合せず、朝のオーナーの承認を待つ"
+    mv "$req" "$DONE_DIR/"
+    echo "  ⏸ $task は合格。朝のオーナーの承認を待つ（候補 ${candidate:0:12}）"
+    return
   fi
 
   # 10 統合（main の checkout。未コミットの変更があれば止める）
@@ -233,11 +281,15 @@ process_request() {
   if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no -- . ':(exclude)docs/tasks')" ]; then
     fail "$task" "main の checkout に未コミットの変更がある。オーナーが片付けてから再申請" "review"; return
   fi
-  # p0.2.4：記録のコミットだけ遅れている場合は、衝突しない統合コミット（--no-ff）で取り込む
-  if [ "$behind_ok" -eq 1 ]; then
-    git -C "$REPO" -c user.name=gate-runner -c user.email=gate-runner@local merge --no-ff -q -m "gate-runner: $task を統合（記録のコミットの後）" "$actual" >/dev/null 2>&1 || { git -C "$REPO" merge --abort >/dev/null 2>&1; fail "$task" "統合できない（衝突）"; mv "$req" "$DONE_DIR/"; return; }
-  elif ! git -C "$REPO" merge --ff-only "$actual" >/dev/null 2>&1; then
-    fail "$task" "fast-forward できない（main が進んだ）。rebase が必要"; mv "$req" "$DONE_DIR/"; return
+  # p0.3.1 案：統合するのは検査した候補のコミット（$candidate）。候補は段階 2 の時点の main を親に持つので fast-forward になる。
+  #   段階 2 以降に main が進んでいれば（同じ周回で別の票が統合された等）ここで止まり、次の周回で最新の main と組み合わせて検査し直す。
+  if [ "$(git -C "$REPO" rev-parse main)" != "$main_sha" ]; then
+    echo "  ↻ $task: 検査中に main が進んだ。次の周回で最新の main と組み合わせて検査し直す" >&2
+    log_event "requeued" "$task" "\"reason\":\"main advanced during inspection\",\"main_at_check\":\"${main_sha:0:12}\""
+    return
+  fi
+  if ! git -C "$REPO" merge --ff-only "$candidate" >/dev/null 2>&1; then
+    fail "$task" "fast-forward できない（想定外。候補 ${candidate:0:12} が main を親に持たない）"; mv "$req" "$DONE_DIR/"; return
   fi
   local merged; merged="$(git -C "$REPO" rev-parse --short=12 HEAD)"
   set_ticket_status "$task" "merged" "main=$merged judge=$jv codex=$cv"
@@ -252,6 +304,7 @@ process_request() {
 
 echo "gate-runner 起動: repo=$REPO interval=${INTERVAL}s codex=$([ "$NO_CODEX" -eq 1 ] && echo off || echo on)"
 while :; do
+  check_git_config
   shopt -s nullglob
   for req in "$REQ_DIR"/*.json; do
     process_request "$req" || echo "  ! $req の処理で例外" >&2
