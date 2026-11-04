@@ -1,7 +1,7 @@
 ---
 id: T-006
 title: 先輩への質問文の下書きとコピー、下書きの機密検査（M10-2・M10-3）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M10-2, M10-3, M6-1, M6-4]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -81,3 +81,4 @@ depends_on: []
 - 21:59 行政の長が差分を確認（`files_allowed` の4ファイルのみ、禁止語なし、A1〜A6 を確認）。`status: review` で main にコミット。鎖の3段目
 
 - 2026-11-04T22:09:04+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/app/api/sessions/[id]/checkin/route.ts src/components/UnderstandingPanel.tsx src/components/WorkScreen.tsx src/lib/understanding.test.ts src/lib/understanding.ts）
+- 22:13 立法補佐：上の差し戻しは鎖の前段 T-004 の不一致による連鎖。回数に数えない
