@@ -200,6 +200,14 @@ process_request() {
     cfile="$(ls -t "$VERDICTS/$task-"*-codex-judge.json 2>/dev/null | head -n 1)"
     [ -n "$cfile" ] && cv="$(jq -r '.final_verdict' "$cfile")"
   fi
+  # p0.3.0a：セキュリティ審査は、監査を済ませた同じ一時 worktree（同じ SHA、node_modules あり）で行う。
+  #   別の worktree を作ると依存がなく、審査の中の監査が「vitest が見つからない」で落ちていた（OBS-025）
+  local sv="SKIPPED"
+  if [ "$(front "$t" security_review)" = "true" ] && [ "$NO_CODEX" -eq 0 ]; then
+    ( cd "$wt" && "$BIN/judge-codex.sh" --security "${reqargs[@]}" --base main --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
+    local sfile; sfile="$(ls -t "$VERDICTS/$task-"*-codex-security.json 2>/dev/null | head -n 1)"
+    sv="CHANGES_REQUIRED"; [ -n "$sfile" ] && sv="$(jq -r '.final_verdict' "$sfile")"
+  fi
   git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true
 
   if [ "$jv" != "APPROVED" ] && [ "$cv" != "APPROVED" ]; then
@@ -216,12 +224,8 @@ process_request() {
     fi
     printf '\n- %s gate-runner: judge と Codex が minor の指摘で分かれた。厳しい側の指摘を残して統合（judge=%s, codex=%s）\n' "$(ts)" "$jv" "$cv" >> "$t"
   fi
-  if [ "$(front "$t" security_review)" = "true" ] && [ "$NO_CODEX" -eq 0 ]; then
-    local wt2; wt2="$(mktemp -d "${TMPDIR:-/tmp}/gate-sec-$task-XXXX")"; git -C "$REPO" worktree add --detach "$wt2" "$actual" >/dev/null 2>&1
-    ( cd "$wt2" && "$BIN/judge-codex.sh" --security "${reqargs[@]}" --base main --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
-    git -C "$REPO" worktree remove --force "$wt2" >/dev/null 2>&1 || true
-    local sfile; sfile="$(ls -t "$VERDICTS/$task-"*-codex-security.json 2>/dev/null | head -n 1)"
-    [ -n "$sfile" ] && [ "$(jq -r '.final_verdict' "$sfile")" = "APPROVED" ] || { fail "$task" "セキュリティ審査が差し戻し"; mv "$req" "$DONE_DIR/"; return; }
+  if [ "$sv" != "SKIPPED" ] && [ "$sv" != "APPROVED" ]; then
+    fail "$task" "セキュリティ審査が差し戻し"; mv "$req" "$DONE_DIR/"; return
   fi
 
   # 10 統合（main の checkout。未コミットの変更があれば止める）
