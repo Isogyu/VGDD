@@ -1,7 +1,7 @@
 ---
 id: T-007
 title: S-1 の途中整理の結果にも「先輩への質問文を下書き」を置く（M10-2 の S-1 側）
-status: review
+status: merged
 requirements: [A1, A2, A3]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M10-2, M10-3, M10-1]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -61,3 +61,5 @@ M10-2 は「M4 **または M10-1** の『人に確認すべきこと』から」
 - 21:52 立法補佐（Pro）が §2 の受け入れ条件を確認（関数名・応答の形・判定の順・テスト件数まで具体的で検証できる。T-004〜T-006 の files_allowed は重ならない。T-007 は T-004〜T-006 の後）。main に固定（D-49②）
 - 22:55 W1 起動（worktree `agent-ad7e0ef6b8219ca60`、main ec9c139 から）。22:56 コミット 3a5a650（1ファイル、+6/−1）。報告：test 123（変更なし）・typecheck・lint 合格。整理中（busy）は下書きを描かない。気づき：`QuestionDraft` は Fragment を返すので `flex-col` の中でボタンが横幅いっぱいに見える可能性（見た目の調整は別の票）。Co-Authored-By は作業員が自分のモデル名（Opus 5.5）にした。拒否なし
 - 23:08 行政の長が差分を確認（`UnderstandingPanel.tsx` のみ、A1〜A3）。`status: review` で main にコミット。新しい worktree で 3a5a650 を main の上に cherry-pick して申請（T-008 とは別のブランチ。鎖にしない。オーナーの指示。T-008 の統合後は「main を含まない」になるため、統合キュー p0.3.1 の施行か積み直しが要る）
+
+- 2026-11-04T23:13:23+0900 gate-runner: status → merged（main=8ce0b37a844c judge=APPROVED codex=APPROVED）

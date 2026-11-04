@@ -1,7 +1,7 @@
 ---
 id: T-008
 title: 「記録なし」の判定の正規化と、質問文の下書きの重複の修正（M4-2・M10 の表示の不具合）
-status: review
+status: in_progress
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-1, M4-2, M10-1, M10-2]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -75,3 +75,5 @@ depends_on: [T-004, T-006]
 - 23:04 立法補佐：W2 が票の矛盾（A4②「未解決は1行」と、既存テストが重複を期待していること、A5「既存のテストは変えない」）で止まった（正しい止まり方）。オーナーの選択により、A5の2 として、重複を期待する既存のテストの1行だけ削除を認める例外を追記し、main に固定
 - 23:07 W2 が再開してコミット c40be22（5ファイル、+123/−6。main ec9c139 から）。報告：test 132（既存 123＋9）・typecheck・lint 合格。A2 ③は行政の長の指示で「該当語を含み、かつ該当語で文が終わる（後ろは記号だけ）ときに none」と実装（A5 ③の2 と両立させるため。`endsWithNonePhrase`）。既存テストの変更は A5の2 の1行の削除だけ。拒否なし
 - 23:08 行政の長が差分を確認（`files_allowed` の5ファイルのみ、A1〜A6）。`status: review` で main にコミット。新しい worktree で c40be22 を main の上に cherry-pick して申請（T-007 とは別のブランチ。鎖にしない。オーナーの指示）
+
+- 2026-11-04T23:13:23+0900 gate-runner: status → in_progress（ブランチが main を含んでいない（rebase が必要））

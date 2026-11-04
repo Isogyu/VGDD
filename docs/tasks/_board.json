@@ -1,9 +1,9 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-04T22:39:53.787+09:00",
+  "generated_at": "2026-11-04T23:13:23.681+09:00",
   "totals": {
-    "tickets": 8,
-    "merged": 7,
+    "tickets": 9,
+    "merged": 8,
     "rejected": 18,
     "blocked": 0,
     "disagreements": 3
@@ -75,8 +75,17 @@
     {
       "id": "T-007",
       "title": "S-1 の途中整理の結果にも「先輩への質問文を下書き」を置く（M10-2 の S-1 側）",
-      "status": "ready",
+      "status": "merged",
       "estimate_h": 0.2,
+      "returns": 0,
+      "merged_at": "2026-11-04T23:13:23+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-008",
+      "title": "「記録なし」の判定の正規化と、質問文の下書きの重複の修正（M4-2・M10 の表示の不具合）",
+      "status": "review",
+      "estimate_h": 0.5,
       "returns": 0,
       "merged_at": null,
       "disagreements": 0
