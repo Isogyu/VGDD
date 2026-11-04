@@ -1,7 +1,7 @@
 ---
 id: T-008
 title: 「記録なし」の判定の正規化と、質問文の下書きの重複の修正（M4-2・M10 の表示の不具合）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-1, M4-2, M10-1, M10-2]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -92,3 +92,5 @@ depends_on: [T-004, T-006]
 
 - 2026-11-04T23:45:20+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
 - 23:46 オーナーの決定：A5の2 から「コミットの本文に書く」を削除（司法が確かめられない条件だった。立法補佐の誤り OBS-032）。コードの変更は不要。この差し戻しは回数に数えない。再申請のため review に
+
+- 2026-11-04T23:53:57+0900 gate-runner: status → merged（main=362d19b2e610 judge=APPROVED codex=APPROVED）

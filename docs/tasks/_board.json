@@ -1,12 +1,12 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-04T23:13:23.681+09:00",
+  "generated_at": "2026-11-04T23:53:57.484+09:00",
   "totals": {
     "tickets": 9,
-    "merged": 8,
-    "rejected": 18,
+    "merged": 9,
+    "rejected": 23,
     "blocked": 0,
-    "disagreements": 3
+    "disagreements": 7
   },
   "tickets": [
     {
@@ -84,11 +84,11 @@
     {
       "id": "T-008",
       "title": "「記録なし」の判定の正規化と、質問文の下書きの重複の修正（M4-2・M10 の表示の不具合）",
-      "status": "review",
+      "status": "merged",
       "estimate_h": 0.5,
-      "returns": 0,
-      "merged_at": null,
-      "disagreements": 0
+      "returns": 5,
+      "merged_at": "2026-11-04T23:53:57+0900",
+      "disagreements": 4
     }
   ]
 }
