@@ -1,7 +1,7 @@
 ---
 id: T-008
 title: 「記録なし」の判定の正規化と、質問文の下書きの重複の修正（M4-2・M10 の表示の不具合）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-1, M4-2, M10-1, M10-2]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -77,3 +77,4 @@ depends_on: [T-004, T-006]
 - 23:08 行政の長が差分を確認（`files_allowed` の5ファイルのみ、A1〜A6）。`status: review` で main にコミット。新しい worktree で c40be22 を main の上に cherry-pick して申請（T-007 とは別のブランチ。鎖にしない。オーナーの指示）
 
 - 2026-11-04T23:13:23+0900 gate-runner: status → in_progress（ブランチが main を含んでいない（rebase が必要））
+- 23:13 立法補佐：上の差し戻しは、別々に分岐した2票のうち先の T-007 の統合で main が進んだため（統合キュー p0.3.1 が未施行。予告どおり）。回数に数えない。再申請のため review に
