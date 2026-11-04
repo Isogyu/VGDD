@@ -1,7 +1,7 @@
 ---
 id: T-008
 title: 「記録なし」の判定の正規化と、質問文の下書きの重複の修正（M4-2・M10 の表示の不具合）
-status: review
+status: blocked
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-1, M4-2, M10-1, M10-2]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -78,3 +78,5 @@ depends_on: [T-004, T-006]
 
 - 2026-11-04T23:13:23+0900 gate-runner: status → in_progress（ブランチが main を含んでいない（rebase が必要））
 - 23:13 立法補佐：上の差し戻しは、別々に分岐した2票のうち先の T-007 の統合で main が進んだため（統合キュー p0.3.1 が未施行。予告どおり）。回数に数えない。再申請のため review に
+
+- 2026-11-04T23:20:12+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/2 件）。オーナーの裁定へ）
