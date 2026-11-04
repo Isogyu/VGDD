@@ -1,7 +1,7 @@
 ---
 id: T-008
 title: 「記録なし」の判定の正規化と、質問文の下書きの重複の修正（M4-2・M10 の表示の不具合）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-1, M4-2, M10-1, M10-2]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -88,3 +88,4 @@ depends_on: [T-004, T-006]
 
 - 2026-11-04T23:36:03+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
 - 23:37 オーナーの決定：A2 ③の「後ろに続いてよい文字」を列挙して確定（。．、，：:！？!? と空白）。Codex の指摘（「：」を許さない）は列挙で解決する。差し戻しは実装の不一致として数える（T-008 は2回目）
+- 23:40 行政の長：W2（新しい worktree、main の上）に修正を指示。`TRAILING_SYMBOLS` を A2 ③の列挙どおり `/^[。．、，：:！？!?\s]*$/u` に直し、テスト「記録がない：→ none」「記録がない（→ none にしない」を足す。元のコミット 1367f1e を cherry-pick して修正を重ね、1コミットにして再申請。`status: review` に戻す（§2 は変えない。差し戻し2回目。次で通らなければ上限3回で自動停止→オーナーの判断）
