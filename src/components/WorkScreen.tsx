@@ -11,6 +11,7 @@ import { restoreSubmitted } from "@/lib/input";
 import type { User } from "@/lib/db";
 import type { WorkSession, Note, KnowledgeHints, HistoryItem } from "@/lib/sessions";
 import { formatHm, formatMdHm, formatDuration, formatDelta } from "@/lib/time";
+import UnderstandingPanel from "@/components/UnderstandingPanel";
 
 interface ActiveResponse {
   session: WorkSession | null;
@@ -431,6 +432,11 @@ export default function WorkScreen() {
             </div>
           )}
 
+          {/* M10-1：作業を終えずに、いまの理解を4区分で整理する（押したときだけ） */}
+          {session && active && (
+            <UnderstandingPanel session={session} userId={userId} notes={active.notes} onNotesChanged={reloadActive} />
+          )}
+
           {session && active && active.notes.length > 0 && (
             <ul className="flex flex-col gap-1 text-sm">
               {active.notes.map((n) => (
@@ -535,14 +541,6 @@ export default function WorkScreen() {
           ) : (
             <p className="text-sm text-zinc-600 dark:text-zinc-300">作業を始めてください。「〇〇の作業開始」と入力するか、作業名を入れて「開始」を押します。</p>
           )}
-          <button
-            type="button"
-            className="rounded border border-dashed border-zinc-400 px-3 py-2 text-sm text-zinc-400"
-            disabled
-            title="M10 で有効になります"
-          >
-            いまの理解を整理（M10 で有効）
-          </button>
 
           <section className="mt-auto flex flex-col gap-1 border-t border-zinc-200 pt-3 dark:border-zinc-800">
             <h2 className="text-sm font-medium text-zinc-500">終了した作業（最新5件）</h2>
