@@ -1,7 +1,7 @@
 ---
 id: T-008
 title: 「記録なし」の判定の正規化と、質問文の下書きの重複の修正（M4-2・M10 の表示の不具合）
-status: review
+status: blocked
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-1, M4-2, M10-1, M10-2]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -85,3 +85,5 @@ depends_on: [T-004, T-006]
 - 2026-11-04T23:26:57+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
 - 23:27 オーナーの裁定：Codex の指摘（③の「後ろに続くのは句読点・空白だけ」に対し、実装の TRAILING_SYMBOLS が \p{P}\p{S} で絵文字や数学記号まで許している）を採り、差し戻し。直しは1か所（許す文字を句読点・感嘆符・疑問符・空白に限る）で、票は変えない。この差し戻しは実装の不一致なので回数に数える
 - 23:31 行政の長：W2（新しい worktree、main の上）に修正を指示。`TRAILING_SYMBOLS` を句読点（。．、，）・感嘆符・疑問符（！？!?）・空白だけに限り、テスト「記録がない😀 → none にしない」を1件足す。元のコミット c40be22 を cherry-pick して修正を重ね、1コミットにして再申請。`status: review` に戻す（§2 は変えない。差し戻し1回目）
+
+- 2026-11-04T23:36:03+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
