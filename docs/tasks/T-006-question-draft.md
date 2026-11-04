@@ -1,7 +1,7 @@
 ---
 id: T-006
 title: 先輩への質問文の下書きとコピー、下書きの機密検査（M10-2・M10-3）
-status: review
+status: in_progress
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M10-2, M10-3, M6-1, M6-4]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -79,3 +79,5 @@ depends_on: []
 - 21:52 立法補佐（Pro）が §2 の受け入れ条件を確認（関数名・応答の形・判定の順・テスト件数まで具体的で検証できる。T-004〜T-006 の files_allowed は重ならない。T-007 は T-004〜T-006 の後）。main に固定（D-49②）
 - 21:54 W3 起動（worktree `agent-a9869c6e93bda1e78`、main 9a9481d から）。21:5x コミット 4ed7ea7（4ファイル、+264/−1）。報告：test 118（既存 114＋4）・typecheck・lint 合格。気づき：`unresolved` が inferred のとき「未確認のこと」に2行出る（A1 の文どおり。重複の扱いは次の改善候補）。本文の改行はそのまま。追加：ボタンに `aria-expanded`、textarea の行数は下書きに合わせる（最大 24）。拒否1件：自分の worktree への `git -C` がフックで止まった（回避せず）
 - 21:59 行政の長が差分を確認（`files_allowed` の4ファイルのみ、禁止語なし、A1〜A6 を確認）。`status: review` で main にコミット。鎖の3段目
+
+- 2026-11-04T22:09:04+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/app/api/sessions/[id]/checkin/route.ts src/components/UnderstandingPanel.tsx src/components/WorkScreen.tsx src/lib/understanding.test.ts src/lib/understanding.ts）

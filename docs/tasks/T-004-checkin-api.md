@@ -1,7 +1,7 @@
 ---
 id: T-004
 title: 「いまの理解を整理」の API と4区分への並べ替え（M10-1 の裏側）
-status: review
+status: blocked
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M10-1, M4-5, D-40]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -75,3 +75,5 @@ depends_on: []
 - 21:52 立法補佐（Pro）が §2 の受け入れ条件を確認（関数名・応答の形・判定の順・テスト件数まで具体的で検証できる。T-004〜T-006 の files_allowed は重ならない。T-007 は T-004〜T-006 の後）。main に固定（D-49②）
 - 21:53 W1 起動（worktree `agent-ac11a91bf6763b495`、main 9a9481d から）。21:5x コミット fb4afbc（3ファイル、+207）。報告：test 119（既存 114＋5）・typecheck・lint 合格。解釈：`answers: []` は「なし」扱い（400 にしない）。追加の export：`FACT_KEYS`・`NOT_IN_NOTES_TEXT`。Co-Authored-By は作業員が自分のモデル名（Opus 5.5）にした。拒否1件：自分の worktree への `git -C <worktree>` がフックに「作業フォルダ以外」として止められた（回避せず `-C` なしで実行。OBS 候補）
 - 21:59 行政の長が差分を確認（`files_allowed` の3ファイルのみ、禁止語なし、A1〜A7 を確認）。`status: review` で main にコミット。鎖 T-004 → T-005 → T-006 を新しい worktree で積んで申請
+
+- 2026-11-04T22:09:04+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
