@@ -1,7 +1,7 @@
 ---
 id: T-006
 title: 先輩への質問文の下書きとコピー、下書きの機密検査（M10-2・M10-3）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M10-2, M10-3, M6-1, M6-4]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -85,3 +85,5 @@ depends_on: []
 
 - 2026-11-04T22:26:18+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/app/api/sessions/[id]/checkin/route.ts src/components/UnderstandingPanel.tsx src/components/WorkScreen.tsx src/lib/understanding.test.ts src/lib/understanding.ts）
 - 22:28 立法補佐：上の差し戻しは法律の不具合（OBS-025、p0.3.0a で修正）と、その連鎖によるもの。回数に数えない。再申請のため review に
+
+- 2026-11-04T22:39:53+0900 gate-runner: status → merged（main=ebc238ac5136 judge=APPROVED codex=APPROVED）

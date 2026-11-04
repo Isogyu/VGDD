@@ -1,12 +1,12 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-03T21:47:06.757+09:00",
+  "generated_at": "2026-11-04T22:39:53.787+09:00",
   "totals": {
-    "tickets": 4,
-    "merged": 4,
-    "rejected": 12,
+    "tickets": 8,
+    "merged": 7,
+    "rejected": 18,
     "blocked": 0,
-    "disagreements": 2
+    "disagreements": 3
   },
   "tickets": [
     {
@@ -44,6 +44,42 @@
       "returns": 5,
       "merged_at": "2026-11-03T21:47:06+0900",
       "disagreements": 1
+    },
+    {
+      "id": "T-004",
+      "title": "「いまの理解を整理」の API と4区分への並べ替え（M10-1 の裏側）",
+      "status": "merged",
+      "estimate_h": 0.5,
+      "returns": 2,
+      "merged_at": "2026-11-04T22:36:35+0900",
+      "disagreements": 1
+    },
+    {
+      "id": "T-005",
+      "title": "S-1 の「いまの理解を整理」ボタンと4区分の表示（M10-1 の画面）",
+      "status": "merged",
+      "estimate_h": 0.7,
+      "returns": 2,
+      "merged_at": "2026-11-04T22:38:00+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-006",
+      "title": "先輩への質問文の下書きとコピー、下書きの機密検査（M10-2・M10-3）",
+      "status": "merged",
+      "estimate_h": 0.6,
+      "returns": 2,
+      "merged_at": "2026-11-04T22:39:53+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-007",
+      "title": "S-1 の途中整理の結果にも「先輩への質問文を下書き」を置く（M10-2 の S-1 側）",
+      "status": "ready",
+      "estimate_h": 0.2,
+      "returns": 0,
+      "merged_at": null,
+      "disagreements": 0
     }
   ]
 }
