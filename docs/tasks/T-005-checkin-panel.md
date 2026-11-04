@@ -1,7 +1,7 @@
 ---
 id: T-005
 title: S-1 の「いまの理解を整理」ボタンと4区分の表示（M10-1 の画面）
-status: review
+status: in_progress
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M10-1, M4-5, D-40]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -72,3 +72,5 @@ depends_on: []
 
 - 2026-11-04T22:09:04+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/app/api/sessions/[id]/checkin/route.ts src/lib/understanding.test.ts src/lib/understanding.ts）
 - 22:13 立法補佐：上の差し戻しは鎖の前段 T-004 の不一致による連鎖。回数に数えない
+
+- 2026-11-04T22:26:18+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/app/api/sessions/[id]/checkin/route.ts src/lib/understanding.test.ts src/lib/understanding.ts）
