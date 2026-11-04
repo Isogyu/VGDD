@@ -1,7 +1,7 @@
 ---
 id: T-008
 title: 「記録なし」の判定の正規化と、質問文の下書きの重複の修正（M4-2・M10 の表示の不具合）
-status: blocked
+status: review
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-1, M4-2, M10-1, M10-2]   # 関連する docs/requirements.md の ID（記録用。司法には渡さない）
@@ -47,7 +47,7 @@ depends_on: [T-004, T-006]
 - A3. `validateAndMap()` と `itemStatus()` は従来どおり「根拠（evidence）が1件以上なら `evidenced`、なければ `isNoneText` で `none`／`inferred`」のまま（A2 の広がりがそのまま効く）。**保存する `text` は変えない**（「なし。メモには書かれていない」のままで `status: none`）。`SummaryItem` の形・`Summary` の形・`RawSummarySchema` は変えない
 - A4. `src/lib/question-draft.ts` の【未確認のこと】：①`itemStatus()` が `none` の項目は出さない（A2 の正規化後は自動で外れる。明示的にも `none` を除く）②`unresolved` は**1回だけ**出す：`inferred` なら「- 未解決：<text>（AI の推測）」の1行だけ（個別の行は足さない）、`evidenced` なら「- <text>」の1行だけ、`none` なら出さない ③同じ文の行が2回出ないように重複を除く。ほかの節（担当作業・いま理解していること・試したこと・聞きたいこと）と1行目・最後の行は T-006 の A1 のまま
 - A5. テストを足す（既存のテストは変えない）：`summary-schema.test.ts` に **5件以上**：①「なし。メモには書かれていない」（evidence 空）→ `none` ②「原因はメモに記録がない」→ `none` ③「設定漏れが原因ではなく、ポートの競合だった」（evidence 空）→ `inferred`（誤って none にしない） ③の2 **「原因はメモに書かれていないが、権限の設定が関係している可能性がある」（evidence 空）→ `inferred`**（「書かれていない」を含んでも、推測の内容を述べている文は none にしない。立法補佐の追加、AI の推測を「記録なし」に隠さないため）④evidence が1件以上なら本文が「なし」でも `evidenced`。`question-draft.test.ts` に **2件以上**：①本文「なし。メモには書かれていない」（evidence 空）の項目が【未確認のこと】に出ない ②`unresolved` が `inferred` のとき【未確認のこと】に「未解決」の行が1回だけ出る
-- A5の2. **例外（立法補佐の追記）**：`src/lib/question-draft.test.ts` の既存のテスト（T-006）のうち、【未確認のこと】で「未解決」の重複を期待している**1行**（`"- 他の一覧画面にも同じ比較関数があるか",`。A4② で直す不具合そのものを期待値にしていた行）だけは、削除してよい。ほかの既存のテストは変えない。削除した理由をコミットの本文に書く
+- A5の2. **例外（立法補佐の追記）**：`src/lib/question-draft.test.ts` の既存のテスト（T-006）のうち、【未確認のこと】で「未解決」の重複を期待している**1行**（`"- 他の一覧画面にも同じ比較関数があるか",`。A4② で直す不具合そのものを期待値にしていた行）だけは、削除してよい。ほかの既存のテストは変えない。（「削除した理由をコミットの本文に書く」は削除：司法には情報の独立のためコミットの本文を渡さないので、確かめられない条件だった。理由は本票の §6 に記録済み。2026-11-04 オーナーの決定、OBS-032）
 - A6. `npm run -s test`（既存 123 件＋追加分）・`npm run -s typecheck`・`npm run -s lint` がすべて通る。差分は `files_allowed` の5ファイルだけ。依存の追加はしない
 
 ## 3. 開発用テスト
@@ -91,3 +91,4 @@ depends_on: [T-004, T-006]
 - 23:40 行政の長：W2（新しい worktree、main の上）に修正を指示。`TRAILING_SYMBOLS` を A2 ③の列挙どおり `/^[。．、，：:！？!?\s]*$/u` に直し、テスト「記録がない：→ none」「記録がない（→ none にしない」を足す。元のコミット 1367f1e を cherry-pick して修正を重ね、1コミットにして再申請。`status: review` に戻す（§2 は変えない。差し戻し2回目。次で通らなければ上限3回で自動停止→オーナーの判断）
 
 - 2026-11-04T23:45:20+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
+- 23:46 オーナーの決定：A5の2 から「コミットの本文に書く」を削除（司法が確かめられない条件だった。立法補佐の誤り OBS-032）。コードの変更は不要。この差し戻しは回数に数えない。再申請のため review に
