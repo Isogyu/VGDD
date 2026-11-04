@@ -6,7 +6,9 @@
 // useEffect・タイマーは使わない（自動実行しない）。
 
 import { useState } from "react";
+import QuestionDraft from "@/components/QuestionDraft";
 import type { WorkSession, Note } from "@/lib/sessions";
+import type { Summary } from "@/lib/summary-schema";
 
 // T-004 の応答の型（T-004 と並行のため部品の中に書く。統合後に T-004 の型へ寄せる）
 type UnderstandingItem = { key: string; label: string; text: string; evidence_note_ids: number[] };
@@ -17,7 +19,8 @@ type Understanding = {
   ask_human: UnderstandingItem | null;
   questions: { id: string; text: string; target: string }[];
 };
-type CheckinResponse = { understanding: Understanding; model: string; savedNotes: Note[] };
+// summary は T-004 の応答に含まれる整理の結果そのもの。先輩への質問文の下書き（T-006）に渡す
+type CheckinResponse = { understanding: Understanding; summary: Summary; model: string; savedNotes: Note[] };
 
 type Answer = { question: string; text: string };
 
@@ -192,6 +195,8 @@ export default function UnderstandingPanel({ session, userId, notes, onNotesChan
             {renderSection("未確認", result.understanding.unverified, "unverified")}
             {renderSection("人に確認すべきこと", result.understanding.ask_human ? [result.understanding.ask_human] : [], "ask_human")}
           </div>
+          {/* 先輩への質問文の下書き（T-006 の部品、M10-2）。整理中は描かない */}
+          {!busy && <QuestionDraft summary={result.summary} notes={notes} session={session} />}
           <p className="text-xs text-zinc-500">
             原案です。作業は続いています。この整理は保存されません
             <span className="ml-1">・{result.model}</span>
