@@ -10,8 +10,8 @@ estimate_h: 0.7
 time_limit_min: 50
 security_review: true          # 外部 API を呼ぶ開発用のルート
 unattended: true
-branch: worktree-agent-a1db65563f70a6a0c   # 作業員のブランチ（main 1b09519 付近から）。統合キュー（p0.3.1）により main から分岐したまま申請
-worker: W14
+branch: worktree-agent-a8d585142e02f121c   # 差し戻し対応の作業員のブランチ（29cc506 を cherry-pick）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W17
 files_allowed:
   - src/lib/ai/capture-extras.ts               # 新設
   - src/lib/ai/capture-extras.test.ts          # 新設
@@ -81,3 +81,5 @@ API キーのない審査員の環境（デモモード）でも、W1 の手順�
 - 01:22 行政の長が差分を確認し、503 の応答に票にない `message` が付いていたので取り除くよう W14 に依頼（A4 は `{ error: "no_api_key" }` だけ）。01:23 W14 が同じ1コミットに amend（HEAD 29cc506、4ファイル +569。test 261・typecheck・lint 合格）。行政の長が再確認（`files_allowed` の4ファイルのみ、A4 の判定の順 404→403 Origin→415→400→400 strict→503、ルートと lib に `console` なし、材料は `captureDemoExtras` のメモリ DB、例外は `capture_failed` のみ）。`status: review` で main にコミットし申請（security_review: true）
 
 - 2026-11-06T01:31:49+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
+- 01:36 立法補佐からの伝達（オーナー経由）：Codex security の指摘は A7（`Origin` の拒否の試験がない）。原因は票の A7 の書き方（`captureDemoExtras` で試すように読め、試せない形）。立法補佐が A7 と A6 の⑫を明確化して main に固定（2e823d3）、オーナーが承認し直し済み。直し方：ルートの要求の判定を純粋な関数 `checkCaptureRequest` に分けてルートから呼び、試験⑫を足す
+- 01:37 行政の長が W17 を起動（worktree `agent-a8d585142e02f121c`）。29cc506 を cherry-pick し、`checkCaptureRequest` への分離と⑫の試験を足して1コミットに amend する指示。W14 の worktree `agent-a1db6556…` は触らない
