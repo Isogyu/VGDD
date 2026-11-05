@@ -35,6 +35,8 @@ while [ $# -gt 0 ]; do
     --task) TASK="$2"; shift 2;;
     --out) OUT_DIR="$2"; shift 2;;
     --dry-run) DRY=1; shift;;
+    # p0.4.3（OBS-053）：gate-runner の起動時の点検。claude が動けば 0、なければ 69（判定はしない）
+    --preflight) if command -v claude >/dev/null 2>&1 && claude --version >/dev/null 2>&1; then exit 0; else exit 69; fi;;   # set -e の下でも 69 で終わる（Codex の指摘 #4）
     # --emit-input：judge を呼ばず、組み立てた入力だけを標準出力に出す（judge-codex.sh・gate-runner が同じ入力を使うため）
     --emit-input) EMIT=1; shift;;
     # --audit-state-file：--emit-input のとき、TASK/BRANCH/HEAD_SHA/BASE/STAMP/REQ/AUDIT_STATE を shell 変数の形で書き出す先
@@ -61,7 +63,7 @@ if [ -z "$BASE" ]; then
   fi
 fi
 BRANCH="$(git branch --show-current || echo '(detached)')"
-HEAD_SHA="$(git rev-parse --short=12 HEAD)"
+HEAD_SHA="$(git rev-parse HEAD | cut -c1-12)"   # p0.4.3：先頭12桁に固定（--short は曖昧なとき13桁以上になり、裁判所が判定のファイルを見つけられない）
 
 # 作業ツリーの未コミット分も含めて見る（夜間はコミット単位、手動は作業中も判定できるように）
 DIFF_STAT="$(git diff --stat "$BASE" -- . ':(exclude)package-lock.json' || true)"
@@ -197,19 +199,46 @@ fi
 
 # ---- judge を起動（ヘッドレス。ツールなしの判定だけ） -----------------------------
 command -v claude >/dev/null || { echo "claude CLI が見つからない" >&2; exit 69; }
-RAW="$(printf '%s' "$INPUT" | claude -p --agent judge --output-format json --max-turns 1 2>/dev/null || true)"
+CLI_RC=0; RAW="$(printf '%s' "$INPUT" | claude -p --agent judge --output-format json --max-turns 1 2>/dev/null)" || CLI_RC=$?   # p0.4.3：CLI の終了状態を残す
 
 # ---- 出力の取り出しと、決定論的監査による上書き -------------------------------
 mkdir -p "$OUT_DIR"
 OUT_FILE="${OUT_DIR}/${TASK}-${HEAD_SHA}.json"
-export RAW AUDIT_FAIL AUDIT_RAN TASK BRANCH HEAD_SHA BASE STAMP REQ REQ_SOURCE
+export RAW AUDIT_FAIL AUDIT_RAN TASK BRANCH HEAD_SHA BASE STAMP REQ REQ_SOURCE CLI_RC
 node - > "$OUT_FILE" <<'NODE'
 const raw = process.env.RAW || '';
-let text = raw;
-try { const o = JSON.parse(raw); if (o && typeof o.result === 'string') text = o.result; } catch {}
-let verdict = null;
-const m = text.match(/\{[\s\S]*\}/);
-if (m) { try { verdict = JSON.parse(m[0]); } catch {} }
+// p0.4.3（Codex の4回目の監査 #1 critical）：外側の応答は、成功の形（type: "result"・subtype: "success"・is_error: false の真偽・result が文字列）の
+//   ときだけ受け取る。それ以外（エラーの形・is_error が文字列・max_turns など）は、result の本文が正しくても判定として成り立たない。
+//   形は 2026-11-06 04:4x に claude -p --output-format json で確かめた
+let text = ''; let cliError = process.env.CLI_RC !== '0';
+try {
+  const o = JSON.parse(raw);
+  if (o && typeof o === 'object' && o.type === 'result' && o.subtype === 'success' && o.is_error === false && typeof o.result === 'string') text = o.result;
+  else cliError = true;
+} catch { cliError = true; }
+// p0.4.3（Codex の3回目の監査 #1 critical）：判定のスキーマ（vgdd.verdict.v1）の完全な検証。余分なキー・欠けたキー・型・列挙値のどれかが違えば false
+const VERDICT_KEYS = ['schema', 'verdict', 'deterministic_audits_passed', 'requirements', 'findings', 'summary'];
+const REQ_KEYS = ['id', 'status', 'evidence'];
+const FIND_KEYS = ['severity', 'category', 'file', 'line', 'requirement_id', 'reason'];
+const exactKeys = (o, keys) => !!o && typeof o === 'object' && !Array.isArray(o) && Object.keys(o).length === keys.length && keys.every((k) => Object.prototype.hasOwnProperty.call(o, k));
+const strOrNull = (v) => v === null || typeof v === 'string';
+const wellFormed = (v) => exactKeys(v, VERDICT_KEYS) && v.schema === 'vgdd.verdict.v1' && (v.verdict === 'APPROVED' || v.verdict === 'CHANGES_REQUIRED')
+  && typeof v.deterministic_audits_passed === 'boolean' && typeof v.summary === 'string'
+  && Array.isArray(v.requirements) && v.requirements.every((r) => exactKeys(r, REQ_KEYS) && typeof r.id === 'string' && ['met', 'not_met', 'unverified'].includes(r.status) && typeof r.evidence === 'string')
+  && Array.isArray(v.findings) && v.findings.every((f) => exactKeys(f, FIND_KEYS) && ['critical', 'major', 'minor'].includes(f.severity)
+    && ['requirement', 'correctness', 'security', 'test', 'protected_path', 'input'].includes(f.category) && strOrNull(f.file)
+    && (f.line === null || Number.isInteger(f.line)) && strOrNull(f.requirement_id) && typeof f.reason === 'string');
+// 本文全体を1つの JSON オブジェクトとして読む（前後の空白と、全体を囲む ```json の囲みだけを許す。正規表現で途中を取り出さない）
+const parseWhole = (text) => {
+  let t = String(text || '').trim();
+  const fence = t.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/);
+  if (fence) t = fence[1].trim();
+  try { const o = JSON.parse(t); return o && typeof o === 'object' && !Array.isArray(o) ? o : null; } catch { return null; }
+};
+// 判定として成り立つのは、CLI が正常に終わり、本文全体が1つの JSON オブジェクトで、vgdd.verdict.v1 のスキーマに完全に合うときだけ。
+//   {}・エラーの JSON・必須の欠け・配列・末尾の壊れ・不正な verdict を「解釈できた判定」にしない（p0.4.2 は正規表現で途中を取り出していた）
+let verdict = parseWhole(text);
+if (cliError || !wellFormed(verdict)) verdict = verdict && typeof verdict === 'object' ? { ...verdict, __malformed: true } : null;
 const auditFail = process.env.AUDIT_FAIL === '1';
 const auditRan = process.env.AUDIT_RAN === '1';
 // 未実行は合格ではない（judge の指摘 2026-11-03：未実行と合格を区別する）
@@ -224,16 +253,17 @@ const record = {
   requirements_source: process.env.REQ_SOURCE || 'docs/requirements.md',
   collected_at: process.env.STAMP,
   judge: verdict,
-  judge_parse_ok: !!verdict,
+  judge_parse_ok: !!verdict && !verdict.__malformed,   // p0.4.3：false は「司法が使えない」（gate-runner は判定として使わない）
   deterministic_audits: auditState,
   deterministic_audits_passed: auditState === 'passed',
   final_verdict: null,
   overridden_by_deterministic_audit: false,
   note: null,
 };
-if (!verdict) {
+if (!verdict || verdict.__malformed) {
   record.final_verdict = 'CHANGES_REQUIRED';
-  record.note = 'judge の出力を JSON として解釈できない（fail-closed）';
+  record.note = verdict ? 'judge の出力が判定の形をしていない・CLI が失敗した（fail-closed。判定ではない）' : 'judge の出力を JSON として解釈できない（fail-closed）';
+  if (verdict) delete verdict.__malformed;
 } else if (auditState !== 'passed' && verdict.verdict === 'APPROVED') {
   record.final_verdict = 'CHANGES_REQUIRED';
   record.overridden_by_deterministic_audit = true;

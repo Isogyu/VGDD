@@ -64,3 +64,6 @@ yarn-error.log*
 .pnpm-debug.log*
 .vercel
 next-env.d.ts
+
+# p0.4.3：Kernel の状態の写し（裁判所が周回ごとに書く。追跡しない）
+docs/governance/kernel-state.json*

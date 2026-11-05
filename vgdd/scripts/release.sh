@@ -37,6 +37,47 @@ for task in "$@"; do
   rec="$(jq -c --arg t "$task" 'select(.task==$t)' "$Z3/evidence/held.jsonl" | tail -n 1)"
   [ -n "$rec" ] || { echo "✗ ${task}：夜間の合格の記録がない" >&2; exit 1; }
   req="$(printf '%s' "$rec" | jq -r .request)"; cand="$(printf '%s' "$rec" | jq -r .candidate)"
+  # p0.4.3（Codex の指摘 #3）：p0.4.2 までの held は、Codex の判定の欠落を SKIPPED として合格にしえた。版の印（law）のない held と、
+  #   --no-codex で起動していないのに Codex が APPROVED／CHANGES_REQUIRED でない held は統合しない（昼に申請し直す）
+  if [ "$(printf '%s' "$rec" | jq -r '.law // empty')" != "p0.4.3" ]; then echo "✗ ${task}：前の版（p0.4.2 以前）か未知の版の夜間の合格の記録。司法の成立を確かめられないので統合しない。昼に申請し直す" >&2; exit 1; fi
+  # 記録の形が、裁判所が held にする条件（司法が成り立ち、両方の差し戻しでなく、security は省略か合格）と合うか（Codex の再監査 #2）
+  if ! printf '%s' "$rec" | jq -e '
+      (.no_codex | type == "boolean")
+      and (.judge == "APPROVED" or .judge == "CHANGES_REQUIRED")
+      and (if .no_codex then .codex == "SKIPPED" and .judge == "APPROVED" else (.codex == "APPROVED" or .codex == "CHANGES_REQUIRED") end)
+      and (.judge == "APPROVED" or .codex == "APPROVED")
+      and (.security == "SKIPPED" or .security == "APPROVED")
+      and (.security_required | type == "boolean")
+      and (if .security_required and (.no_codex | not) then .security == "APPROVED" else true end)
+      and (if .no_codex or .judge == .codex then .route == "agreed" else (.route == "minor_disagreement" or .route == "ruling") end)' >/dev/null 2>&1; then
+    echo "✗ ${task}：夜間の合格の記録に、成り立った司法の判定がない（Codex の欠落・両方の差し戻し・security の不合格など）。統合しない" >&2; exit 1
+  fi
+  # p0.4.3（Codex の4回目の監査 #2）：held の自己申告を信用せず、Z3 の判定の記録（候補の SHA に結び付いたファイル）と main の票に照合し直す。
+  #   各司法の記録が成り立っていて（印が true）、結論が held と同じこと。minor の不一致なら両方の記録に critical・major がないこと。
+  #   security の要否は、夜に検査した時点の main の票（main_at_check）から読み直す
+  c12="$(printf '%s' "$cand" | cut -c1-12)"; V="$Z3/evidence/verdicts"
+  vcheck() { # file, flag, want → 0 なら一致
+    [ -s "$1" ] && [ "$(jq -s -r --arg k "$2" 'if length == 1 and (.[0][$k] == true) then .[0].final_verdict else "" end' "$1" 2>/dev/null)" = "$3" ]
+  }
+  vcheck "$V/$task-$c12.json" judge_parse_ok "$(printf '%s' "$rec" | jq -r .judge)" || { echo "✗ ${task}：judge の判定の記録が held と合わない（ない・成り立っていない・結論が違う）。統合しない" >&2; exit 1; }
+  if [ "$(printf '%s' "$rec" | jq -r .no_codex)" != "true" ]; then
+    vcheck "$V/$task-$c12-codex-judge.json" parse_ok "$(printf '%s' "$rec" | jq -r .codex)" || { echo "✗ ${task}：Codex の判定の記録が held と合わない。統合しない" >&2; exit 1; }
+  fi
+  mac0="$(printf '%s' "$rec" | jq -r .main_at_check)"
+  trel0="$(git -C "$REPO" ls-tree --name-only "$mac0" docs/tasks/ | grep "^docs/tasks/${task}-.*\.md$" | head -n 1)"
+  sreq="$(git -C "$REPO" show "$mac0:$trel0" 2>/dev/null | sed -n '/^---$/,/^---$/p' | sed -n 's/^security_review: *//p' | head -n 1 | sed 's/ *#.*$//' | tr -d ' ')"
+  [ "$([ "$sreq" = "true" ] && echo true || echo false)" = "$(printf '%s' "$rec" | jq -r .security_required)" ] || { echo "✗ ${task}：held のセキュリティ審査の要否が、夜に検査した時点の票と合わない。統合しない" >&2; exit 1; }
+  if [ "$sreq" = "true" ] && [ "$(printf '%s' "$rec" | jq -r .no_codex)" != "true" ]; then
+    vcheck "$V/$task-$c12-codex-security.json" parse_ok APPROVED || { echo "✗ ${task}：セキュリティ審査の合格の記録がない。統合しない" >&2; exit 1; }
+  fi
+  if [ "$(printf '%s' "$rec" | jq -r .route)" = "minor_disagreement" ]; then
+    maj="$(jq -s '[.[] | (.judge.findings? // []), (.codex.findings? // []) | .[] | select(.severity=="critical" or .severity=="major")] | length' "$V/$task-$c12.json" "$V/$task-$c12-codex-judge.json" 2>/dev/null || echo x)"
+    [ "$maj" = "0" ] || { echo "✗ ${task}：minor の不一致として held になったが、判定の記録に重大な指摘がある（${maj}）。統合しない" >&2; exit 1; }
+  fi
+  # 裁定で通った held は、オーナーの裁定（Z3 の rulings.jsonl）がこの票のこの申請の SHA について「統合」であることを照合し直す
+  if [ "$(printf '%s' "$rec" | jq -r .route)" = "ruling" ] && [ -z "$(jq -c --arg t "$task" --arg s "$(printf '%s' "$rec" | jq -r .request)" 'select(.task==$t and .sha==$s and .decision=="merge")' "$Z3/evidence/rulings.jsonl" 2>/dev/null | tail -n 1)" ]; then
+    echo "✗ ${task}：裁定で通った夜間の合格の記録だが、この申請へのオーナーの裁定が見つからない。統合しない" >&2; exit 1
+  fi
   git -C "$REPO" cat-file -e "$cand^{commit}" || { echo "✗ ${task}：候補のコミットがない" >&2; exit 1; }
   if git -C "$REPO" merge-base --is-ancestor "$req" main; then
     echo "・${task}：申請 ${req:0:12} はすでに main に入っている（統合済み）。何もしない"; continue

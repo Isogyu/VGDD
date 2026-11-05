@@ -31,6 +31,8 @@ while [ $# -gt 0 ]; do
     --shots) SHOTS="$2"; shift 2;;
     --out) OUT_DIR="$2"; shift 2;;
     --dry-run) DRY=1; shift;;
+    # p0.4.3（OBS-053）：gate-runner の起動時の点検。codex が動けば 0、なければ 69（判定はしない）
+    --preflight) if command -v codex >/dev/null 2>&1 && codex --version >/dev/null 2>&1; then exit 0; else exit 69; fi;;   # set -e の下でも 69 で終わる（Codex の指摘 #4）
     *) PASSTHRU+=("$1"); shift;;
   esac
 done
@@ -80,17 +82,36 @@ LAST="$(mktemp "$TMP_BASE/judge-codex-last.XXXXXX")"
 # shellcheck disable=SC2086
 printf '%s' "$INPUT" | codex exec - \
   --output-schema "$HERE/../schemas/verdict.schema.json" \
-  -o "$LAST" --ephemeral --skip-git-repo-check ${CODEX_EXTRA_ARGS:-} >/dev/null 2>"$OUT_DIR/.codex-stderr.log" || true
+  -o "$LAST" --ephemeral --skip-git-repo-check ${CODEX_EXTRA_ARGS:-} >/dev/null 2>"$OUT_DIR/.codex-stderr.log" && CLI_RC=0 || CLI_RC=$?   # p0.4.3：終了状態を残す
 RAW="$(cat "$LAST" 2>/dev/null || true)"
 rm -f "$LAST"
 
 OUT_FILE="${OUT_DIR}/${TASK}-${HEAD_SHA}-codex-${MODE}.json"
-export RAW AUDIT_STATE TASK BRANCH HEAD_SHA BASE STAMP REQ MODE REQ_SOURCE
+export RAW AUDIT_STATE TASK BRANCH HEAD_SHA BASE STAMP REQ MODE REQ_SOURCE CLI_RC
 node - > "$OUT_FILE" <<'NODE'
 const raw = process.env.RAW || '';
-let verdict = null;
-const m = raw.match(/\{[\s\S]*\}/);
-if (m) { try { verdict = JSON.parse(m[0]); } catch {} }
+// p0.4.3（Codex の3回目の監査 #1 critical）：判定のスキーマ（vgdd.verdict.v1）の完全な検証。余分なキー・欠けたキー・型・列挙値のどれかが違えば false
+const VERDICT_KEYS = ['schema', 'verdict', 'deterministic_audits_passed', 'requirements', 'findings', 'summary'];
+const REQ_KEYS = ['id', 'status', 'evidence'];
+const FIND_KEYS = ['severity', 'category', 'file', 'line', 'requirement_id', 'reason'];
+const exactKeys = (o, keys) => !!o && typeof o === 'object' && !Array.isArray(o) && Object.keys(o).length === keys.length && keys.every((k) => Object.prototype.hasOwnProperty.call(o, k));
+const strOrNull = (v) => v === null || typeof v === 'string';
+const wellFormed = (v) => exactKeys(v, VERDICT_KEYS) && v.schema === 'vgdd.verdict.v1' && (v.verdict === 'APPROVED' || v.verdict === 'CHANGES_REQUIRED')
+  && typeof v.deterministic_audits_passed === 'boolean' && typeof v.summary === 'string'
+  && Array.isArray(v.requirements) && v.requirements.every((r) => exactKeys(r, REQ_KEYS) && typeof r.id === 'string' && ['met', 'not_met', 'unverified'].includes(r.status) && typeof r.evidence === 'string')
+  && Array.isArray(v.findings) && v.findings.every((f) => exactKeys(f, FIND_KEYS) && ['critical', 'major', 'minor'].includes(f.severity)
+    && ['requirement', 'correctness', 'security', 'test', 'protected_path', 'input'].includes(f.category) && strOrNull(f.file)
+    && (f.line === null || Number.isInteger(f.line)) && strOrNull(f.requirement_id) && typeof f.reason === 'string');
+// 本文全体を1つの JSON オブジェクトとして読む（前後の空白と、全体を囲む ```json の囲みだけを許す。正規表現で途中を取り出さない）
+const parseWhole = (text) => {
+  let t = String(text || '').trim();
+  const fence = t.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/);
+  if (fence) t = fence[1].trim();
+  try { const o = JSON.parse(t); return o && typeof o === 'object' && !Array.isArray(o) ? o : null; } catch { return null; }
+};
+// judge.sh と同じ「判定として成り立つ」条件（本文全体が1つの JSON オブジェクトで、スキーマに完全に合う）
+const verdict = parseWhole(raw);
+const malformed = process.env.CLI_RC !== '0' || !wellFormed(verdict);
 const auditState = process.env.AUDIT_STATE || 'not_run';
 const record = {
   type: 'verdict',
@@ -104,13 +125,13 @@ const record = {
   requirements_source: process.env.REQ_SOURCE || 'docs/requirements.md',
   collected_at: process.env.STAMP,
   codex: verdict,
-  parse_ok: !!verdict,
+  parse_ok: !!verdict && !malformed,   // p0.4.3：false は「司法が使えない」
   deterministic_audits: auditState,
   final_verdict: null,
   overridden_by_deterministic_audit: false,
   note: null,
 };
-if (!verdict) { record.final_verdict = 'CHANGES_REQUIRED'; record.note = 'Codex の出力を JSON として解釈できない（fail-closed）'; }
+if (!verdict || malformed) { record.final_verdict = 'CHANGES_REQUIRED'; record.note = verdict ? 'Codex の出力が判定の形をしていない・CLI が失敗した（fail-closed。判定ではない）' : 'Codex の出力を JSON として解釈できない（fail-closed）'; }
 else if (auditState !== 'passed' && verdict.verdict === 'APPROVED') {
   record.final_verdict = 'CHANGES_REQUIRED'; record.overridden_by_deterministic_audit = true;
   record.note = auditState === 'failed' ? '決定論的監査が不合格のため、Codex の APPROVED を取り消した' : '決定論的監査が未実行のため、Codex の APPROVED を取り消した';
