@@ -1,7 +1,7 @@
 ---
 id: T-020
 title: デモ用の保存済みの AI 出力（手順書の原案・AI の検出）を実 API で採取する仕組み（M4-4・M8-2 の拡張）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-4, M8-2, M5-1, M6-2, D-62]   # 記録用。司法には渡さない
@@ -83,3 +83,5 @@ API キーのない審査員の環境（デモモード）でも、W1 の手順�
 - 2026-11-06T01:31:49+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
 - 01:36 立法補佐からの伝達（オーナー経由）：Codex security の指摘は A7（`Origin` の拒否の試験がない）。原因は票の A7 の書き方（`captureDemoExtras` で試すように読め、試せない形）。立法補佐が A7 と A6 の⑫を明確化して main に固定（2e823d3）、オーナーが承認し直し済み。直し方：ルートの要求の判定を純粋な関数 `checkCaptureRequest` に分けてルートから呼び、試験⑫を足す
 - 01:37 行政の長が W17 を起動（worktree `agent-a8d585142e02f121c`）。29cc506 を cherry-pick し、`checkCaptureRequest` への分離と⑫の試験を足して1コミットに amend する指示。W14 の worktree `agent-a1db6556…` は触らない
+- 01:40 W17 の報告：コミット c8ebe6a（1つに amend。main との差は4ファイル +683。29cc506 との差は `capture-extras.ts` +39、`route.ts` +11/−18、試験 +82、`demo-capture.mjs` は不変）。`checkCaptureRequest`（404→403→415→400、zod の strict はこの関数に移動、`Content-Type` は小文字で比較、空文字の Origin も 403）を export し、ルートは本文を JSON で読んで（読めなければ `undefined`）この関数 → `hasApiKey`（503）→ `captureDemoExtras(check.kind)` の順。⑫の `it(` 7件（404 の3入力、403 の3入力、415 の5入力、大文字・charset つきは通る、400 の13入力、`{}` と3種類の kind、判定の順）。test 268・typecheck・lint 合格。拒否1件：`sed` にパスを変数で渡したコマンドが worktree の分離の確認で拒否（回避せずパスを書き出して実行）。逸脱：本番でも本文を一度読んでから 404 を返す（A7 が関数に `body` を渡す形のため。本文は使わず応答にも出さない）
+- 01:41 行政の長が差分を確認（`files_allowed` の4ファイルのみ、ルートの全文と `checkCaptureRequest` の判定の順、⑫の試験の一覧を読んだ。`console` なし、応答の形は A4 のまま）。`status: review` で main にコミットし再申請（差し戻し1回目。security_review: true）
