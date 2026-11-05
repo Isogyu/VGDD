@@ -1,7 +1,7 @@
 ---
 id: T-021
 title: 作業画面の見出しに、チームの知恵・共有の記録・統治のライブ画面への導線を置く
-status: in_progress
+status: review
 requirements: [A1, A2, A3]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M7-2, M8-2]   # 記録用。司法には渡さない
@@ -59,3 +59,5 @@ depends_on: []
 
 （統合後に追記）
 - 01:17 行政の長が W15 を起動（worktree `agent-a78465bf2bc659142`）。仕様はオーナーが 01:12 に approve-spec で承認済み（立法補佐の伝達）。T-020 と並行（触るファイルは重ならない）
+- 01:19 W15 の報告：コミット 5881597（1ファイル、+12）。`<h1>` とセレクタの間に `<nav aria-label="ほかの画面">`（`flex flex-wrap items-center gap-3 text-sm`）とリンク3つ（既存の `Link` の import を使用）。test 245・typecheck・lint 合格。逸脱・拒否なし（`npm ci` で `.github` の TAR_ENTRY_ERROR の警告が出たがインストールは完了）。画面は未確認
+- 01:19 行政の長が差分を確認（`WorkScreen.tsx` のみ、追加 12 行、削除なし。順と文と href が A1 のとおり）。`status: review` で main にコミットし申請
