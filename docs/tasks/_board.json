@@ -1,12 +1,12 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-04T23:53:57.484+09:00",
+  "generated_at": "2026-11-06T06:49:11.360+09:00",
   "totals": {
-    "tickets": 9,
-    "merged": 9,
-    "rejected": 23,
+    "tickets": 24,
+    "merged": 24,
+    "rejected": 33,
     "blocked": 0,
-    "disagreements": 7
+    "disagreements": 13
   },
   "tickets": [
     {
@@ -89,6 +89,141 @@
       "returns": 5,
       "merged_at": "2026-11-04T23:53:57+0900",
       "disagreements": 4
+    },
+    {
+      "id": "T-009",
+      "title": "docs/ideas.md に「その後」の列を足し、M10 で見送った案を追記する（V8 夜間ハーネスの試験運転用の小さな票）",
+      "status": "merged",
+      "estimate_h": 0.2,
+      "returns": 0,
+      "merged_at": "2026-11-05T22:09:16+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-010",
+      "title": "共有前の本人確認の裏側（共有候補の作成・承認・編集して承認・却下・取り下げ・記録。M9 の裏側）",
+      "status": "merged",
+      "estimate_h": 1.2,
+      "returns": 1,
+      "merged_at": "2026-11-05T23:25:22+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-011",
+      "title": "機密の検出箇所ごとの抽象化の案と、本人が選んだ案だけの置き換え（M6-3 の裏側）",
+      "status": "merged",
+      "estimate_h": 0.4,
+      "returns": 1,
+      "merged_at": "2026-11-06T00:56:43+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-012",
+      "title": "手順書の原案と判断のポイントの生成（承認済みの共有から。M5 の裏側）",
+      "status": "merged",
+      "estimate_h": 1,
+      "returns": 0,
+      "merged_at": "2026-11-05T23:25:45+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-013",
+      "title": "統治のライブ画面 /governance（票の盤・票1枚の運命・統治の数字。D-59③）",
+      "status": "merged",
+      "estimate_h": 1,
+      "returns": 1,
+      "merged_at": "2026-11-05T23:26:08+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-014",
+      "title": "S-3 共有候補の確認の画面（承認・編集して承認・却下、抽象化の案、記録と取り下げ。M9・M6-3 の画面）",
+      "status": "merged",
+      "estimate_h": 1.2,
+      "returns": 1,
+      "merged_at": "2026-11-06T01:25:15+0900",
+      "disagreements": 2
+    },
+    {
+      "id": "T-015",
+      "title": "S-4 チームの知恵の画面（承認済みの共有の一覧と、手順書の原案・判断のポイント。M5・C2 の画面）",
+      "status": "merged",
+      "estimate_h": 1,
+      "returns": 2,
+      "merged_at": "2026-11-06T00:43:38+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-016",
+      "title": "lint の対象から作業員の worktree（.claude/worktrees/）を外す",
+      "status": "merged",
+      "estimate_h": 0.1,
+      "returns": 1,
+      "merged_at": "2026-11-06T00:50:55+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-017",
+      "title": "共有候補への AI の追加の検出（決定論的な検出に足すだけ。M6-2 の裏側）",
+      "status": "merged",
+      "estimate_h": 1,
+      "returns": 1,
+      "merged_at": "2026-11-06T01:04:29+0900",
+      "disagreements": 2
+    },
+    {
+      "id": "T-018",
+      "title": "デモの合成データに先輩C の W1 の記録と承認済みの共有を足す（M5 のデモ用）",
+      "status": "merged",
+      "estimate_h": 0.3,
+      "returns": 0,
+      "merged_at": "2026-11-06T00:51:26+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-019",
+      "title": "S-3 に「AI でも確かめる」を置き、AI の候補を決定論的な検出と分けて見せる（M6-2 の画面）",
+      "status": "merged",
+      "estimate_h": 0.5,
+      "returns": 1,
+      "merged_at": "2026-11-06T01:47:40+0900",
+      "disagreements": 2
+    },
+    {
+      "id": "T-020",
+      "title": "デモ用の保存済みの AI 出力（手順書の原案・AI の検出）を実 API で採取する仕組み（M4-4・M8-2 の拡張）",
+      "status": "merged",
+      "estimate_h": 0.7,
+      "returns": 1,
+      "merged_at": "2026-11-06T01:49:15+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-021",
+      "title": "作業画面の見出しに、チームの知恵・共有の記録・統治のライブ画面への導線を置く",
+      "status": "merged",
+      "estimate_h": 0.2,
+      "returns": 0,
+      "merged_at": "2026-11-06T01:27:51+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-022",
+      "title": "統治のライブ画面に「Kernel」の区画を足す（法律の版・稼働／停止・成立条件①〜⑤の強制と試験・承認済みの仕様・held・裁定・判定と不一致・ハッシュチェーン）",
+      "status": "merged",
+      "estimate_h": 3,
+      "returns": 0,
+      "merged_at": "2026-11-06T06:47:55+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-023",
+      "title": "開発用ルート（seed・capture-fixtures）の門を capture-extras と同じにし、整理の fixture の採取を合成データだけにする（別サイトからの seed --reset と、今の DB のメモの外部送信を塞ぐ）",
+      "status": "merged",
+      "estimate_h": 0.6,
+      "returns": 0,
+      "merged_at": "2026-11-06T06:47:21+0900",
+      "disagreements": 0
     }
   ]
 }
