@@ -14,7 +14,9 @@ branch: null
 worker: null
 files_allowed:
   - src/lib/time.ts
-  - src/lib/time.test.ts                 # なければ新設
+  - src/lib/time.test.ts                 # 新設
+  - src/lib/db.test.ts                   # formatMdHm の期待値 1 行だけ（L43）
+  - src/lib/summary-markdown.test.ts     # 日時の期待値 2 行だけ（L62・L65）
   - src/components/ShareReview.tsx       # formatDateTime を消して lib/time に
   - src/components/TeamKnowledge.tsx     # formatMmDdHm を消して lib/time に
   - src/components/GovernanceView.tsx    # formatTs を消して lib/time に
@@ -44,11 +46,11 @@ depends_on: [T-draft-ui-error-handling]
 
 ## 2. 受け入れ条件
 
-- A1. `src/lib/time.ts` の `formatMdHm(iso)` の書式を **`MM/DD HH:MM`（月・日・時・分をゼロ埋め2桁。例 `11/03 13:05`）** に変える（今は `11/3 13:05`）。JST の ISO 文字列（`+09:00`）を受け取り、`Date` にできない文字列は「—」を返す。あわせて `formatMd(iso)`（`MM/DD`）を export する。`src/lib/time.test.ts` に：①`"2026-11-03T13:05:00+09:00"` → `"11/03 13:05"` ②1桁の月日時分がゼロ埋め ③不正な文字列 → `"—"` ④`formatMd` → `"11/03"`。既存の `time.test.ts` の `it(` があれば期待値だけを新しい書式に変える
-- A2. 部品の中の日時の整形の**複製を消し**、`@/lib/time` の `formatMdHm`・`formatMd` を使う：`ShareReview.tsx` の `formatDateTime`（L35-38 付近）、`TeamKnowledge.tsx` の `formatMmDdHm`（L21-23 付近）、`GovernanceView.tsx` の `formatTs`（L34-37 付近。`MM/DD` の表示は `formatMd`）。`ShareReview` の `formatDateTime` は `ShareRecords.tsx` から import されているので、`ShareReview.tsx` から **同じ名前で `formatMdHm` を re-export**（`export { formatMdHm as formatDateTime } from "@/lib/time"`）して `ShareRecords.tsx` は変えない。`@/lib/time` は DB を読まないので実行時に import してよい
-- A3. 二次ボタンの共通クラス：`CopyButton.tsx`（L45 付近）と `QuestionDraft.tsx`（L31 付近）の `<button>` に、`SummaryActions.tsx` の「チームに共有する」Link と同じクラス `rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-800` を付ける。`CopyButton` の `aria-live` は `<button>` から外し、通知の文を隣の `<span role="status">` に出す（文は変えない）
-- A4. 一貫性：(a) `SessionView.tsx` の前回との差の色（L156 付近）を `WorkScreen.tsx`（L576-578 付近）と同じ条件（差が負のときだけ emerald、正は zinc）に (b) `SessionView.tsx` L161 付近の固定文「AI：Claude（Sonnet 5.5）」を、`data.summary.model` から組む（`demo` なら「保存済みの AI 出力（デモ）」、それ以外は「AI：<model>」。L241 付近の既存の表示と同じ規則）(c) 主ボタンの色を `bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300` に統一（`WorkScreen` の `bg-zinc-800/dark:bg-zinc-200` をこれに）(d) 画面の文の句点：**1文の通知・注意・失敗の文は句点なし**に統一（`WorkScreen` L146・L427・L554、`SessionView` L178・L186・L304、`ShareReview` L225・L228 付近の末尾の「。」を消す。2文以上の文の中の「。」は残す）
-- A5. `npm run -s test`（既存の試験のすべて）・`npm run -s typecheck`・`npm run -s lint` が通る（決定論的な監査の結果で確かめる）。差分のファイルは `files_allowed` の最大9つ。`ShareRecords.tsx`・`UnderstandingPanel.tsx` は変えない
+- A1. `src/lib/time.ts` の `formatMdHm(iso: string)` の書式を **`MM/DD HH:MM`（月・日・時・分をゼロ埋め2桁。例 `11/03 13:05`）** に変える（今は `11/3 13:05`）。判定は**形の検査**：先頭が `^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}` に合わなければ「—」を返す（`Date` は使わない。今の「文字列を切る」の方針のまま。`+09:00` も `+0900`（統治の記録の `ts` の形）も同じ先頭なので通る）。引数の型は `string` のまま。`src/lib/time.test.ts`（新設）に：①`"2026-11-03T13:05:00+09:00"` → `"11/03 13:05"` ②1桁の月日時分がゼロ埋め（`"2026-01-05T09:07:00+09:00"` → `"01/05 09:07"`）③`"abc"`・`""` → `"—"` ④`"2026-11-03T20:28:02+0900"` → `"11/03 20:28"`。**既存の期待値を新しい書式に変える 3 行**：`src/lib/db.test.ts` L43 付近（`"11/3 09:07"` → `"11/03 09:07"`）、`src/lib/summary-markdown.test.ts` L62・L65 付近（`"11/3 13:05"` → `"11/03 13:05"`）。それ以外の `it(` と期待値は変えない。注：`summaryToMarkdown`（Markdown のコピー）の開始の行も `11/03` になる（画面だけでなく出力も変わる）
+- A2. 部品の中の日時の整形の**複製を消し**、`@/lib/time` の `formatMdHm` を使う：`TeamKnowledge.tsx` の `formatMmDdHm`（L21-23 付近）と `GovernanceView.tsx` の `formatTs`（L34-40 付近。`tsToMs` も含む）を消して `formatMdHm` に（`GovernanceView` は既に `formatMdHm` を import 済み）。`ShareReview.tsx` の `formatDateTime(iso: string | null)`（L35-38 付近）は **`ShareRecords.tsx` が import し、`decisionTime(c)` の `string | null` を渡す**ので、名前と引数の型を残して中身を1行の包みにする：`export function formatDateTime(iso: string | null): string { return iso ? formatMdHm(iso) : ""; }`（`null` は今までどおり `""`。`ShareRecords.tsx` は変えない）。`@/lib/time` は DB を読まないので実行時に import してよい
+- A3. 二次ボタンの共通クラス：`CopyButton.tsx`（L45 付近）と `QuestionDraft.tsx`（L31 付近）の `<button>` に、`SummaryActions.tsx` の「チームに共有する」Link と同じクラス `rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-50 dark:border-zinc-600 dark:hover:bg-zinc-800` を付ける（`self-start` は付けない）。`CopyButton` は**ボタンの文字を常に `label`** にし、`aria-live` を `<button>` から外して、**常に描画する**隣の `<span role="status" className="text-xs text-zinc-500">` に `message` を出す（live region は更新の前から DOM に要る。2つの文字列は変えない）
+- A4. 一貫性：(a) `SessionView.tsx` の前回との差の色（L156 付近）を `WorkScreen.tsx`（L575-578 付近）と同じ条件（`delta_min < 0` のときだけ emerald、それ以外は zinc）に (b) `SessionView.tsx` L161 付近の AI の表示を3分岐に：`data.provider === "demo"` なら今の文「デモモード：保存した AI 出力を表示しています（API キーなし）」のまま、それ以外で `data.summary?.model` があれば「AI：<model>」、なければ「AI：Claude」（固定の「Claude（Sonnet 5.5）」を消す）(c) 主ボタンのクラスを `bg-zinc-900 text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300` に統一する対象：`WorkScreen.tsx` L330・L410・L531 付近、`SessionView.tsx` L188・L251・L329 付近（`disabled:opacity-50`・`self-start`・`py-2` などほかのクラスは残す）。`ShareReview.tsx` L601 付近は hover の2つだけ足す。`UnderstandingPanel.tsx` は別の票（M14・M11 の後）(d) 句点：次の **8 箇所の文末の「。」だけ**を消す（文中の「。」は残す。変更前後の文を作業員が報告に列挙する）：`WorkScreen.tsx` L146・L427・L554、`SessionView.tsx` L178・L186・L304、`ShareReview.tsx` L225・L228 付近。L146 は依存の票（T-draft-ui-error-handling）で `{ kind, text }` の形に変わっているので `text` の文末を消す
+- A5. `npm run -s test`（既存の試験のすべて）・`npm run -s typecheck`・`npm run -s lint` が通る（決定論的な監査の結果で確かめる）。差分のファイルは `files_allowed` の最大 11 で、`db.test.ts`・`summary-markdown.test.ts` の差分は期待値の 3 行だけ。`ShareRecords.tsx`・`UnderstandingPanel.tsx`・`PreviousSummary.tsx` は変えない
 
 ## 3. 開発用テスト
 
@@ -70,7 +72,7 @@ depends_on: [T-draft-ui-error-handling]
 
 ## 7. 点検の記録
 
-**Claude の点検済み、Codex は未点検**（4:00 から立法補佐が行う）。（この票は点検前。行番号は review-ui.md のもの、02:4x の main）
+**Claude の点検済み、Codex は未点検**（4:00 から立法補佐が行う）。点検役：Claude のサブエージェント（読み取り専用）。03:2x、この票 8 件（重い 2・中 5・軽 1）。対応：#1 `formatMdHm` の既存の期待値は `db.test.ts`・`summary-markdown.test.ts` にある → `files_allowed` に足し、変える 3 行を明記、Markdown の出力も変わると注記（A1・A5）／#2 `formatDateTime` は `string | null` を受けて `""` を返す → re-export でなく1行の包み（A2）／#3 「`Date` にできない」の判定 → 形の検査、`+0900` の試験④（A1）／#4 `formatMd` の使い手がない → 外した（A1・A2）／#5 句点の規則と列挙の不一致 → 8 箇所の文末だけ（A4(d)）／#6 主ボタンの対象を列挙（A4(c)）／#7 AI の表示は `provider === "demo"` の3分岐（A4(b)）／#8 CopyButton の文字は常に `label`、span は常に描画（A3）
 
 ## 8. オーナーに聞くこと
 
