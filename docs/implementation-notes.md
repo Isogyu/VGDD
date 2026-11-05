@@ -102,3 +102,32 @@
 - `app/` 内のファイルは Edit・Write で書く。テストは `npm test`。`npx` は ask
 - フックは commit 本文の保護語には反応しなくなった（p0.2.0）。コマンド文字列の中の説明文はまだ照合される
 - `.env.local` は読まない・表示しない。実案件の語・実名を書かない
+
+## 11/5 夜の運用メモ（2026-11-05 23:24〜23:5x）
+
+| 日時 | 対象 | 計画 → 実際 | 理由 | 影響 |
+|---|---|---|---|---|
+| 11/5 23:24〜23:26 | held 3件の統合 | 朝に release.sh → **夜のうちにオーナーが release.sh を実行**（T-010 7af0191、T-012 a259c5a、T-013 0925dc3。merge-tree で3件とも main と衝突なしを事前確認済み） | オーナーが離席の前に承認 | T-014・T-015 の依存のうち T-010・T-012 が満たされた |
+| 11/5 23:3x | main の lint | 統合後に main で `npm run lint` が 771 エラー → **原因は作業員の worktree（`.claude/worktrees/*/.next` 等）を eslint が読むこと**。main のコードはエラー 0、警告1件（`vgdd/conformance/run.mjs` の未使用変数） | eslint の `globalIgnores` に `.claude/**` がない | 立法補佐が票 T-016 を起草（23:36）。W7 が 8edbe97 で実装、仕様の承認待ちで blocked |
+| 11/5 23:40 | T-014 の起動 | T-010 の統合後に起動 → **未着手** | 依存の T-011 が差し戻し中（judge・Codex とも CHANGES_REQUIRED、指摘の中身は Z3） | 立法補佐からの伝達の後に起動。ブリーフの下書きは行政の長の scratchpad |
+| 11/5 23:4x | 作業員の scratchpad | 作業員が長いコミット本文をファイル経由で渡そうとした → **worktree の外への Write がフックで拒否**（規則どおり） | 作業員は自分の worktree の外に書けない（OBS-013②） | ブリーフに「コミット本文は `-m` を複数回で渡す。ファイル経由にしない」を足す |
+| 11/5 23:44 | T-016 の申請 | review → **gate-runner が blocked**（仕様がオーナーに承認されていない） | p0.4.0 の仕様の承認（approve-spec.sh）が、立法補佐の起草直後の票には未実施 | 朝に承認 → review に戻して再申請。**票を起こす前に承認の有無を確かめる手段が行政にはない**（記録は Z3） |
+| 11/5 23:48 | T-015 の申請 | review → **gate-runner が in_progress（セキュリティ審査が差し戻し）**。judge・Codex judge の結果と指摘の中身は Z3 | security_review: true の票は Codex security も通る | 立法補佐からの伝達を待って W6 の後継を起こす。行政の長の事前確認（未承認・取り下げ済みを出さない、原文のメモを読まない、例外の本文を出さない）では見つからなかった観点 |
+| 11/5 23:48 | 票の時刻の訂正 | 行政の長が §6 の時刻を実測値に訂正（未コミット）→ **gate-runner のコミット bf6ad28 に2行が混入**（gate-runner の名で main に入った） | gate-runner p0.4.1 は票を丸ごと add する。OBS-050 と同じ経路。立法補佐が p0.4.2（G11・G12：他人の書きかけがあれば預ける）を起草中 | 中身は正しく実害なし。**行政の長は票の編集と commit を間を空けずに行う**（gate-runner の周回は数分おき） |
+
+## 現在の状態と次の一手（2026-11-05 23:5x 更新）
+
+### 状態（`git status`・`git log`・`git worktree list` で確認済み）
+
+- main：58a6c65 以降（origin/main より 20 件以上先行、未 push）。作業ツリーには**立法補佐の未コミット分**（`vgdd/**`・`docs/kernel.md`・`docs/vgdd-status.md`。p0.4.2 の起草）がある。行政の長のコミットは明示パスの `git add` だけで行う
+- 票：T-010・T-012・T-013 merged（23:25 release）。T-011 in_progress（差し戻し、指摘は Z3）。T-014 ready（T-011 待ち）。T-015 in_progress（W6 266083a。23:48 セキュリティ審査が差し戻し、指摘は Z3）。T-016 blocked（W7 8edbe97、仕様の承認待ち）。T-017 は立法補佐が起草・点検反映済み（1503dbb、承認前）
+- worktree：held だった3件（`agent-ad2ebcea…`・`agent-a74be100…`・`agent-a897ccfa…`）は統合済み、`agent-ad0fec44…`（T-013 の旧 8d58f68）、`agent-adf6a1c2…`（T-011）、`night-T-010`、新しい `agent-a9b7f50f…`（T-015）・`agent-a956de1c…`（T-016）。削除はオーナーの承認が要る
+- push 前の確認：`git diff origin/main..HEAD` の追加行に秘密情報の形（API キー・秘密鍵・実メール）はない（23:3x に検索。唯一の一致は試験の架空の文字列 `secret` 変数）
+
+### 次の一手（順に）
+
+1. オーナー：`approve-spec.sh` で T-016（必要なら T-014・T-017）を承認 → 行政の長が T-016 を `status: review` に戻して再申請
+2. 立法補佐 → 行政の長：T-011（judge・Codex）と T-015（Codex security）の差し戻しの指摘を伝達 → W4・W6 の後継を起こして修正 → 再申請
+3. オーナー：held を画面で確認して `release.sh`。T-015 の統合後、`/knowledge`（S-4）をユーザー役が W1 の流れで確かめる。T-011 の統合後に T-014 を起動（ブリーフは下書き済み）
+4. 統合が済んだら、未 push 分の `git diff --cached --stat` と秘密情報の検索をやり直してから push（オーナーの承認）
+5. `agent-ad0fec44…` の worktree とブランチの削除（オーナーの承認）
