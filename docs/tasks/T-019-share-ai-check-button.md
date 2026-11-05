@@ -1,7 +1,7 @@
 ---
 id: T-019
 title: S-3 に「AI でも確かめる」を置き、AI の候補を決定論的な検出と分けて見せる（M6-2 の画面）
-status: blocked
+status: review
 requirements: [A1, A1b, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M6-2, M6-4, M9-1]   # 記録用。司法には渡さない
@@ -65,3 +65,4 @@ S-3（T-014 の `ShareReview`）で、本人が押したときだけ、共有候
 - 01:30 行政の長が差分を確認（`files_allowed` の1ファイルのみ。`@/lib/ai-sensitive` は `import type { AiFlag }` だけ、`dangerouslySetInnerHTML`・`console` なし、A1 の2行と A2・A3 の文が票どおり、`stale` の早期 return には変更なし）。`status: review` で main にコミットし申請
 
 - 2026-11-06T01:33:49+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=CHANGES_REQUIRED/1 件, codex=APPROVED/0 件）。オーナーの裁定へ）
+- 01:39 オーナーの裁定（立法補佐の伝達）：merge。judge の指摘は、AI の区画を出す条件（T-014 の `stale` の早期 return）が差分の外にあって見えなかったための誤検知。Codex は APPROVED。行政の長が `status: review` に戻して同じ a921350 を再申請（コードの変更なし）
