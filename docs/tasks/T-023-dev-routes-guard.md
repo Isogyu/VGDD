@@ -1,7 +1,7 @@
 ---
 id: T-023
 title: 開発用ルート（seed・capture-fixtures）の門を capture-extras と同じにし、整理の fixture の採取を合成データだけにする（別サイトからの seed --reset と、今の DB のメモの外部送信を塞ぐ）
-status: ready
+status: review
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [約束6（漏えい防止）, M7-1, M4-4, D-56①]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 0.6
 time_limit_min: 45
 security_review: true          # 開発用ルートと外部 API の呼び出し
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a9f6854c5b4313c5b   # 作業員のブランチ（main 691ef66 から）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W19
 files_allowed:
   - src/lib/ai/capture.ts                        # DB をメモリの seed に
   - src/lib/ai/capture.test.ts                   # 新設（なければ）
@@ -67,7 +67,11 @@ depends_on: [T-020]
 
 ## 6. 記録
 
-（統合後に追記）
+- 06:2x 行政の長が W19 を起動（worktree `agent-a9f6854c5b4313c5b`）。仕様はオーナーが 06:19 に approve-spec で承認済み（Kernel の写しの `approvals[].current` と、オーナーの着手の指示で確かめた）。T-022 と並行（触るファイルは重ならない）
+- W19 の報告：HEAD `bcc4bf25f4ddb8b59120b16a2844cf864d0d3a62`。test 277 件（24 ファイル）合格、typecheck・lint は終了コード 0（lint の警告 1 件は `vgdd/conformance/run.mjs:602` で差分の外）。`scripts/seed.mjs`・`scripts/demo-capture.mjs` は `content-type: application/json` だけを送り `Origin` を付けないことを読んで確かめた（実サーバーでは動かしていない。§3 でオーナーが確かめる）
+- 補った解釈・逸脱：`capture.ts` に非公開の関数 `captureFrom` を足し、ループ本体を移した（公開の名前・引数の順・返り値は同じ）。import は既存の書き方に合わせて `../db`・`../seed`（同じモジュール）。試験は③⑥に票より多くの例を足した。`seed_failed` の 500 と、メモリの DB を閉じることの試験はない（A5 の列挙にない）
+- 拒否された操作：W19 の Bash のヒアドキュメント1件を、フックが「worktree の外」と判定した。書き込み先は worktree の中で、W19 は Edit でやり直した。誤検知かどうかは未確認（立法補佐に渡す）
+- 06:29 行政の長が差分を確認（`files_allowed` の6つだけ、追加 405・削除 25、`src/lib/demo-fixtures/**` の差分 0 件、禁止語と秘密情報の形なし。A1〜A6 と読み合わせた。行政の長は試験を自分では走らせていない）。`status: review` で main にコミットし申請
 
 ## 7. 点検の記録
 
