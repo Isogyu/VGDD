@@ -23,7 +23,7 @@ describe("demo provider（M4-4：API キーなしで保存済みの出力を返�
       const fx = loadFixture(task, false, FIXTURE_DIR);
       expect(fx, `${task} の fixture がない（npm run demo:capture で採取する）`).not.toBeNull();
       expect(fx!.source).toBe("claude");
-      const sid = (db.prepare("SELECT id FROM work_sessions WHERE task_name = ?").get(task) as { id: number }).id;
+      const sid = (db.prepare("SELECT id FROM work_sessions WHERE task_name = ? AND user_id = 'newcomer_a'").get(task) as { id: number }).id;
       const noteIds = listNotes(sid, db).map((n) => n.id);
       expect(fx!.note_count).toBe(noteIds.length);
       const v = validateAndMap(fx!.raw, noteIds);
@@ -39,7 +39,7 @@ describe("demo provider（M4-4：API キーなしで保存済みの出力を返�
   it("summarizeSession を demo provider で通すと W1 は整理でき、fixture のない作業名は provider_unavailable", async () => {
     const db = openDb(":memory:");
     seedDemo(db);
-    const w1 = db.prepare("SELECT id FROM work_sessions WHERE task_name = ?").get(DEMO_TASK_W1) as { id: number };
+    const w1 = db.prepare("SELECT id FROM work_sessions WHERE task_name = ? AND user_id = 'newcomer_a'").get(DEMO_TASK_W1) as { id: number };
     const p = new DemoProvider(FIXTURE_DIR);
     const r1 = await summarizeSession(w1.id, { provider: p }, db);
     expect(r1.ok).toBe(true);
