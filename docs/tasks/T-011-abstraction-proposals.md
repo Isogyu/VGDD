@@ -1,7 +1,7 @@
 ---
 id: T-011
 title: 機密の検出箇所ごとの抽象化の案と、本人が選んだ案だけの置き換え（M6-3 の裏側）
-status: ready
+status: review
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M6-3, M6-1, M9-1]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 0.4
 time_limit_min: 40
 security_review: false         # 純粋関数だけ。ルート・DB・AI に触れない
 unattended: true
-branch: null
-worker: null
+branch: worktree-agent-adf6a1c2fb01ee932   # 作業員のブランチ（0e69137）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W4
 files_allowed:
   - src/lib/abstraction.ts        # 新設：純粋関数
   - src/lib/abstraction.test.ts   # 新設
@@ -66,3 +66,5 @@ depends_on: []
 ## 6. 記録
 
 （統合後に追記）
+- 23:04 W4 起動（worktree `agent-adf6a1c2fb01ee932`、main 836733a から。T-013 が申請まで進んで枠が空いたため）。23:0x コミット 0e69137（2ファイル新設、+358）。報告：test 151（既存 135＋16）・typecheck・lint 合格（警告1件は既存の `vgdd/conformance/run.mjs`）。`sensitive` からは型だけ import。試験の文はすべて架空。拒否・逸脱なし
+- 23:08 行政の長が差分を確認（`files_allowed` の2ファイルのみ、禁止語なし、A1〜A6。A5 の①〜⑩に `it(` が対応、16件）。`status: review` で main にコミットし申請（gate-runner `--hold`。合格は held、統合は朝に release.sh）
