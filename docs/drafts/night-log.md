@@ -22,3 +22,28 @@
 | 03:0x | F-5：要件の未着手から票の下書き2枚（S1 共通つまずきの簡易集計＝承認済みの共有から `【つまずき】` の行を拾う、M15 匿名ブレスト＝設計の論点と推奨。C2 は T-015 で実装済み）。3票の点検役（読み取り専用）を起動 | `docs/tasks/drafts/T-draft-s1-common-struggles.md`・`T-draft-m15-anonymous-brainstorm.md`（3ddb9ba） |
 | 03:0x | dev-routes の票の点検（8件）を反映（c886484）。F-1：p0.4.3 案の2回目の点検（既存の試験との衝突・実現性、12件：major 6・medium 3・minor 3）を反映：群の記号を ST に、起動時の点検は代わりの司法でも通る形に、**codex が判定のファイルを書かずに終わると SKIPPED で統合に至る既存の穴**、書き出しの時点、promise の自己検査、`.gitignore`、出どころの訂正 5 件、night-runner の対応。§9 に申し送りの表 | `docs/drafts/kernel-p0.4.3-proposal.md`（6b6af53） |
 | 03:1x | 票4枚の点検（計 24 件）を反映（4f5b898）：答えの門は route の試験の形（`stubEnv`＋`setProviderOverride`）と SessionView の `pendingAnswers`、「該当メモを除いて送る」が無限に出る穴、stale の却下は既存の試験⑦⑫の期待値、失敗の扱いは `setMessage` 16 箇所の規則と対象 10 箇所、S1 は seed の新人A の本文に `【つまずき】` の行がない（前提が偽）→ seed を 4 行の形に。F-1：B（Kernel の UI）の2回目の点検（p0.4.3 §1 との一致・既存コード）を起動 | 票の下書き4枚 |
+
+## 4:00 の報告（立法補佐へ。下書き、4:00 に確定）
+
+**02:00〜03:1x の成果。すべて main の `docs/` の下にコミット済み（行政の長のコミット 17 件、45da41a〜fbd8709）。作業員は起こしていない。Codex は sandbox から呼べず、点検は Claude のサブエージェント（ツールなし、または読み取り専用）。各下書きの末尾に「Claude の点検済み、Codex は未点検」。**
+
+| 区分 | 成果物（パス） | 点検 | オーナーに聞くこと |
+|---|---|---|---|
+| A 改正案 p0.4.3 | `docs/drafts/kernel-p0.4.3-proposal.md` | 2回（12 件＋12 件。2回目は `run.mjs`・gate-runner 等と突き合わせ。§7・§9） | 6 件（置き方 A/B、停止中の書き込み、`--record`、司法の失敗の扱い、参考のコメント、夜間の `*`） |
+| B Kernel の UI | `docs/tasks/drafts/T-draft-kernel-ui.md` | 1回（10 件）＋2回目を起動中 | 4 件 |
+| C 段階2の票 | `T-draft-m12-interview-api`・`-screen`、`T-draft-m11-knowing-map`、`T-draft-m14-checkin-prompt`、`T-draft-m13-voice-input`、`T-draft-agents-md`、`T-draft-fingerprint-no-id` | 各1回（M12 は2回目を起動中） | 票ごと §8 |
+| D 記録 | `docs/implementation-notes.md`（M9〜M5 と画面の経過の表）、`docs/vgdd-status.md`（K1 本番で運用中、K4 下書き） | — | — |
+| E 提出物 | `docs/drafts/README.md`、`docs/drafts/demo-script.md` | 1回（12 件） | README 6 件、台本 3 件 |
+| F-2 研究 | `docs/drafts/comparison-experiment.md`、`governance-record-2026-11-05.md`、`kernel-stages-and-approval-levels.md` | — | 各 2〜3 件 |
+| F-3 判例の候補 | `docs/drafts/conformance-candidates.md`（17 件） | — | 2 件 |
+| F-4 アプリの点検 | `docs/drafts/review-security.md`（major 6・minor 9）、`review-ui.md`（major 6・minor 9） | 読み取り専用の点検役 | 票にするか |
+| F-5 点検由来・未着手の票 | `T-draft-dev-routes-guard`（最優先：別サイトから seed --reset が打てる、採取が今の DB のメモを外部に送る）、`T-draft-answers-flagged-gate`、`T-draft-share-stale-reject`、`T-draft-ui-error-handling`、`T-draft-s1-common-struggles`、`T-draft-m15-anonymous-brainstorm` | 各1回 | 票ごと §8 |
+
+**立法補佐に特に見てほしいこと**
+1. p0.4.3 案 §9 の 3：**codex が判定のファイルを書かずに終わると `cv` が `SKIPPED` のまま、judge が APPROVED なら minor の不一致として統合される穴**（今の版で統合に至る経路）。p0.4.3 の優先度を上げる根拠
+2. p0.4.3 案 §9 の 1・2：新しい群の記号は `ST`、起動時の点検は代わりの司法でも通る形（`--preflight`）
+3. `T-draft-dev-routes-guard`：機能凍結の前に通す候補（修正）。`T-draft-answers-flagged-gate` も
+4. `T-draft-agents-md` §5：Codex の司法が `AGENTS.md` を読む経路の裁判所側の対処（p0.4.3 の必須の候補）
+5. README の §6 の強制の層の表と、`CLAUDE.md` の「フックと Z3 は予定」の記述が古い点（オーナー）
+
+**止めた判断**：新しい票の作業員は起こしていない。`docs/` の外は書いていない。利用の上限の文言は出ていない。
