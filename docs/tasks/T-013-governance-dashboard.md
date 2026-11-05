@@ -1,7 +1,7 @@
 ---
 id: T-013
 title: 統治のライブ画面 /governance（票の盤・票1枚の運命・統治の数字。D-59③）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-45, D-55, D-56, D-59]   # 記録用。司法には渡さない
@@ -86,3 +86,5 @@ VGDD の統治が実際に働いたことを、アプリの中の1画面で見�
 - 23:19 行政の長が差分を確認（8d58f68 との差が上限の除去だけ、`files_allowed` の5ファイル）。`status: review` で main にコミットし再申請（差し戻し1回目）
 
 - 2026-11-05T23:21:49+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-05T23:26:08+0900 release: status → merged（main=0925dc3eaead。夜間の判定に合格した候補 439125f46e09 を、オーナーが朝に承認して統合）
