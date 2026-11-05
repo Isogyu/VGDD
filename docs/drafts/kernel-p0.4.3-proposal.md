@@ -43,7 +43,8 @@
 | `disagreements` | `{ count, tasks: [...] }` | `gate_events.jsonl` |
 | `evidence` | `{ records, chain_ok, checkpoint_at, last_record_at }` | `verify-chain.mjs --summary-json`、チェックポイント |
 | `conformance` | `{ passed, total, impl: "p0.4.2", at } \| null`。最後の適合性テストの結果 | **新設**：`run.mjs` に `--record` を足し、結果の1行を Z3 の `conformance.jsonl` に追記。**実行できるのはオーナーだけ**（Z3 に書ける主体。sandbox の外）。証拠ストア（`tool_calls.jsonl` のハッシュチェーン）とは別の台帳で、`held.jsonl`・`rulings.jsonl` と同じ「追記だけの記録」の扱い（チェーンには入れない。点検の指摘 11） |
-| `tickets` | `_board.json` と同じ5つの数（二重に出す必要はない。UI が `_board.json` を読めるので省いてよい） | `_board.json` |
+| （`tickets`） | **出さない（MUST NOT）**。`_board.json` にあり、UI はそちらを読む。UI の票は strict で検証するので、出すと state 全体が落ちる（B の2回目の点検） | — |
+| null の扱い | `stopped.since`・`judiciary.since`・`evidence.checkpoint_at`・`evidence.last_record_at`・`approvals[].approved_at` は `string \| null`。`verdicts.by_task` の結論は `APPROVED`・`CHANGES_REQUIRED`・`null` の3つだけ（`--no-codex` の `SKIPPED` は `null` に写す） | — |
 
 **出さないもの（MUST NOT）**：判定の理由（findings）の全文、裁定の理由の本文、停止の理由の本文、証拠ストアの各行、ファイルのパス（Z3・worktree・ホーム）、セッション ID、`tool_use_id`、作業員の報告、コミットの本文、**Z3 のハッシュ（指紋・候補の SHA・チェーンの指紋）の全桁も一部も**（点検の指摘 4）
 
