@@ -1,7 +1,7 @@
 ---
 id: T-015
 title: S-4 チームの知恵の画面（承認済みの共有の一覧と、手順書の原案・判断のポイント。M5・C2 の画面）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A5b, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M5-1, M5-2, M5-3, M5-4, M9-3, C2, D-62]   # 記録用。司法には渡さない
@@ -88,3 +88,5 @@ depends_on: [T-012]
 - 00:36 オーナーの裁定：00:20 の差し戻しは裁判所の環境の不具合（コードの指摘ではない）。同じ d07cc6a をそのまま再申請してよい。行政の長が `status: review` で main にコミットし再申請（コードの変更なし）
 
 - 2026-11-06T00:39:31+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-06T00:43:38+0900 release: status → merged（main=5aefab88eb18。夜間の判定に合格した候補 1ffd441ac2b8 を、オーナーが朝に承認して統合）
