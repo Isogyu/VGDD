@@ -60,3 +60,5 @@ depends_on: []
 - 00:24 立法補佐（Pro）が §2 を確認（1ファイルだけ、表の列と行を値まで指定、差分で判定できる。unattended: true は文書だけの票として妥当）。main に固定（D-49②）
 
 - 2026-11-05T20:24:28+0900 night-runner: 作業員の実装を前検査で確認（HEAD 3ed97a3）。status → review で再申請（試行 1）
+
+- 2026-11-05T20:49:56+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
