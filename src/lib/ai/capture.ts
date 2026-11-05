@@ -1,13 +1,24 @@
 // デモ用 fixture の採取（M4-4）。実 API（Sonnet 5.5）に seed の合成ログを投げ、出力を fixture に保存する。
 // オーナーが開発サーバーで npm run demo:capture を実行する（POST /api/dev/capture-fixtures）。送るのは合成データだけ。
+// db を渡さないときの材料は、メモリの DB に入れた seed の合成データだけ（今の開発 DB は使わない。T-023）。
 import type { DatabaseSync } from "node:sqlite";
-import { getDb } from "../db";
+import { z } from "zod";
+import { openDb } from "../db";
+import { seedDemo } from "../seed";
 import { listNotes, type WorkSession } from "../sessions";
 import { validateAndMap } from "../summary-schema";
 import { ClaudeProvider } from "./claude";
 import { saveFixture, type Fixture } from "./demo";
 import { nowJst } from "../time";
 import type { SummaryProvider } from "./provider";
+
+/** POST /api/dev/capture-fixtures の body（未知の項目は不合格）。上限は tasks の値に対するもの */
+export const CaptureFixturesBodySchema = z
+  .object({
+    tasks: z.array(z.string().min(1).max(200)).max(10).optional(),
+    partial: z.boolean().optional(),
+  })
+  .strict();
 
 export interface CaptureResult {
   task_name: string;
@@ -31,7 +42,23 @@ function latestEndedSession(taskName: string, db: DatabaseSync): WorkSession | u
 export async function captureFixtures(
   taskNames: string[],
   opts: { partial?: boolean; provider?: SummaryProvider; dir?: string } = {},
-  db: DatabaseSync = getDb(),
+  db?: DatabaseSync,
+): Promise<CaptureResult[]> {
+  // db の省略時は、メモリの DB に seed だけを入れて使い、終わったら閉じる（渡された db は閉じない）
+  if (db) return captureFrom(taskNames, opts, db);
+  const mem = openDb(":memory:");
+  try {
+    seedDemo(mem);
+    return await captureFrom(taskNames, opts, mem);
+  } finally {
+    mem.close();
+  }
+}
+
+async function captureFrom(
+  taskNames: string[],
+  opts: { partial?: boolean; provider?: SummaryProvider; dir?: string },
+  db: DatabaseSync,
 ): Promise<CaptureResult[]> {
   const provider = opts.provider ?? new ClaudeProvider();
   const partial = !!opts.partial;
