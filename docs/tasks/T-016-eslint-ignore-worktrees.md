@@ -1,7 +1,7 @@
 ---
 id: T-016
 title: lint の対象から作業員の worktree（.claude/worktrees/）を外す
-status: blocked
+status: review
 requirements: [A1, A2, A3]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: []
@@ -59,3 +59,4 @@ depends_on: []
 
 - 2026-11-05T23:44:00+0900 gate-runner: status → blocked（仕様（main の票の統治の項目と受け入れ条件）がオーナーに承認されていない、または承認の後に変わった。approve-spec.sh で承認する）
 - 23:46 行政の長：blocked は仕様の承認待ち（票は 23:36 に立法補佐が起草し、オーナーの approve-spec.sh が未実施。差分 8edbe97 は問題なし）。朝にオーナーが `approve-spec.sh T-016` を実行した後、行政の長が `status: review` に戻して申請を置き直す
+- 00:38 立法補佐からの伝達：オーナーが 00:25 に approve-spec で承認済み（指紋は main 9272008 の票と一致）。行政の長が `status: review` に戻して同じ 8edbe97 を再申請（コードの変更なし）
