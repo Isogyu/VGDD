@@ -1,7 +1,7 @@
 ---
 id: T-012
 title: 手順書の原案と判断のポイントの生成（承認済みの共有から。M5 の裏側）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6, A7, A8]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M5-1, M5-2, M5-3, M5-4, M9-3, M4-4, D-62]   # 記録用。司法には渡さない
@@ -87,3 +87,5 @@ depends_on: []
 - 23:07 行政の長が差分を確認（`files_allowed` の4ファイルのみ、`notes`・`console` の使用なし、禁止語なし、A1〜A8。A7 の①〜⑭に `it(` が対応）。`status: review` で main にコミットし申請（gate-runner `--hold`。合格は held、統合は朝に release.sh）
 
 - 2026-11-05T23:17:35+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-05T23:25:45+0900 release: status → merged（main=a259c5ac8683。夜間の判定に合格した候補 eda51c682ef2 を、オーナーが朝に承認して統合）
