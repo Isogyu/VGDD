@@ -1,7 +1,7 @@
 ---
 id: T-014
 title: S-3 共有候補の確認の画面（承認・編集して承認・却下、抽象化の案、記録と取り下げ。M9・M6-3 の画面）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M9-1, M9-2, M9-4, M9-5, M6-3, M6-4, D-56]   # 記録用。司法には渡さない
@@ -92,3 +92,5 @@ depends_on: [T-010, T-011]
 - 01:14 行政の長が差分を確認（`files_allowed` の5ファイルのみ。早期 return が `proposals.length > 0` のブロックより前にあること、A6 の制約が保たれていることを読んだ）。`status: review` で main にコミットし再申請（差し戻し1回目）
 
 - 2026-11-06T01:16:51+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-06T01:25:15+0900 release: status → merged（main=65d7173a79cb。夜間の判定に合格した候補 cdc3a0beac50 を、オーナーが朝に承認して統合）
