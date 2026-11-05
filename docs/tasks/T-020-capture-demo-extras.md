@@ -1,7 +1,7 @@
 ---
 id: T-020
 title: デモ用の保存済みの AI 出力（手順書の原案・AI の検出）を実 API で採取する仕組み（M4-4・M8-2 の拡張）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-4, M8-2, M5-1, M6-2, D-62]   # 記録用。司法には渡さない
@@ -87,3 +87,5 @@ API キーのない審査員の環境（デモモード）でも、W1 の手順�
 - 01:41 行政の長が差分を確認（`files_allowed` の4ファイルのみ、ルートの全文と `checkCaptureRequest` の判定の順、⑫の試験の一覧を読んだ。`console` なし、応答の形は A4 のまま）。`status: review` で main にコミットし再申請（差し戻し1回目。security_review: true）
 
 - 2026-11-06T01:46:02+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-06T01:49:15+0900 release: status → merged（main=61480f0e1f9b。夜間の判定に合格した候補 4091667adb04 を、オーナーが朝に承認して統合）
