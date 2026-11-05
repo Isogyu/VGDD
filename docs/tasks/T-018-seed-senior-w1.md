@@ -1,7 +1,7 @@
 ---
 id: T-018
 title: デモの合成データに先輩C の W1 の記録と承認済みの共有を足す（M5 のデモ用）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M7-1, M5-1, M5-2, D-62]   # 記録用。司法には渡さない
@@ -72,3 +72,5 @@ depends_on: []
 
 （統合後に追記）
 - 00:39 行政の長が W11 を起動（worktree `agent-a17de9e84f5dc0bc3`）。仕様はオーナーが 00:25 に approve-spec で承認済み（立法補佐の伝達）
+- 00:43 W11 の報告：コミット 55174c6（3ファイル、+89/−11。所要約4分）。`insertW1Extras` の最後で新設の `insertW1SeniorC` を呼び、先輩C の作業（`startSession`・`addNote`×3・`endSession`）と `shared_knowledge` 1件を入れる。`seed.test.ts` は A3 の期待値だけを1行ずつ変更し、新しい試験2件（`listProcedureSources` が2件で1件目が先輩C、2回目の seed で増えない）。`demo.test.ts` は2か所に `AND user_id = 'newcomer_a'`。test 200（既存 198＋2）・typecheck・lint 合格。逸脱：先輩C のデータを `seed.ts` 内の定数 `DEMO_W1_SENIOR_C` として export（使用は `seed.ts` 内のみ）。拒否なし
+- 00:44 行政の長が差分を確認（`files_allowed` の3ファイルのみ。メモ3件と共有の本文が A1・A2 の文と一致、既存の期待値の変更は A3 の9行、`session_summaries` に先輩C の分なし）。`status: review` で main にコミットし申請
