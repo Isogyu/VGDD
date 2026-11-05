@@ -125,6 +125,7 @@
 
 - 作業員は headless でも同じフックと sandbox の下で動くが、**`claude -p --agent worker` のフック入力に `agent_type` が入るかは未確認**。入らなくても `.claude/worktrees/` の下で動かすことで閉じ込めは効く（p0.2.0 の cwd の判定）。初回の試験運転（V8）で `tool_calls.jsonl` を見て確かめる
 - runner は gate-runner と同じくオーナー権限のスクリプト。runner のバグで main が壊れる経路は「票の status のコミット」だけに限る（ソースは触らない）。`main_advanced_outside_gate` の検知では、author が `night-runner` で差分が `docs/tasks/T-*.md` だけのコミットを例外にしている（p0.3.1）。夜は `--hold` なので、main にコードが入る経路は朝の `release.sh` だけ
+- **macOS 標準の bash 3.2 で動く前提**（p0.3.1c、OBS-039・040）。バックグラウンドのレーンの関数の中で `command` を使うとレーンのプロセスが置き換わるため、git は起動時に決めた絶対パスで呼ぶ。`wait -n` は使わない。レーンの件数と記録は変数ではなく、この夜の出来事のファイル（`night/logs/<日付>/lanes-<run_id>.tsv`）に追記して本体が数える。最後まで行ったレーンは `end` を残し、`end` のないレーンは「予期せず終わった」として記録し失敗に数える
 - Max の5時間枠の残量は API で読めない。利用上限の文言で止めるしかなく、止まった後の作業員の途中の作業は worktree に残る（朝に人が見る）
 - 朝刊の文章は LLM の出力。数字は集計 JSON から人が照合できるようにする
 

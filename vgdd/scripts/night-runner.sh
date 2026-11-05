@@ -23,7 +23,10 @@ REPO="${HOME}/tsubuyaki-worklog/app"; Z3="${VGDD_Z3_DIR:-${HOME}/tsubuyaki-z3}"
 
 # p0.3.1：この裁判所（sandbox の外・オーナーの権限）が実行する git は、リポジトリのフックと fsmonitor を読まない（OBS-033）。
 #   作業員が共有の .git/config に設定を書いても、ここでは使われない。さらに .git/config の要約をオーナーの基準値と照合し、違えば止める
-git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.sshCommand=ssh "$@"; }
+# p0.3.1c：bash 3.2（macOS 標準）では、バックグラウンドのレーンの関数の中で `command git` を呼ぶと、
+#   レーンのプロセスそのものが git に置き換わり、続きが実行されない（OBS-039）。git は起動時に決めた絶対パスで呼ぶ
+GIT_BIN="$(type -P git || true)"; [ -n "$GIT_BIN" ] || { echo "git が見つからない" >&2; exit 69; }
+git() { "$GIT_BIN" -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.sshCommand=ssh "$@"; }
 # p0.3.1a：macOS には timeout コマンドがないため、perl の alarm で時間の上限を付ける（V8 の試し実行で判明）。
 #   上限を過ぎると SIGALRM で作業員の claude を止める（終了コード 142）
 run_with_timeout() { local secs="$1"; shift; perl -e 'alarm shift; exec @ARGV or exit 127' "$secs" "$@"; }
@@ -54,6 +57,8 @@ LOGS="$NIGHT/logs/$DATE"; SUMMARY="$NIGHT/summary-$DATE.json"; STOP_FILE="$NIGHT
 EVENTS="$Z3/evidence/gate_events.jsonl"; TOOLCALLS="$Z3/evidence/tool_calls.jsonl"; VERDICTS="$Z3/evidence/verdicts"
 REQ_DIR="$REPO/merge-requests"; WT_BASE="$REPO/.claude/worktrees"
 mkdir -p "$LOGS"
+[ -d "$REQ_DIR" ] || { echo "申請のフォルダがない: ${REQ_DIR}（fail-closed。p0.3.1c）" >&2; exit 66; }
+check_git_config   # p0.3.1c：定義だけで呼ばれていなかった（Codex の監査の指摘 critical。OBS-041）。起動時と票を取る前ごとに照合する
 
 # ---- 上限（キューの limits。引数が優先） --------------------------------------------------------------
 lim() { jq -r --arg k "$1" --arg d "$2" '.limits[$k] // $d' "$QUEUE"; }
@@ -67,9 +72,16 @@ ts() { date +%Y-%m-%dT%H:%M:%S%z; }
 log() { echo "[$(ts)] $*"; }
 RUN_ID="night-$DATE-$$"
 RUN_START="$(ts)"   # p0.3.1b：この夜の運転の開始。これより前の記録は止める条件に数えない（OBS-037）
-STARTED=0; MERGED=0; REJECTED=0; BLOCKED=0; SKIPPED=0; TOK_TOTAL=0; FAIL_STREAK=0; STOP_REASON=""
-declare -a NOTES=()
-note() { NOTES+=("$1"); log "$1"; }
+SKIPPED=0; STOP_REASON=""
+# p0.3.1c：レーンはバックグラウンドのサブシェルで動くため、レーンの中の変数の加算は本体に戻らない（OBS-040）。
+#   レーンの出来事（started・merged・rejected・blocked・fail・ok・tokens・stop・note）はこの夜のファイルに1行ずつ追記し、本体はそこから数える
+LANE_EV="$LOGS/lanes-$RUN_ID.tsv"; : > "$LANE_EV"
+lane_ev() { printf '%s\t%s\n' "$1" "${2:-}" >> "$LANE_EV"; }
+count_ev() { awk -F'\t' -v k="$1" '$1==k {n++} END {print n+0}' "$LANE_EV"; }
+fail_streak() { awk -F'\t' '$1=="fail" {n++} $1=="ok" {n=0} END {print n+0}' "$LANE_EV"; }
+tok_total() { awk -F'\t' '$1=="tokens" {s+=$2} END {print s+0}' "$LANE_EV"; }
+lane_stop() { awk -F'\t' '$1=="stop" {r=$2} END {print r}' "$LANE_EV"; }
+note() { lane_ev note "$1"; log "$1"; }
 
 # ---- 票の読み取り（gate-runner と同じ関数） ------------------------------------------------------------
 ticket_path() { ls "$REPO"/docs/tasks/"$1"-*.md 2>/dev/null | head -n 1; }
@@ -108,14 +120,17 @@ judge_calls_tonight() { find "$VERDICTS" -name '*.json' -newer "$QUEUE" 2>/dev/n
 past_until() { [ "$(date +%H:%M)" \> "$UNTIL" ] && [ "$(date +%H)" -lt 12 ]; }
 should_stop() {
   if [ -f "$STOP_FILE" ]; then STOP_REASON="オーナーの停止（STOP ファイル）"; return 0; fi
+  if ! ( check_git_config ) >/dev/null 2>&1; then STOP_REASON="共有の .git/config が基準値と違う（OBS-033・041）"; return 0; fi
   if past_until; then STOP_REASON="時刻 ${UNTIL} を過ぎた"; return 0; fi
   if ! gate_alive; then STOP_REASON="gate-runner が動いていない"; return 0; fi
   if outside_gate; then STOP_REASON="main_advanced_outside_gate を検知"; return 0; fi
   if [ "$(deny_recent)" -gt 30 ]; then STOP_REASON="直近10分の拒否が30件を超えた"; return 0; fi
-  if [ "$FAIL_STREAK" -ge 2 ]; then STOP_REASON="2票続けて失敗"; return 0; fi
+  local lstop; lstop="$(lane_stop)"
+  if [ -n "$lstop" ]; then STOP_REASON="$lstop"; return 0; fi
+  if [ "$(fail_streak)" -ge 2 ]; then STOP_REASON="2票続けて失敗"; return 0; fi
   if [ "$(free_gb)" -lt "$MIN_FREE_GB" ]; then STOP_REASON="空き容量が ${MIN_FREE_GB}GB 未満"; return 0; fi
   if [ "$(judge_calls_tonight)" -ge "$MAX_JUDGE" ]; then STOP_REASON="司法の呼び出しが上限 ${MAX_JUDGE} に達した"; return 0; fi
-  if [ "$TOK_TOTAL" -ge "$MAX_TOK_TOTAL" ]; then STOP_REASON="トークンの合計が上限に達した"; return 0; fi
+  if [ "$(tok_total)" -ge "$MAX_TOK_TOTAL" ]; then STOP_REASON="トークンの合計が上限に達した"; return 0; fi
   return 1
 }
 
@@ -138,9 +153,9 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
   ( cd "$wt" && run_with_timeout "$(( (limit + 10) * 60 ))" claude -p --agent worker --output-format json --max-turns 80 \
       "$(worker_prompt "$task" "$trel" "$extra")" ) > "$out" 2> "$LOGS/${task}-${attempt}.err" || true
   local tok; tok="$(jq -r '(.usage.input_tokens // 0) + (.usage.output_tokens // 0)' "$out" 2>/dev/null || echo 0)"
-  TOK_TOTAL=$(( TOK_TOTAL + tok ))
+  lane_ev tokens "$tok"
   if grep -q -i -E 'usage limit|rate limit|利用上限' "$out" "$LOGS/${task}-${attempt}.err" 2>/dev/null; then
-    STOP_REASON="claude の利用上限の文言"; return 2
+    lane_ev stop "claude の利用上限の文言"; note "${task}: claude の利用上限の文言を検知。この票と夜の運転を止める"; return 2
   fi
   [ "$tok" -le "$MAX_TOK_TICKET" ] || { note "${task}: トークン ${tok} が1票の上限を超えた"; return 1; }
   return 0
@@ -164,7 +179,8 @@ precheck() { # task, wt → 0 なら申請へ。stdout に理由
     [ "$okf" -eq 1 ] || outside="$outside $f"
   done <<< "$changed"
   [ -z "$outside" ] || { echo "files_allowed の外:${outside}"; return 1; }
-  git -C "$REPO" diff "main...night/$task" | grep -qE 'sk-ant-api03-[A-Za-z0-9]{40,}|BEGIN (RSA|OPENSSH|PRIVATE)|@gmail\.com|AKIA[0-9A-Z]{16}' && { echo "秘密情報らしい文字列"; return 1; }
+  # p0.3.1c：grep -q は一致した時点で読むのをやめ、git が SIGPIPE で終わると pipefail で偽陰性になる（Codex の指摘。OBS-041）。裁判所と同じく最後まで読む
+  git -C "$REPO" diff "main...night/$task" | grep -nE 'sk-ant-api03-[A-Za-z0-9]{40,}|BEGIN (RSA|OPENSSH|PRIVATE)|@gmail\.com|AKIA[0-9A-Z]{16}' >/dev/null && { echo "秘密情報らしい文字列"; return 1; }
   if [ -d "$wt/node_modules" ]; then
     # p0.3.1：作業員の書いたテストは sandbox の中で実行する（OBS-034。gate-runner と同じ sandboxed-run.sh）
     ( cd "$wt" && "$Z3/bin/sandboxed-run.sh" --dir "$wt" -- npm run -s test >/dev/null 2>&1 ) || { echo "npm test が不合格"; return 1; }
@@ -175,7 +191,7 @@ precheck() { # task, wt → 0 なら申請へ。stdout に理由
 # ---- 票を review にして main にコミット（§2 は触らない） --------------------------------------------------
 mark_review() { # task, head, note
   local t; t="$(ticket_path "$1")"
-  sed -i '' -E "s/^status: .*/status: review/" "$t"
+  sed -i '' -E "2,/^---\$/ s/^status: .*/status: review/" "$t"   # p0.3.1c：front matter の中だけを書き換える（本文の status: に触れない。OBS-041）
   printf '\n- %s night-runner: 作業員の実装を前検査で確認（HEAD %s）。status → review で再申請（%s）\n' "$(ts)" "${2:0:7}" "$3" >> "$t"
   git -C "$REPO" add "docs/tasks/$(basename "$t")"
   git -C "$REPO" -c user.name=night-runner -c user.email=night-runner@local commit -q -m "night-runner: ${1} を review に（§2 は変えない）"
@@ -206,27 +222,28 @@ request() { # task, head
 # ---- 1レーン（1票）。2回まで（初回＋やり直し1回） ------------------------------------------------------------------
 run_lane() { # task
   local task="$1" wt="$WT_BASE/night-$task" attempt=1 extra="" head res why
-  git -C "$REPO" worktree add "$wt" -b "night/$task" main >/dev/null 2>&1 || { note "${task}: worktree を作れない"; FAIL_STREAK=$((FAIL_STREAK+1)); return; }
-  STARTED=$((STARTED+1))
+  git -C "$REPO" worktree add "$wt" -b "night/$task" main >/dev/null 2>&1 || { note "${task}: worktree を作れない"; lane_ev fail "$task"; return; }
+  lane_ev started "$task"
   while [ "$attempt" -le 2 ]; do
-    run_worker "$task" "$wt" "$attempt" "$extra"; local rc=$?
+    local rc=0; run_worker "$task" "$wt" "$attempt" "$extra" || rc=$?   # p0.3.1c：set -e のもとで非0を受け取る（以前は非0でレーンが黙って終わった。OBS-040）
     [ "$rc" -eq 2 ] && return
+    [ "$rc" -eq 1 ] && { lane_ev fail "$task"; note "${task}: 1票のトークンの上限を超えたため中止"; return; }   # p0.3.1c：以前は非0を見ずに続けていた（OBS-040）
     why="$(precheck "$task" "$wt")" || { note "${task}: 前検査で落ちた（${why}）"; extra="前回の問題：${why}。直してからコミットしてください。"; attempt=$((attempt+1)); continue; }
     git -C "$wt" rebase main >/dev/null 2>&1 || { git -C "$wt" rebase --abort >/dev/null 2>&1 || true; note "${task}: rebase の衝突"; extra="main との衝突を直してください（git rebase main）。"; attempt=$((attempt+1)); continue; }
     head="$(git -C "$REPO" rev-parse "night/$task")"
     mark_review "$task" "$head" "試行 ${attempt}"
-    git -C "$wt" rebase main >/dev/null 2>&1 || true   # status のコミットを取り込む（docs だけなので衝突しない）
+    git -C "$wt" rebase main >/dev/null 2>&1 || { git -C "$wt" rebase --abort >/dev/null 2>&1 || true; note "${task}: status のコミットの取り込みで衝突。申請しない"; lane_ev fail "$task"; return; }   # p0.3.1c：以前は失敗を無視して申請した（OBS-041）
     head="$(git -C "$REPO" rev-parse "night/$task")"
     request "$task" "$head"
     res="$(wait_gate "$task")"
     case "$res" in
-      merged) MERGED=$((MERGED+1)); FAIL_STREAK=0; note "${task}: 判定に合格（朝の承認待ち。統合はオーナーが release.sh で行う）"; git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true; return;;   # p0.3.1：ブランチは朝の release のために残す
-      rejected) REJECTED=$((REJECTED+1)); why="$(tail -n 3 "$(ticket_path "$task")" | grep 'gate-runner: status' | tail -n 1)"; extra="差し戻しの理由（gate-runner）：${why}。これを直してからコミットしてください。"; attempt=$((attempt+1));;
-      blocked) BLOCKED=$((BLOCKED+1)); note "${task}: blocked（朝にオーナーの裁定）"; FAIL_STREAK=$((FAIL_STREAK+1)); return;;
-      timeout) note "${task}: gate-runner の結果を 20 分待っても出ない"; FAIL_STREAK=$((FAIL_STREAK+1)); return;;
+      merged) lane_ev merged "$task"; lane_ev ok "$task"; note "${task}: 判定に合格（朝の承認待ち。統合はオーナーが release.sh で行う）"; git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true; return;;   # p0.3.1：ブランチは朝の release のために残す
+      rejected) lane_ev rejected "$task"; why="$(tail -n 3 "$(ticket_path "$task")" | grep 'gate-runner: status' | tail -n 1)"; extra="差し戻しの理由（gate-runner）：${why}。これを直してからコミットしてください。"; attempt=$((attempt+1));;
+      blocked) lane_ev blocked "$task"; note "${task}: blocked（朝にオーナーの裁定）"; lane_ev fail "$task"; return;;
+      timeout) note "${task}: gate-runner の結果を 20 分待っても出ない"; lane_ev fail "$task"; return;;
     esac
   done
-  FAIL_STREAK=$((FAIL_STREAK+1)); note "${task}: 2回で通らず。朝に確認"
+  lane_ev fail "$task"; note "${task}: 2回で通らず。朝に確認"
 }
 
 # ---- 本体 -------------------------------------------------------------------------------------------------------
@@ -247,19 +264,26 @@ for task in $QUEUE_TASKS; do
   if [ "$DRY" -eq 1 ]; then log "（dry-run）${task} をレーンに割り当てる"; TAKEN=$((TAKEN+1)); continue; fi
   # レーンが空くまで待つ
   while [ "${#PIDS[@]}" -ge "$PARALLEL" ]; do
-    wait -n 2>/dev/null || true
+    sleep 5   # p0.3.1c：bash 3.2 には wait -n がない（以前は空回りの繰り返しになった。OBS-040）
+    if should_stop; then note "停止（空きレーンを待つ間）: ${STOP_REASON}"; break 2; fi   # p0.3.1c：待つ間も止める条件を見る（OBS-041）
     for i in "${!PIDS[@]}"; do kill -0 "${PIDS[$i]}" 2>/dev/null || unset 'PIDS[i]'; done
-    PIDS=("${PIDS[@]}")
+    PIDS=(${PIDS[@]+"${PIDS[@]}"})   # bash 3.2 の set -u では空の配列の展開がエラーになる
   done
-  run_lane "$task" & PIDS+=("$!"); LANES+=("$task"); TAKEN=$((TAKEN+1))
+  # p0.3.1c：最後まで行ったレーンだけが end を残す
+  { run_lane "$task"; lane_ev end "$task"; } & PIDS+=("$!"); LANES+=("$task"); TAKEN=$((TAKEN+1))
   sleep 5
 done
 wait 2>/dev/null || true
+# p0.3.1c：end のないレーンは set -e などで予期せず終わった。黙って終わらせず、記録して失敗に数える（OBS-040）
+for task in ${LANES[@]+"${LANES[@]}"}; do
+  grep -q "^end	${task}$" "$LANE_EV" || { lane_ev fail "$task"; note "${task}: レーンが予期せず終わった（記録の途中で止まった）。朝に確認"; }
+done
+LSTOP="$(lane_stop)"; [ -z "$LSTOP" ] || STOP_REASON="$LSTOP"   # p0.3.1c：レーンが決めた停止の理由を要約に反映する
 [ -n "$STOP_REASON" ] || STOP_REASON="キューを使い切った"
 
-jq -n --arg run "$RUN_ID" --arg date "$DATE" --arg stop "$STOP_REASON" --argjson started "$STARTED" --argjson merged "$MERGED" \
-  --argjson rejected "$REJECTED" --argjson blocked "$BLOCKED" --argjson skipped "$SKIPPED" --argjson tokens "$TOK_TOTAL" \
-  --argjson judge "$(judge_calls_tonight)" --arg notes "$(printf '%s\n' "${NOTES[@]:-}")" \
+jq -n --arg run "$RUN_ID" --arg date "$DATE" --arg stop "$STOP_REASON" --argjson started "$(count_ev started)" --argjson merged "$(count_ev merged)" \
+  --argjson rejected "$(count_ev rejected)" --argjson blocked "$(count_ev blocked)" --argjson skipped "$SKIPPED" --argjson tokens "$(tok_total)" \
+  --argjson judge "$(judge_calls_tonight)" --arg notes "$(awk -F'\t' '$1=="note" {sub(/^note\t/, ""); print}' "$LANE_EV")" \
   '{schema:"vgdd.night-summary.v1", run_id:$run, date:$date, stop_reason:$stop, started:$started, merged:$merged, rejected:$rejected,
     blocked:$blocked, skipped:$skipped, tokens_total:$tokens, judge_calls:$judge, notes:($notes|split("\n")|map(select(.!="")))}' > "$SUMMARY"
 log "終了: ${STOP_REASON}。summary=${SUMMARY}"
