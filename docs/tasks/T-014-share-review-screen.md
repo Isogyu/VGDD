@@ -1,7 +1,7 @@
 ---
 id: T-014
 title: S-3 共有候補の確認の画面（承認・編集して承認・却下、抽象化の案、記録と取り下げ。M9・M6-3 の画面）
-status: ready
+status: in_progress
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M9-1, M9-2, M9-4, M9-5, M6-3, M6-4, D-56]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1.2
 time_limit_min: 75
 security_review: false         # API・DB に触れない。画面だけ
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a0d1d1ef8f90c7f73   # 作業員のブランチ（main 721b925 以降から）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W12
 files_allowed:
   - src/components/SummaryActions.tsx      # 「チームに共有する」への導線を1つ足すだけ
   - src/components/ShareReview.tsx         # 新設：S-3 の本体
@@ -79,3 +79,4 @@ depends_on: [T-010, T-011]
 ## 6. 記録
 
 （統合後に追記）
+- 00:57 行政の長が W12 を起動（worktree `agent-a0d1d1ef8f90c7f73`）。依存の T-010（23:25）・T-011（00:56、721b925）は release で統合済み。前提（T-011 の3関数の export、T-010 の `ShareCandidate` 型と error 名、`SummaryActions` の props）を main で確認。辞書は Map を使う指示（T-015 の差し戻しの教訓）

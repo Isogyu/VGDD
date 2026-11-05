@@ -1,7 +1,7 @@
 ---
 id: T-017
 title: 共有候補への AI の追加の検出（決定論的な検出に足すだけ。M6-2 の裏側）
-status: blocked
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7, A8]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M6-2, M6-1, M6-4, M9-1]   # 記録用。司法には渡さない
@@ -88,3 +88,4 @@ depends_on: []
 - 00:45 行政の長が差分を確認（`files_allowed` の4ファイルのみ。`console` なし、`notes` を読まない、INSERT は試験の中だけ、`known` は `deterministic.map` で回ごとに別に作る、失敗の `message` は固定の文）。`status: review` で main にコミットし申請（security_review: true）
 
 - 2026-11-06T00:52:45+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=CHANGES_REQUIRED/1 件, codex=APPROVED/0 件）。オーナーの裁定へ）
+- 00:57 オーナーの裁定（立法補佐の伝達）：merge。judge の指摘は試験の `taro@example.com`（予約ドメインで架空）の1件だけで、Codex の judge・セキュリティ審査は APPROVED。行政の長が `status: review` に戻して同じ 68f4802 を再申請（コードの変更なし）
