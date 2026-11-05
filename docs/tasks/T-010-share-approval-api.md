@@ -104,3 +104,5 @@ depends_on: []
 - 23:00 行政の長：昼の作業員 W1 を新しい worktree（main 836733a）で起こし、夜の 6525714 を cherry-pick して仕上げを指示（夜は `[id]` のパスへの書き込みが拒否され A7 のルート2本と A11 が未着手。OBS-049）。worktree `night-T-010` は触らない
 - 23:08 W1 の報告：コミット 4fbc2ad（1つに amend。9ファイル、+793/−3）。足したのは A7 のルート2本（`sessions/[id]/share`・`shares/[shareId]`）、A11（seed.ts・seed.test.ts、reset の試験）。夜の実装（A1〜A6・A8・既存の GET）は A 条件と照合して変更なし。test 167（既存 135＋32）・typecheck・lint 合格（警告1件は既存の `vgdd/conformance/run.mjs`）。票にない確認1つ：`withdrawShare` で `shared_knowledge` の UPDATE が1行でなければ ROLLBACK して `not_approved`（夜の実装のまま）。逸脱：件数の確認に `npx --no-install vitest run` を1回使った（ask の例外の範囲だが、約束は `npm test`）。拒否なし
 - 23:09 行政の長が差分を確認（`files_allowed` の9ファイルのみ、`notes`・`console` の使用なし、禁止語なし、schema・seed・db.test の差分が A1・A8・A11 どおり）。`status: review` で main にコミットし再申請（差し戻し1回目。gate-runner `--hold`、合格は held、統合は朝に release.sh）
+
+- 2026-11-05T23:12:53+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
