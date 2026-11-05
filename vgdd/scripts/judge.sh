@@ -35,6 +35,8 @@ while [ $# -gt 0 ]; do
     --task) TASK="$2"; shift 2;;
     --out) OUT_DIR="$2"; shift 2;;
     --dry-run) DRY=1; shift;;
+    # p0.4.3（OBS-053）：gate-runner の起動時の点検。claude が動けば 0、なければ 69（判定はしない）
+    --preflight) command -v claude >/dev/null 2>&1 && claude --version >/dev/null 2>&1; exit $(( $? == 0 ? 0 : 69 ));;
     # --emit-input：judge を呼ばず、組み立てた入力だけを標準出力に出す（judge-codex.sh・gate-runner が同じ入力を使うため）
     --emit-input) EMIT=1; shift;;
     # --audit-state-file：--emit-input のとき、TASK/BRANCH/HEAD_SHA/BASE/STAMP/REQ/AUDIT_STATE を shell 変数の形で書き出す先

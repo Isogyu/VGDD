@@ -1,6 +1,6 @@
 {
   "schema": "vgdd.capabilities.v1",
-  "kernel_version": "p0.4.2",
+  "kernel_version": "p0.4.3",
   "note": "Governance Kernel の権限の表（ADR-001・ADR-003）。役割ごとに、何ができ、何ができず、それを どの層が強制しているかを書く。expect はフック（Policy Decision Point）の判定。enforced_by はその操作を実際に止める層（複数あれば全部）。'promise' は強制がなく約束だけのもの（弱点として公開する）。probes は適合性テスト（vgdd/conformance/run.mjs）がフックに実際に入力する操作で、{self} はその役割の作業場所のルート、{main} は main の checkout、{wt} は作業員の worktree、{z3} は Z3。 個々の probe に expect があれば、その役割についてはそちらを優先する。",
   "layers": {
     "hook": "PreToolUse フック policy.mjs（Policy Decision Point。拒否と記録）",
@@ -573,6 +573,116 @@
         "sandbox"
       ],
       "verified_by": "docs/vgdd-status.md §2 の 11〜13、§2b の V7-3（実セッションで確認。フックの単体試験の対象外）"
+    },
+    {
+      "id": "CAP-KERNEL-STATE-WRITE",
+      "title": "Kernel の状態の写し（docs/governance/kernel-state.json）を書く",
+      "allowed": [
+        "gate_runner"
+      ],
+      "enforced_by": [
+        "permission",
+        "sandbox",
+        "hook",
+        "gate"
+      ],
+      "note": "p0.4.3。表示用の写しで、判断の根拠にしない（裁判所・夜間の代行・release は読まない＝ST9）。git で追跡しない（.gitignore）。作業員の差分に入れば保護パスとして裁判所が拒否",
+      "probes": [
+        {
+          "tool": "Write",
+          "file_path": "{self}/docs/governance/kernel-state.json"
+        },
+        {
+          "tool": "Edit",
+          "file_path": "{self}/docs/governance/kernel-state.json"
+        },
+        {
+          "tool": "Bash",
+          "command": "echo '{}' > docs/governance/kernel-state.json"
+        },
+        {
+          "tool": "Bash",
+          "command": "mv /tmp/x docs/governance/kernel-state.json"
+        }
+      ],
+      "expect": {
+        "executive_head": "deny",
+        "worker": "deny",
+        "tester": "deny"
+      },
+      "scenario_tests": [
+        "ST1",
+        "ST2",
+        "ST3",
+        "ST4",
+        "ST9"
+      ],
+      "known_gaps": [
+        "中身が Z3 と一致することは、Z3 を読めるオーナーの照合に依る（行政は照合できない）",
+        "書き出しは周回ごとなので、表示は最大で周回の間隔だけ遅れる"
+      ]
+    },
+    {
+      "id": "CAP-KERNEL-STATE-READ",
+      "title": "Kernel の状態の写しを読む（統治のライブ画面・行政の長が承認の有無を見る）",
+      "allowed": [
+        "owner",
+        "executive_head",
+        "worker",
+        "tester",
+        "gate_runner"
+      ],
+      "enforced_by": [
+        "permission"
+      ],
+      "probes": [
+        {
+          "tool": "Read",
+          "file_path": "{main}/docs/governance/kernel-state.json"
+        }
+      ],
+      "expect": {
+        "executive_head": "allow",
+        "worker": "allow",
+        "tester": "allow"
+      }
+    },
+    {
+      "id": "CAP-JUDICIARY-UNAVAILABLE",
+      "title": "司法が使えないこと（道具の不在・判定のファイルがない・読めない）を判定として扱わない",
+      "allowed": [
+        "gate_runner"
+      ],
+      "enforced_by": [
+        "gate"
+      ],
+      "note": "p0.4.3（OBS-053）。判定のファイルは候補の SHA のものだけを読む。使えなければ票を書き換えず申請を残し、同じ申請で3回なら blocked。起動時に道具を点検し、欠ければ起動しない",
+      "scenario_tests": [
+        "G14",
+        "G15",
+        "G16",
+        "G17",
+        "G18"
+      ],
+      "known_gaps": [
+        "道具はあるが認証切れ・利用の上限で、司法が1バイト以上の壊れた出力を書いた場合は、今までどおり判定の失敗（CHANGES_REQUIRED）として数える",
+        "起動時の点検は起動の時だけ。常駐の途中で道具が消えれば、呼び出しの時の扱い（G15）で拾う"
+      ]
+    },
+    {
+      "id": "CAP-WORKER-START-AFTER-APPROVAL",
+      "title": "昼の作業員の起動は、main の票の仕様がオーナーに承認された後だけ",
+      "allowed": [
+        "executive_head"
+      ],
+      "enforced_by": [
+        "promise"
+      ],
+      "verified_by": "約束（promise）。強制していない。OBS-051（T-015・T-016 で承認の前に起動）。行政の長は docs/governance/kernel-state.json の approvals[].current で承認の有無を読める（自己申告の助けで、根拠ではない）",
+      "known_gaps": [
+        "起動は止めない。未承認の票は裁判所が司法の前に blocked にする（G1・G4）ので main には入らず、無駄になるのは作業員の時間だけ",
+        "Agent ツールの入力から票を特定できないため、フックでは強制できない"
+      ]
     }
   ]
 }

@@ -108,7 +108,7 @@ function fixture(name) {
   write(path.join(main, 'CLAUDE.md'), '# 憲法（試験用）\n');
   write(path.join(main, 'vgdd/README.md'), '法律（試験用）\n');
   write(path.join(main, '.claude/settings.json'), '{}\n');
-  write(path.join(main, '.gitignore'), 'merge-requests/\n.claude/worktrees/\n');
+  write(path.join(main, '.gitignore'), 'merge-requests/\n.claude/worktrees/\ndocs/governance/kernel-state.json*\n');
   git(main, 'add', '-A'); git(main, 'commit', '-q', '-m', 'init');
   fs.mkdirSync(path.join(main, 'merge-requests/done'), { recursive: true });
   const wt = path.join(main, '.claude/worktrees/w1');
@@ -277,14 +277,20 @@ function groupC3() {
 }
 
 // ---- G 裁判所の場面 ---------------------------------------------------------------------------
+// p0.4.3：代わりの司法も本物と同じく、判定のファイルを候補の HEAD の先頭12桁で名付ける（p0.4.2 までの実装は「最新のファイル」を読むので、どちらでも読める）。
+//   --preflight には STUB_*_PREFLIGHT_FAIL がなければ 0 を返す。STUB_*_NOFILE があればファイルを書かずに終わる（司法が使えない場面）
 const STUB_JUDGE = `#!/bin/bash
+case " $* " in *" --preflight "*) [ -z "\${STUB_JUDGE_PREFLIGHT_FAIL:-}" ] || exit 69; exit 0;; esac
 out=""; task=""; while [ $# -gt 0 ]; do case "$1" in --out) out="$2"; shift 2;; --task) task="$2"; shift 2;; *) shift;; esac; done
 echo called >> "$out/../judge-called.log"
-printf '{"final_verdict":"%s","judge":{"findings":[]}}\\n' "\${STUB_VERDICT:-CHANGES_REQUIRED}" > "$out/$task-stub.json"
+[ -z "\${STUB_JUDGE_NOFILE:-}" ] || exit 1
+printf '{"final_verdict":"%s","judge":{"findings":[]}}\\n' "\${STUB_VERDICT:-CHANGES_REQUIRED}" > "$out/$task-$(git rev-parse --short=12 HEAD).json"
 `;
 const STUB_CODEX = `#!/bin/bash
+case " $* " in *" --preflight "*) [ -z "\${STUB_CODEX_PREFLIGHT_FAIL:-}" ] || exit 69; exit 0;; esac
 out=""; task=""; while [ $# -gt 0 ]; do case "$1" in --out) out="$2"; shift 2;; --task) task="$2"; shift 2;; *) shift;; esac; done
-printf '{"final_verdict":"%s","codex":{"findings":[]}}\\n' "\${STUB_VERDICT:-CHANGES_REQUIRED}" > "$out/$task-stub-codex-judge.json"
+[ -z "\${STUB_CODEX_NOFILE:-}" ] || exit 69
+printf '{"final_verdict":"%s","codex":{"findings":[]}}\\n' "\${STUB_CODEX_VERDICT:-\${STUB_VERDICT:-CHANGES_REQUIRED}}" > "$out/$task-$(git rev-parse --short=12 HEAD)-codex-judge.json"
 `;
 function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export const v = 2;\n' }, stop = false, afterApprove = null } = {}) {
   const fx = fixture(name);
@@ -293,10 +299,12 @@ function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export 
   const wt = path.join(fx.base, 'wt-930');
   git(fx.main, 'worktree', 'add', '-q', '-b', `task/${id}`, wt, 'main');
   for (const [f, s] of Object.entries(change)) write(path.join(wt, f), s);
-  git(wt, 'add', '-A'); git(wt, 'commit', '-q', '-m', '作業員の実装');
+  git(wt, 'add', '-A'); git(wt, 'add', '-f', '--', ...Object.keys(change)); git(wt, 'commit', '-q', '-m', '作業員の実装'); // -f：.gitignore の対象（状態の写し）を差分に入れる場面（ST7）
   const head = git(wt, 'rev-parse', 'HEAD');
   // 実装に spec-digest.mjs がなければ写さない（p0.4.0 より前の実装を試すと、承認の試験が不合格になる。それが正しい結果）
   if (fs.existsSync(path.join(IMPL.bin, 'spec-digest.mjs'))) fs.copyFileSync(path.join(IMPL.bin, 'spec-digest.mjs'), path.join(fx.z3, 'bin/spec-digest.mjs'));
+  // p0.4.3：状態の書き出し（実装になければ写さない。p0.4.2 では ST が落ちる。それが正しい結果）
+  if (fs.existsSync(path.join(IMPL.bin, 'kernel-state.mjs'))) fs.copyFileSync(path.join(IMPL.bin, 'kernel-state.mjs'), path.join(fx.z3, 'bin/kernel-state.mjs'));
   write(path.join(fx.z3, 'bin/judge.sh'), STUB_JUDGE); write(path.join(fx.z3, 'bin/judge-codex.sh'), STUB_CODEX);
   write(path.join(fx.z3, 'bin/sandboxed-run.sh'), '#!/bin/bash\nexit 0\n');
   for (const f of ['judge.sh', 'judge-codex.sh', 'sandboxed-run.sh']) fs.chmodSync(path.join(fx.z3, 'bin', f), 0o755);
@@ -313,16 +321,18 @@ function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export 
   if (stop) write(path.join(fx.z3, 'STOP'), '試験の停止\n');
   return { ...fx, id, head, mainBefore: git(fx.main, 'rev-parse', 'main') };
 }
-function runGate(fx, verdict, extra = []) {
+function runGate(fx, verdict, extra = [], env = {}) {
   const r = sh('bash', [path.join(IMPL.bin, 'gate-runner.sh'), '--repo', fx.main, '--once', '--interval', '1', ...extra],
-    { cwd: fx.main, env: { ...process.env, ...UTF8, VGDD_Z3_DIR: fx.z3, STUB_VERDICT: verdict }, timeout: 120000 });
+    { cwd: fx.main, env: { ...process.env, ...UTF8, VGDD_Z3_DIR: fx.z3, STUB_VERDICT: verdict, ...env }, timeout: 120000 });
   const evf = path.join(fx.z3, 'evidence/gate_events.jsonl');
   const events = fs.existsSync(evf) ? fs.readFileSync(evf, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
   const inMain = sh('git', ['-C', fx.main, 'merge-base', '--is-ancestor', fx.head, 'main']).status === 0;
   const judged = fs.existsSync(path.join(fx.z3, 'evidence/judge-called.log'));
   const pending = fs.existsSync(path.join(fx.main, `merge-requests/${fx.id}.json`));
   const status = (fs.readFileSync(path.join(fx.main, `docs/tasks/${fx.id}-probe.md`), 'utf8').match(/^status: (.*)$/m) || [])[1];
-  return { code: r.status, out: (r.stdout + r.stderr).slice(-400), events, inMain, judged, pending, status };
+  const ksf = path.join(fx.main, 'docs/governance/kernel-state.json');
+  const kstate = fs.existsSync(ksf) ? fs.readFileSync(ksf, 'utf8') : null;
+  return { code: r.status, out: (r.stdout + r.stderr).slice(-400), events, inMain, judged, pending, status, kstate };
 }
 function groupG() {
   let g = runGate(gateFixture('g1', { approve: false }), 'APPROVED');
@@ -389,8 +399,81 @@ function groupG() {
     Buffer.compare(before13, fs.readFileSync(path.join(g13.main, 'docs/tasks/T-901-probe.md'))) === 0 && !/T-901-probe\.md/.test(byGate13)
       && fs.existsSync(path.join(g13.main, 'merge-requests/T-901.json')) && g.events.some((e) => e.type === 'ticket_dirty_wait' && /T-901/.test(e.ticket || '')),
     `byGate=${byGate13.trim().replace(/\n/g, ',')}`);
+  // ---- p0.4.3（OBS-053）：司法が使えないことは判定ではない ----
+  const g14 = gateFixture('g14');
+  g = runGate(g14, 'APPROVED', [], { STUB_CODEX_PREFLIGHT_FAIL: '1' });
+  record('G', 'G14', '起動時の点検で司法（Codex）が動かなければ裁判所は起動しない（司法を呼ばず、票も申請も触らず、preflight_failed を残す）',
+    g.code !== 0 && !g.judged && g.pending && g.status === 'review' && !g.inMain && g.events.some((e) => e.type === 'preflight_failed'), `exit=${g.code} status=${g.status} judged=${g.judged}`);
+  const g15 = gateFixture('g15');
+  g = runGate(g15, 'APPROVED', [], { STUB_CODEX_NOFILE: '1' });
+  record('G', 'G15', 'Codex が判定のファイルを書かずに終われば、judge が APPROVED でも統合しない（p0.4.2 までは SKIPPED とみなし minor の不一致として統合していた）。差し戻しに数えず、票を変えず、申請を残す',
+    !g.inMain && g.pending && g.status === 'review' && !g.events.some((e) => e.type === 'rejected' || e.type === 'merged')
+      && g.events.some((e) => e.type === 'judiciary_unavailable' && e.which === 'codex'), `inMain=${g.inMain} status=${g.status} pending=${g.pending}`);
+  runGate(g15, 'APPROVED', [], { STUB_CODEX_NOFILE: '1' });
+  g = runGate(g15, 'APPROVED', [], { STUB_CODEX_NOFILE: '1' });
+  record('G', 'G16', '同じ申請で司法が3回使えなければ blocked にしてオーナーの判断へ（行政が司法を壊す入力で裁判所を待たせ続けない）',
+    !g.inMain && !g.pending && g.status === 'blocked' && g.events.filter((e) => e.type === 'judiciary_unavailable').length === 3, `status=${g.status} n=${g.events.filter((e) => e.type === 'judiciary_unavailable').length}`);
+  const g17 = gateFixture('g17');
+  // 前の申請の judge の APPROVED の記録が残っている（別の SHA）。今回の judge はファイルを書かずに終わる
+  write(path.join(g17.z3, `evidence/verdicts/${g17.id}-0123456789ab.json`), JSON.stringify({ final_verdict: 'APPROVED', judge: { findings: [] } }) + '\n');
+  g = runGate(g17, 'APPROVED', [], { STUB_JUDGE_NOFILE: '1' });
+  record('G', 'G17', '判定のファイルは候補の SHA のものだけを読む（前の申請の APPROVED を使わない。judge が書かなければ統合しない）',
+    !g.inMain && g.pending && g.status === 'review' && g.events.some((e) => e.type === 'judiciary_unavailable' && e.which === 'judge'), `inMain=${g.inMain} status=${g.status}`);
+  // 司法が戻れば、同じ申請が次の周回で普通に判定されて統合される（陽性の対照）
+  g = runGate(g17, 'APPROVED');
+  record('G', 'G18', '司法が戻った周回では、残っていた申請が普通に判定されて統合される（陽性の対照）', g.inMain && g.status === 'merged', `inMain=${g.inMain} status=${g.status}`);
   g = runGate(gateFixture('g8'), 'APPROVED', ['--hold']);
   record('G', 'G8', '夜間（--hold）は合格しても統合せず、held として朝の承認を待つ', !g.inMain && g.events.some((e) => e.type === 'held'), `inMain=${g.inMain}`);
+}
+
+// ---- ST Kernel の状態の書き出し（p0.4.3） ------------------------------------------------------------
+function groupST() {
+  const fx = gateFixture('st1');
+  write(path.join(fx.main, 'vgdd/kernel/capabilities.json'), JSON.stringify({ kernel_version: CAPS.kernel_version }) + '\n'); // 法律の版は main の権限の表から読む
+  git(fx.main, 'add', '-A'); git(fx.main, 'commit', '-q', '-m', '権限の表（試験用）');
+  write(path.join(fx.z3, 'evidence/rulings.jsonl'), JSON.stringify({ ts: '2026-11-06T01:39:00+0900', task: 'T-930', sha: 'f'.repeat(40), decision: 'merge', reason: '裁定の理由の本文 ST' }) + '\n');
+  write(path.join(fx.z3, 'evidence/annulments.jsonl'), JSON.stringify({ ts: '2026-11-06T01:40:00+0900', task: 'T-930', reason: '取り消しの理由の本文 ST' }) + '\n');
+  let g = runGate(fx, 'APPROVED');
+  let st = null; try { st = JSON.parse(g.kstate); } catch { /* なし */ }
+  record('ST', 'ST1', '裁判所が周回の終わりに状態の写しを書き、中身は公開してよい集計だけ（パス・ハッシュ・理由の本文・セッション ID を含まない）',
+    !!st && st.schema === 'vgdd.kernel-state.v1' && st.kernel_version === CAPS.kernel_version && st.stopped?.active === false
+      && st.approvals?.some((a) => a.task === 'T-930' && a.current === true) && st.rulings?.count === 1 && st.annulments?.count === 1 && st.verdicts?.by_task?.['T-930']?.judge === 'APPROVED'
+      && !/\/Users\/|tsubuyaki-z3|vgdd-conf|[0-9a-f]{8,}|session|tool_use|reason|findings|理由の本文/.test(g.kstate) && !('tickets' in st),
+    st ? '' : `書き出しがない ${g.out}`);
+  record('ST', 'ST2', '状態の写しは git で追跡されない（裁判所の記録のコミットに入らず、作業ツリーを汚さない）',
+    !!st && sh('git', ['-C', fx.main, 'status', '--porcelain', '--', 'docs/governance']).stdout.trim() === ''
+      && !/kernel-state/.test(sh('git', ['-C', fx.main, 'log', '--all', '--name-only', '--format=']).stdout));
+  const gen = st?.generated_at;
+  g = runGate(fx, 'APPROVED');
+  let st2 = null; try { st2 = JSON.parse(g.kstate); } catch { /* なし */ }
+  record('ST', 'ST3', '内容が同じ周回では書き直さない（generated_at が変わらない）', !!st2 && !!gen && st2.generated_at === gen, `${gen} → ${st2?.generated_at}`);
+  write(path.join(fx.z3, 'STOP'), '理由の本文 ST（2026-11-06T04:00:00+0900）\n');
+  fs.appendFileSync(path.join(fx.z3, 'evidence/gate_events.jsonl'), JSON.stringify({ ts: '2026-11-06T04:00:00+0900', type: 'kernel_stop', task: '-', stop_id: 'stop-12345' }) + '\n');
+  g = runGate(fx, 'APPROVED');
+  let st3 = null; try { st3 = JSON.parse(g.kstate); } catch { /* なし */ }
+  record('ST', 'ST4', '停止中は「停止中」と時刻を書き出し、停止の理由の本文と stop_id は出さない',
+    !!st3 && st3.stopped?.active === true && st3.stopped?.since === '2026-11-06T04:00:00+0900' && !/理由の本文|stop-12345/.test(g.kstate), JSON.stringify(st3?.stopped || null));
+  fs.rmSync(path.join(fx.z3, 'STOP'));
+  g = runGate(fx, 'APPROVED');
+  let st5 = null; try { st5 = JSON.parse(g.kstate); } catch { /* なし */ }
+  record('ST', 'ST5', '停止が解けた周回では active が false に戻る', !!st5 && st5.stopped?.active === false);
+  // 承認の後に main の票の §2 を変えると current が false
+  const f6 = gateFixture('st6', { afterApprove: (x, id) => commitTicket(x, id, { section2: '- A1. `src/lib/a.ts` の `v` が 2 か 3 になる' }) });
+  g = runGate(f6, 'APPROVED');
+  let st6 = null; try { st6 = JSON.parse(g.kstate); } catch { /* なし */ }
+  record('ST', 'ST6', '承認の後に受け入れ条件を変えた票は approvals[].current が false（承認の有無を行政の長が読める。OBS-051）',
+    !!st6 && st6.approvals?.some((a) => a.task === 'T-930' && a.current === false), JSON.stringify(st6?.approvals || null));
+  // 判断の根拠にしない：裁判所・夜間の代行・release・再開はこのファイルを読まない（書き出しの --out と保護パスの照合だけ）
+  const readers = ['gate-runner.sh', 'night-runner.sh', 'release.sh', 'kernel-resume.sh', 'rule.sh', 'approve-spec.sh'].map((f) => {
+    const p = path.join(IMPL.bin, f); if (!fs.existsSync(p)) return [];
+    return fs.readFileSync(p, 'utf8').split('\n').filter((l) => /kernel-state\.json/.test(l) && !/^\s*#/.test(l) && !/PROTECTED_RE=|KSTATE_OUT="\$REPO\/docs\/governance\/kernel-state\.json"/.test(l)).map((l) => `${f}: ${l.trim()}`);
+  }).flat();
+  record('ST', 'ST9', '裁判所・夜間の代行・release・再開は状態の写しを読まない（表示用で、判断の根拠にしない）',
+    fs.existsSync(path.join(IMPL.bin, 'kernel-state.mjs')) && readers.length === 0, readers.join(' / ').slice(0, 200));
+  // 作業員が差分に状態の写しを入れて申請すれば、保護パスとして司法の前に blocked
+  g = runGate(gateFixture('st7', { change: { 'src/lib/a.ts': 'export const v = 2;\n', 'docs/governance/kernel-state.json': '{"approvals":[]}\n' } }), 'APPROVED');
+  record('ST', 'ST7', '作業員の差分に状態の写しが含まれれば、司法の前に保護パスとして blocked',
+    !g.inMain && !g.judged && g.status === 'blocked' && g.events.some((e) => /保護パス/.test(e.reason || '')), `status=${g.status} judged=${g.judged}`);
 }
 
 // ---- K 停止と再開 -------------------------------------------------------------------------------
@@ -668,6 +751,7 @@ try {
   groupC2();
   groupC3();
   groupG();
+  groupST();
   groupK();
   groupK2();
   groupH();

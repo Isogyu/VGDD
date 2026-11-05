@@ -58,7 +58,7 @@ BIN="$Z3/bin"                      # judge.sh / judge-codex.sh の実行用コ�
 REQ_DIR="$REPO/merge-requests"
 DONE_DIR="$REQ_DIR/done"
 BOARD="$REPO/docs/tasks/_board.json"
-PROTECTED_RE='^(\.claude/|CLAUDE\.md$|\.github/|vgdd/|docs/requirements\.md$|docs/tasks/_board\.json$|merge-requests/)'
+PROTECTED_RE='^(\.claude/|CLAUDE\.md$|\.github/|vgdd/|docs/requirements\.md$|docs/tasks/_board\.json$|docs/governance/kernel-state\.json|merge-requests/)'
 MAX_RETURNS=3                       # 差し戻しの上限（D-05）
 
 mkdir -p "$VERDICTS" "$DONE_DIR"
@@ -113,6 +113,23 @@ ticket_edit() { # task, status（空なら変えない）, 行（§6 に足す1�
 }
 set_ticket_status() { # task, status, note
   ticket_edit "$1" "$2" "$(ts) gate-runner: status → $2${3:+（$3）}"
+}
+verdict_of() { # file → APPROVED | CHANGES_REQUIRED | UNAVAILABLE（p0.4.3：ファイルがない・読めない・結論がこの2つでない＝司法が使えない）
+  local v=""; [ -s "$1" ] && v="$(jq -r '.final_verdict // empty' "$1" 2>/dev/null || true)"
+  case "$v" in APPROVED|CHANGES_REQUIRED) echo "$v";; *) echo "UNAVAILABLE";; esac
+}
+JUDICIARY_MAX_FAILS=3               # p0.4.3：同じ申請の SHA で司法が使えなかった回数の上限。超えたらオーナーの判断へ（blocked）
+judiciary_unavailable() { # task, 申請の完全な SHA, どの司法か, 申請のファイル
+  # p0.4.3（OBS-053）：司法が使えないことは判定ではない。票を書き換えず（差し戻しの回数を使わず）、申請を残して次の周回でやり直す。
+  #   行政が司法を壊す入力で裁判所を待たせ続けないよう、同じ申請の SHA で通算 JUDICIARY_MAX_FAILS 回に達したら blocked にする
+  local n; n="$(jq -c --arg t "$1" --arg s "${2:0:12}" 'select(.type=="judiciary_unavailable" and .task==$t and .request==$s)' "$EVENTS" 2>/dev/null | wc -l | tr -d ' ')"
+  n=$((n + 1))
+  log_event "judiciary_unavailable" "$1" "\"request\":\"${2:0:12}\",\"which\":\"$3\",\"count\":$n"
+  echo "  ⚠ ${1}: 司法（$3）が使えなかった（判定のファイルがない・読めない。この申請で ${n} 回目）。差し戻しに数えず、申請を残す" >&2
+  if [ "$n" -ge "$JUDICIARY_MAX_FAILS" ]; then
+    fail "$1" "司法（$3）が同じ申請で ${n} 回使えなかった。オーナーが司法の環境を確かめる" "blocked" && mv "$4" "$DONE_DIR/"
+  fi
+  return 0
 }
 update_board() { # 全票から _board.json を作り直す（gate-runner だけが書く）
   node - "$REPO/docs/tasks" "$BOARD" "$EVENTS" <<'NODE'
@@ -252,25 +269,31 @@ process_request() {
   #   judge.sh は main にコミット済みの票（git show main:docs/tasks/…）から節と「- A1.」… の ID を読み、ブランチの票と違えば fail-closed（OBS-015②）
   local -a reqargs
   if [ "$src_main" = "ticket" ]; then reqargs=(--ticket "$trel"); else reqargs=(--req "$reqs"); fi
-  local jout="$VERDICTS/$task-$sha-judge.json"
+  # p0.4.3（OBS-053・Max の点検 §9-3）：判定のファイルは、この候補の SHA（judge.sh・judge-codex.sh が HEAD の先頭12桁で名付ける）のものだけを読む。
+  #   p0.4.2 までは「この票の最新のファイル」を読んでおり、(a) Codex がファイルを書かずに終われば cv=SKIPPED のまま、judge が APPROVED なら
+  #   minor の不一致として統合された (b) 司法がファイルを書かずに終われば、前の申請の判定が使われえた。
+  #   ファイルがない・結論が APPROVED／CHANGES_REQUIRED でないことは「司法が使えない」であって判定ではない（差し戻しに数えず、申請を残す）
+  local c12="${candidate:0:12}"
+  local jfile="$VERDICTS/$task-$c12.json" cfile="$VERDICTS/$task-$c12-codex-judge.json" sfile="$VERDICTS/$task-$c12-codex-security.json"
+  rm -f "$jfile" "$cfile" "$sfile"   # 同じ候補の前回の判定（司法が使えなかった周回の残り）を読まない
   ( cd "$wt" && "$BIN/judge.sh" "${reqargs[@]}" --base "$main_sha" --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
-  local jfile; jfile="$(ls -t "$VERDICTS/$task-"*.json 2>/dev/null | grep -v codex | head -n 1)"
-  local jv="CHANGES_REQUIRED"; [ -n "$jfile" ] && jv="$(jq -r '.final_verdict' "$jfile")"
-  local cv="SKIPPED" cfile=""
-  if [ "$NO_CODEX" -eq 0 ]; then
+  local jv; jv="$(verdict_of "$jfile")"
+  local cv="SKIPPED"
+  if [ "$NO_CODEX" -eq 0 ] && [ "$jv" != "UNAVAILABLE" ]; then
     ( cd "$wt" && "$BIN/judge-codex.sh" "${reqargs[@]}" --base "$main_sha" --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
-    cfile="$(ls -t "$VERDICTS/$task-"*-codex-judge.json 2>/dev/null | head -n 1)"
-    [ -n "$cfile" ] && cv="$(jq -r '.final_verdict' "$cfile")"
+    cv="$(verdict_of "$cfile")"
   fi
   # p0.3.0a：セキュリティ審査は、監査を済ませた同じ一時 worktree（同じ SHA、node_modules あり）で行う。
   #   別の worktree を作ると依存がなく、審査の中の監査が「vitest が見つからない」で落ちていた（OBS-025）
   local sv="SKIPPED"
-  if [ "$(front "$tmain" security_review)" = "true" ] && [ "$NO_CODEX" -eq 0 ]; then
+  if [ "$(front "$tmain" security_review)" = "true" ] && [ "$NO_CODEX" -eq 0 ] && [ "$jv" != "UNAVAILABLE" ] && [ "$cv" != "UNAVAILABLE" ]; then
     ( cd "$wt" && "$BIN/judge-codex.sh" --security "${reqargs[@]}" --base "$main_sha" --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
-    local sfile; sfile="$(ls -t "$VERDICTS/$task-"*-codex-security.json 2>/dev/null | head -n 1)"
-    sv="CHANGES_REQUIRED"; [ -n "$sfile" ] && sv="$(jq -r '.final_verdict' "$sfile")"
+    sv="$(verdict_of "$sfile")"
   fi
   git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true
+  local which=""
+  [ "$jv" != "UNAVAILABLE" ] || which="judge"; [ "$cv" != "UNAVAILABLE" ] || which="codex"; [ "$sv" != "UNAVAILABLE" ] || which="security"
+  if [ -n "$which" ]; then judiciary_unavailable "$task" "$actual" "$which" "$req"; return; fi
 
   if [ "$jv" != "APPROVED" ] && [ "$cv" != "APPROVED" ]; then
     fail "$task" "judge=$jv, codex=${cv}（両方が差し戻し）" && mv "$req" "$DONE_DIR/"; return
@@ -351,6 +374,37 @@ process_request() {
   echo "  ✓ $task を統合: main=$merged"
 }
 
+# p0.4.3（OBS-053）：起動時の点検。司法と監査の道具がそろっていなければ起動しない（申請も票も触らない）。
+#   2026-11-06 00:20、PATH に codex のない裁判所が T-015 を「セキュリティ審査が差し戻し」にした。道具の不在は判定ではない。
+#   LLM の道具の有無は各司法の --preflight に委ねる（適合性テストの代わりの司法でも同じ形で通る。Max の点検 §9-2）
+preflight() {
+  local missing="" c
+  for c in jq node git npm; do command -v "$c" >/dev/null 2>&1 || missing="$missing $c"; done
+  for c in judge.sh sandboxed-run.sh; do [ -x "$BIN/$c" ] || missing="$missing bin/$c"; done
+  [ -f "$BIN/spec-digest.mjs" ] || missing="$missing bin/spec-digest.mjs"
+  [ "$NO_CODEX" -eq 1 ] || [ -x "$BIN/judge-codex.sh" ] || missing="$missing bin/judge-codex.sh"
+  if [ -z "$missing" ]; then
+    "$BIN/judge.sh" --preflight >/dev/null 2>&1 || missing="$missing judge"
+    [ "$NO_CODEX" -eq 1 ] || "$BIN/judge-codex.sh" --preflight >/dev/null 2>&1 || missing="$missing codex"
+  fi
+  if [ -n "$missing" ]; then
+    log_event "preflight_failed" "-" "\"missing\":$(jq -Rn --arg m "${missing# }" '$m' 2>/dev/null || echo '"?"')"
+    echo "起動時の点検に失敗：${missing# } がない・動かない。裁判所は起動しない（申請と票は触らない）" >&2
+    exit 69
+  fi
+}
+# p0.4.3：Kernel の状態の書き出し（表示用の写し。docs/governance/kernel-state.json は git で追跡しない＝.gitignore）。
+#   書くのは裁判所だけ。失敗しても周回は止めない（記録して続ける）。失敗の記録は、成功するまで1回だけ
+KSTATE_OUT="$REPO/docs/governance/kernel-state.json"; KSTATE_FAILED=0
+write_kernel_state() {
+  if [ -f "$BIN/kernel-state.mjs" ] && node "$BIN/kernel-state.mjs" --repo "$REPO" --z3 "$Z3" --out "$KSTATE_OUT" >/dev/null 2>&1; then
+    KSTATE_FAILED=0; return 0
+  fi
+  [ "$KSTATE_FAILED" -eq 1 ] || log_event "kernel_state_unwritten" "-" "\"script\":$([ -f "$BIN/kernel-state.mjs" ] && echo true || echo false)"
+  KSTATE_FAILED=1; return 0
+}
+preflight
+
 echo "gate-runner 起動: repo=$REPO interval=${INTERVAL}s codex=$([ "$NO_CODEX" -eq 1 ] && echo off || echo on)"
 STOPPED_LOGGED=0
 while :; do
@@ -358,6 +412,7 @@ while :; do
   # p0.4.0：Kernel の停止中（Z3 の STOP。kernel-stop.sh）は申請を処理しない。判定も統合もせず、申請はそのまま残す
   if [ -f "$Z3/STOP" ]; then
     [ "$STOPPED_LOGGED" -eq 1 ] || { echo "⏹ Kernel の停止中：$(head -n 1 "$Z3/STOP")。申請は処理しない"; STOPPED_LOGGED=1; }
+    write_kernel_state   # p0.4.3：停止中も「停止中」を書き出す（SPEC §8-2 の例外として列挙した唯一の書き込み）
     [ "$ONCE" -eq 1 ] && break
     sleep "$INTERVAL"; continue
   fi
@@ -391,6 +446,7 @@ while :; do
     [ "$author" = "gate-runner" ] || log_event "main_advanced_outside_gate" "-" "\"head\":\"${cur:0:12}\",\"author\":$(jq -Rn --arg a "$author" '$a')"
   fi
   echo "$cur" > "$LAST_MAIN_FILE"
+  write_kernel_state   # p0.4.3：記録のコミットとチェックポイントの後に1回
   [ "$ONCE" -eq 1 ] && break
   sleep "$INTERVAL"
 done

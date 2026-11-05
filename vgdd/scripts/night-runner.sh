@@ -179,7 +179,7 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
 }
 
 # ---- 前検査（gate-runner の段階 1〜4 を先に機械で見る。合否ではなく無駄な差し戻しを減らすため） -------------------
-PROTECTED_RE='^(\.claude/|CLAUDE\.md$|\.github/|vgdd/|docs/requirements\.md$|docs/tasks/|merge-requests/)'
+PROTECTED_RE='^(\.claude/|CLAUDE\.md$|\.github/|vgdd/|docs/requirements\.md$|docs/tasks/|docs/governance/kernel-state\.json|merge-requests/)'
 precheck() { # task, wt → 0 なら申請へ。stdout に理由
   local task="$1" wt="$2"; local t; t="$(ticket_path "$task")"
   local n; n="$(git -C "$REPO" rev-list --count "main..night/$task")"
