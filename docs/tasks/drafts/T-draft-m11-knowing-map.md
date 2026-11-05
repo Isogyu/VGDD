@@ -39,11 +39,11 @@ depends_on: []
 
 ## 2. 受け入れ条件
 
-- A1. `src/lib/knowing-map.ts` に純粋関数 `buildKnowingMap(u: Understanding): KnowingMap` を export する（`Understanding` は `@/lib/understanding` の型。`import type` だけ）。`KnowingMap = { layers: KnowingLayer[]; total: number; summary: string }`、`KnowingLayer = { key: "confirmed" | "inferred" | "unverified" | "ask_human"; label: string; items: string[]; overflow: number; count: number }`。層は**この順に4つ固定**（件数が 0 でも層は出す）。`label` は `@/lib/understanding` の `UNDERSTANDING_LABELS` の値。`items` は各区分の `text` を `seq` 順（配列の順）に**最大 4 件**、1件は **28 文字**を超えれば先頭 27 文字＋「…」。`overflow` は 5 件目以降の件数。`count` は元の件数。`ask_human` は `null` なら 0 件、あれば 1 件。`NOT_IN_NOTES_TEXT`（「まだメモにない」）の項目は**どの層にも入れない**（件数にも数えない）。`total` は4層の `count` の合計。`summary` は「確認済み <n>・推測 <n>・未確認 <n>・人に確認 <n>」の形
-- A2. `src/components/KnowingMap.tsx`（クライアント部品、props `{ understanding: Understanding }`）は `buildKnowingMap` の結果を **インラインの SVG**（`viewBox="0 0 320 240"`、幅は親に合わせる）で描く：上から4つの横の帯（高さ 60 ずつ）、水面の線を1層目と2層目の境（y=60）に引き、帯の左に `label`、帯の中に `items` を1行ずつ（`<text>`。長い文字は A1 で切り詰め済み）、`overflow` が 1 以上なら最後に「ほか <overflow> 件」。色：1層目 emerald、2層目 violet（既存の「AI の推測」のバッジと同じ系）、3層目 zinc、4層目 amber。SVG には `role="img"` と `aria-label="知らないことマップ：<summary>"` を付け、SVG の直後に**スクリーンリーダー用の一覧**（`<ul className="sr-only">` に層ごとの `label` と `items`）を置く。`total` が 0 なら SVG を描かず「整理の結果がまだありません」の1行
+- A1. `src/lib/knowing-map.ts` に純粋関数 `buildKnowingMap(u: Understanding): KnowingMap` を export する（`Understanding` は `@/lib/understanding` の型。`import type` だけ）。`KnowingMap = { layers: KnowingLayer[]; total: number; summary: string }`、`KnowingLayer = { key: "confirmed" | "inferred" | "unverified" | "ask_human"; label: string; items: string[]; overflow: number; count: number }`。層は**この順に4つ固定**（件数が 0 でも層は出す）。`label` は `@/lib/understanding` の `UNDERSTANDING_LABELS` の値。`items` は各区分の `text` を配列の順に**最大 4 件**、1件は文字数（**`Array.from(text).length`、コードポイントで数える**。絵文字やサロゲートペアを途中で切らない）が **28 を超えれば先頭 27 文字（コードポイント）＋「…」**。`overflow` は 5 件目以降の件数。`count` は除外の後の件数。`ask_human` は `null` なら 0 件、あれば 1 件（除外に当たれば 0 件）。`text.trim()` が `NOT_IN_NOTES_TEXT`（「まだメモにない」）と**完全に一致**する項目は**どの層にも入れない**（`count` にも数えない）。`total` は4層の `count` の合計。`summary` は「確認済み <n>・推測 <n>・未確認 <n>・人に確認 <n>」の形
+- A2. `src/components/KnowingMap.tsx`（クライアント部品、props `{ understanding: Understanding }`）は `buildKnowingMap` の結果を **インラインの SVG**（`viewBox="0 0 320 240"`、幅は親に合わせる）で描く：上から4つの横の帯（高さ 60 ずつ）、水面の線を1層目と2層目の境（y=60）に引き、帯の左の **幅 96 の列**に `label`（`font-size` 11）、x=104 から右の列に `items` を1行ずつ（`<text>`、`font-size` 10。長い文字は A1 で切り詰め済み）、`overflow` が 1 以上なら最後に「ほか <overflow> 件」。`total` が 0 のときの1行は「整理の結果がまだありません」。色：1層目 emerald、2層目 violet（既存の「AI の推測」のバッジと同じ系）、3層目 zinc、4層目 amber。SVG には `role="img"` と `aria-label="知らないことマップ：<summary>"` を付け、SVG の直後に**スクリーンリーダー用の一覧**（`<ul className="sr-only">` に層ごとの `label` と `items`）を置く。`total` が 0 なら SVG を描かず「整理の結果がまだありません」の1行
 - A3. `src/components/UnderstandingPanel.tsx` の、結果の4区分（`renderSection` ×4）の**直後**に、見出し「知らないことマップ」（`<h3>`、既存の見出しと同じ見た目）と `<KnowingMap understanding={result.understanding} />` を差し込む。結果がないとき（`result` が `null`）は出さない。それ以外（fetch・質問への答え・4区分の表示・props の型）は変えない
-- A4. `KnowingMap` は `@/lib/knowing-map` を実行時に import してよい（純粋関数だけ。`node:fs`・DB を使わない）。`@/lib/understanding` は `import type` と `UNDERSTANDING_LABELS`・`NOT_IN_NOTES_TEXT` の定数だけ（実行時に DB を読まないことを作業員が確かめる）。`dangerouslySetInnerHTML`・`console`・`localStorage` を使わない。SVG の `<text>` に入れる文字列は React の子としてだけ渡す（文字列から SVG を組み立てない）
-- A5. `src/lib/knowing-map.test.ts` に、下の①〜⑥を**それぞれ1件以上の `it(`**で試す：①4層が固定の順と `label` で出る（件数 0 の層も）②5件以上の区分は `items` が 4 件で `overflow` が残りの数、`count` は元の数 ③29 文字の `text` は 27 文字＋「…」（28 文字はそのまま）④`ask_human` が `null` なら 0 件、あれば 1 件 ⑤「まだメモにない」の項目は層に入らず `total` に数えない ⑥`summary` の文が「確認済み 2・推測 1・未確認 0・人に確認 1」の形
+- A4. `KnowingMap` は `@/lib/knowing-map` を実行時に import してよい（純粋関数だけ。`node:fs`・DB を使わない）。型は **`@/lib/understanding` の `Understanding` を `import type` で使う**（`UnderstandingPanel.tsx` の中にある型の写しは使わない。`UnderstandingPanel` が `KnowingMap` に渡す `result.understanding` は写しの型なので、構造が同じことを `typecheck` で確かめる。写しを消す整理はこの票ではしない）。`@/lib/understanding` から実行時に読むのは `UNDERSTANDING_LABELS`・`NOT_IN_NOTES_TEXT` の定数だけ（このモジュールが DB を読まないことを作業員が確かめる）。`dangerouslySetInnerHTML`・`console`・`localStorage` を使わない。SVG の `<text>` に入れる文字列は React の子としてだけ渡す（文字列から SVG を組み立てない）
+- A5. `src/lib/knowing-map.test.ts` に、下の①〜⑦を**それぞれ1件以上の `it(`**で試す：①4層が固定の順と `label` で出る（件数 0 の層も）②5件以上の区分は `items` が 4 件で `overflow` が残りの数、`count` は元の数 ③29 文字の `text` は 27 文字＋「…」（28 文字はそのまま）④絵文字（サロゲートペア）を含む 29 コードポイントの `text` が、絵文字を途中で切らずに 27 コードポイント＋「…」になる ⑤`ask_human` が `null` なら 0 件、あれば 1 件 ⑥「まだメモにない」（前後に空白があっても）の項目は層に入らず `total` に数えない。「まだメモにない。」のように違う文は除外しない ⑦`summary` の文が「確認済み 2・推測 1・未確認 0・人に確認 1」の形
 - A6. `npm run -s test`（既存の試験のすべて）・`npm run -s typecheck`・`npm run -s lint` が通る（決定論的な監査の結果で確かめる）。差分のファイルは次の4つだけ：`src/lib/knowing-map.ts`（新設）、`src/lib/knowing-map.test.ts`（新設）、`src/components/KnowingMap.tsx`（新設）、`src/components/UnderstandingPanel.tsx`
 
 ## 3. 開発用テスト
@@ -58,7 +58,7 @@ depends_on: []
 
 ## 5. 統合審査
 
-決定論的な監査＋ judge ＋ Codex judge。**T-draft-m14-checkin-prompt と `UnderstandingPanel.tsx` が重なる**ので、どちらかの統合の後にもう片方を着手する（並行しない）。
+決定論的な監査＋ judge ＋ Codex judge。**T-draft-m14-checkin-prompt と `UnderstandingPanel.tsx` が重なる**ので並行しない。順は **M14 → この票（M11）**。
 
 ## 6. 記録
 
@@ -66,7 +66,7 @@ depends_on: []
 
 ## 7. 点検の記録
 
-**Claude の点検済み、Codex は未点検**（Codex は sandbox の中から呼べない。4:00 から立法補佐が行う）。（点検の後に追記）
+**Claude の点検済み、Codex は未点検**（Codex は sandbox の中から呼べない。4:00 から立法補佐が行う）。点検役：Claude のサブエージェント（ツールなし）。02:5x、3票あわせて指摘 12 件。この票への対応：#9 文字数はコードポイントで数える、絵文字の試験④（A1・A5）／#10 「まだメモにない」は trim 後の完全一致、`ask_human` の除外時は 0 件、`total` 0 の文を固定（A1・A2）／#11 型は `@/lib/understanding` の `Understanding` に統一し写しは使わない、`label` の列幅 96 と `items` の x=104 を固定（A2・A4）／#12 M14 → M11 の順を §5 に
 
 ## 8. オーナーに聞くこと
 

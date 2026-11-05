@@ -11,4 +11,6 @@
 | 02:2x | B の点検（Claude、10件：major 6・minor 4）を反映。検証を fs なしのファイルに分けて画面でも検証、書き出し日時と「古い写し」、表示用の純粋関数と試験、zod 式の全項目 | 同上（0a390a5） |
 | 02:3x | C-1：M12 先輩インタビューの票2枚（裏側・画面）。点検（Claude、12件：critical 2・major 7・minor 3）を反映：所有の確認、UNIQUE と UPDATE の件数で同時実行を防ぐ、`done` の後は `ai_done`、外部 API に送る範囲と上限、エラーの対応表、`normalizeTaskName` は `@/lib/commands` | `docs/tasks/drafts/T-draft-m12-interview-api.md`・`T-draft-m12-interview-screen.md` |
 | 02:4x | C-5：AGENTS.md の票（生成の出どころを確かめて `agentRules: false` か `.gitignore`。Codex の司法が AGENTS.md を読む経路を p0.4.3 の候補に）、C-6：原案の指紋から `knowledge_id` を外す票。点検役を起動 | `docs/tasks/drafts/T-draft-agents-md.md`・`T-draft-fingerprint-no-id.md` |
-| 02:5x | C-2：M11 知らないことマップ、C-3：M14 30分チェックイン（促しの表示だけ。デモ時計は §8 で問う）、C-4：M13 音声でつぶやく（Web Speech API、依存なし、プライバシーを §8 で問う） | `docs/tasks/drafts/T-draft-m11-knowing-map.md`・`T-draft-m14-checkin-prompt.md`・`T-draft-m13-voice-input.md` |
+| 02:5x | C-2：M11 知らないことマップ、C-3：M14 30分チェックイン（促しの表示だけ。デモ時計は §8 で問う）、C-4：M13 音声でつぶやく（Web Speech API、依存なし、プライバシーを §8 で問う） | `docs/tasks/drafts/T-draft-m11-knowing-map.md`・`T-draft-m14-checkin-prompt.md`・`T-draft-m13-voice-input.md`（9f42d72） |
+| 02:3x | C-5・C-6 の点検（8件）と C-2〜C-4 の点検（12件）を反映。D：implementation-notes に「M9・M6-3・M6-2・M5 と画面の経過」の表（票ごとの判断・逸脱・差し戻しの原因）、vgdd-status の K1 を本番で運用中に、K4（状態の書き出しと UI、下書き）を追加 | `docs/implementation-notes.md`・`docs/vgdd-status.md`・票の下書き5枚 |
+| 02:4x | E：README の下書き（数字は main から：test 268/22、画面 6、票 22 枚統合、コミット 198、適合性 231。保証できないことを明記）、3分デモの筋書きの下書き（Kernel の画面を 2:20〜、代替の表）。点検役を起動 | `docs/drafts/README.md`・`docs/drafts/demo-script.md` |

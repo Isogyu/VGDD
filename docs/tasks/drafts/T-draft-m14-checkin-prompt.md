@@ -39,10 +39,10 @@ depends_on: []
 ## 2. 受け入れ条件
 
 - A1. `src/lib/checkin-prompt.ts` に純粋関数 `shouldPromptCheckin(input: { elapsedMin: number; lastCheckinMin: number | null; dismissedMin: number | null }): boolean` を export する。規則：`elapsedMin` が **30 未満**なら false。30 以上のとき、`lastCheckinMin`（最後に整理を実行した時点の経過分）と `dismissedMin`（最後に「あとで」を押した時点の経過分）の**両方**について、`null` か `elapsedMin - その値 >= 30` なら true、どちらかが 30 未満なら false。`elapsedMin` が負・`NaN`・整数でないなら false。あわせて `checkinPromptText(elapsedMin: number): string` を export し、「作業開始から <elapsedMin> 分です。いまの理解を整理しませんか」を返す
-- A2. `src/components/WorkScreen.tsx`：進行中の作業（`session`）があるとき、`shouldPromptCheckin({ elapsedMin, lastCheckinMin, dismissedMin })` が true なら、入力欄の**上**に促しの帯（`role="status"`、amber の枠）を出す：`checkinPromptText(elapsedMin)` の文、ボタン「いまの理解を整理する」（押すと `document.getElementById("understanding-panel")` へ `scrollIntoView({ block: "start" })`。整理は**自動では実行しない**）、ボタン「あとで」（押すと `dismissedMin` を今の `elapsedMin` にする）。`lastCheckinMin`・`dismissedMin` は WorkScreen の state で、**作業が変わったら（`session.id` が変わったら）`null` に戻す**。既存の表示（入力欄・履歴・経過時間・`UnderstandingPanel`）は変えない。`elapsedMin` は既存の `active.elapsedMin`（サーバーが返し 1 分ごとに取り直す）を使い、クライアントの時計を読まない
-- A3. `src/components/UnderstandingPanel.tsx` の変更は次の2点だけ：(1) `Props` に任意の `onCheckin?: () => void` を足し、整理の応答（`CheckinResponse`）を受け取って `result` を更新した直後に、渡されていれば呼ぶ（追加の質問に答えて更新したときも呼ぶ）(2) 部品の最も外側の要素に `id="understanding-panel"` を付ける。それ以外（fetch・表示・既存の props）は変えない。`WorkScreen` は `onCheckin` に「`lastCheckinMin` を今の `elapsedMin` にする」関数を渡す
+- A2. `src/components/WorkScreen.tsx`：進行中の作業（`session`）があるとき、`shouldPromptCheckin({ elapsedMin, lastCheckinMin, dismissedMin })` が true なら、入力欄の**上**に促しの帯（`role="status"`、amber の枠）を出す：`checkinPromptText(elapsedMin)` の文、ボタン「いまの理解を整理する」（押すと `document.getElementById("understanding-panel")` へ `scrollIntoView({ block: "start" })`。整理は**自動では実行しない**）、ボタン「あとで」（押すと `dismissedMin` を今の `elapsedMin` にする。**「あとで」から 30 分は出ない**）。`lastCheckinMin`・`dismissedMin` は WorkScreen の state で、**どの作業の値かを `session.id` と一緒に持つ**（例：`{ sessionId, lastCheckinMin, dismissedMin }`）。描画のとき state の `sessionId` が今の `session.id` と違えば両方を `null` とみなす（**effect の中で setState して戻さない**。React Compiler の lint に当たるため。切り替えの後に最初に値を書くときに `sessionId` も書き換える）。既存の表示（入力欄・履歴・経過時間・`UnderstandingPanel`）は変えない。`elapsedMin` は既存の `active.elapsedMin`（サーバーが返し 1 分ごとに取り直す）を使い、クライアントの時計を読まない（取り直しの前後で最大 1 分のずれが出ることは許容する）
+- A3. `src/components/UnderstandingPanel.tsx` の変更は次の2点だけ：(1) `Props` に任意の `onCheckin?: () => void` を足し、**整理の API（`POST /api/sessions/[id]/checkin`）が 2xx を返して `result` を新しい値に更新した直後にだけ**呼ぶ（追加の質問に答えて更新したときも 2xx なら呼ぶ。失敗で `result` が変わらないときは呼ばない。メモの保存など整理以外では呼ばない）(2) 部品の最も外側の要素に `id="understanding-panel"` を付ける。それ以外（fetch・表示・既存の props）は変えない。`WorkScreen` は `onCheckin` に「`lastCheckinMin` を今の `elapsedMin` にする」関数を渡す
 - A4. 促しの帯は、`session` がないとき（作業を始めていない）には出さない。表示の判定は描画のたびに A1 の関数で行い、`setInterval`・`setTimeout` を**新しく足さない**（既存の 1 分ごとの取り直しだけ）。`dangerouslySetInnerHTML`・`console`・`localStorage` を使わない
-- A5. `src/lib/checkin-prompt.test.ts` に、下の①〜⑥を**それぞれ1件以上の `it(`**で試す：①29 分は false、30 分は true（両方 `null`）②`lastCheckinMin` が 5 で 30 分は false、60 分は true ③`dismissedMin` が 31 で 59 分は false、61 分は true ④`lastCheckinMin` 5・`dismissedMin` 40 で 69 分は false、70 分は true ⑤`elapsedMin` が -1・`NaN`・30.5 は false ⑥`checkinPromptText(30)` が「作業開始から 30 分です。いまの理解を整理しませんか」
+- A5. `src/lib/checkin-prompt.test.ts` に、下の①〜⑦を**それぞれ1件以上の `it(`**で試す（純粋関数だけ。時計やタイマーに依存しない）：①29 分は false、30 分は true（両方 `null`）②`lastCheckinMin` が 5 で 30 分は false、60 分は true ③`dismissedMin` が 31 で 59 分は false、61 分は true ④`lastCheckinMin` 5・`dismissedMin` 40 で 69 分は false、70 分は true ⑤「あとで」の直後（`dismissedMin` が `elapsedMin` と同じ 30）は false、30 分後（60）は true ⑥`elapsedMin` が -1・`NaN`・30.5 は false ⑦`checkinPromptText(30)` が「作業開始から 30 分です。いまの理解を整理しませんか」
 - A6. `npm run -s test`（既存の試験のすべて）・`npm run -s typecheck`・`npm run -s lint` が通る（決定論的な監査の結果で確かめる）。差分のファイルは次の4つだけ：`src/lib/checkin-prompt.ts`（新設）、`src/lib/checkin-prompt.test.ts`（新設）、`src/components/WorkScreen.tsx`、`src/components/UnderstandingPanel.tsx`
 
 ## 3. 開発用テスト
@@ -57,7 +57,7 @@ depends_on: []
 
 ## 5. 統合審査
 
-決定論的な監査＋ judge ＋ Codex judge。**T-draft-m11-knowing-map と `UnderstandingPanel.tsx` が重なる**ので、どちらかの統合の後にもう片方を着手する（並行しない）。
+決定論的な監査＋ judge ＋ Codex judge。**T-draft-m11-knowing-map と `UnderstandingPanel.tsx` が重なる**ので並行しない。順は **この票（M14）→ M11**（M14 の変更は props と id の2点で小さく、M11 はその後の `UnderstandingPanel` に図を差し込む）。
 
 ## 6. 記録
 
@@ -65,9 +65,9 @@ depends_on: []
 
 ## 7. 点検の記録
 
-**Claude の点検済み、Codex は未点検**（Codex は sandbox の中から呼べない。4:00 から立法補佐が行う）。（点検の後に追記）
+**Claude の点検済み、Codex は未点検**（Codex は sandbox の中から呼べない。4:00 から立法補佐が行う）。点検役：Claude のサブエージェント（ツールなし）。02:5x、3票あわせて指摘 12 件。この票への対応：#2 `onCheckin` は 2xx で `result` を更新したときだけ、失敗とメモの保存では呼ばない（A3）／#3 作業の切り替えのリセットは `sessionId` を一緒に持つ state で描画時に判定し、effect 内の setState を禁じる。1 分のずれは許容と明記（A2）／#4 「あとで」から 30 分は出ないと明記、試験⑤／#5 デモ時計は (b) で、seed の時刻は相対（開始が 28 分前）、試験は純粋関数だけと明記（§8・A5）／#12 M14 → M11 の順を §5 に
 
 ## 8. オーナーに聞くこと
 
-1. **デモ時計**（D-44④「30分チェックイン＋デモ時計」）：デモの録画で 30 分待たずに促しを出す手段を作るか。案：(a) 開発サーバーだけで効く `?demoClockMin=30` のような query を `elapsedMin` に足す（`NODE_ENV` が development のときだけ。本番の経路には入れない）(b) seed に「28 分前に開始した進行中の作業」を入れる（データだけで済む。T-018 と同じ形）。下書きは (b) を推奨（コードの経路を増やさない）。別の票にする
+1. **デモ時計**（D-44④「30分チェックイン＋デモ時計」）：デモの録画で 30 分待たずに促しを出す手段を作るか。案：(a) 開発サーバーだけで効く `?demoClockMin=30` のような query を `elapsedMin` に足す（`NODE_ENV` が development のときだけ。本番の経路には入れない）(b) seed に「**今から 28 分前に開始した**進行中の作業」（時刻は seed の実行時刻からの相対。合成データ）を入れる（データだけで済む。T-018 と同じ形）。下書きは (b) を推奨（コードの経路を増やさない）。別の票にする
 2. 促しの閾値 30 分と、再表示の間隔 30 分でよいか
