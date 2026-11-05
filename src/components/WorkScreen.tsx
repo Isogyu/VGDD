@@ -284,6 +284,18 @@ export default function WorkScreen() {
     <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 p-4 sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-semibold">つぶやき業務ログ</h1>
+        {/* ほかの画面への導線（T-021） */}
+        <nav aria-label="ほかの画面" className="flex flex-wrap items-center gap-3 text-sm">
+          <Link href="/knowledge" className="underline-offset-2 hover:underline">
+            チームの知恵
+          </Link>
+          <Link href="/shares" className="underline-offset-2 hover:underline">
+            共有の記録
+          </Link>
+          <Link href="/governance" className="underline-offset-2 hover:underline">
+            統治のライブ画面
+          </Link>
+        </nav>
         <label className="flex items-center gap-2 text-sm">
           <span className="text-zinc-500">ユーザー</span>
           <select
