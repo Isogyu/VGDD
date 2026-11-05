@@ -33,7 +33,7 @@ files_forbidden:
   - merge-requests/**
   - package.json
   - package-lock.json
-depends_on: [kernel-p0.4.3]   # 改正案 p0.4.3 §1 がオーナーに承認され、kernel-state.json の形（vgdd.kernel-state.v1）が固定されてから。形が変わればこの票は差し替える（strict で検証するため、項目の追加1つで state 全体が null になる）
+depends_on: [kernel-p0.4.3]   # 法律 p0.4.3（ブランチ law/p0.4.3、vgdd/scripts/kernel-state.mjs）がオーナーに反映されてから。A1 の形は 04:3x に立法補佐が kernel-state.mjs の出力と一字ずつ合わせた。形が変われば票を差し替える（strict のため）
 ---
 
 ## 1. 目的
@@ -53,19 +53,19 @@ release.sh は統合の後に `_board.json` を作り直さない（次の gate-
 
 ## 2. 受け入れ条件
 
-- A1. `src/lib/kernel-state-schema.ts`（**`node:fs` を import しない**）に `pickKernelState(json: unknown): KernelState | null` を export する。手順：(1) `json` がオブジェクト（`null`・配列でない）でなければ `null` (2) `json.verdicts.by_task` がオブジェクトなら、`Object.entries` で鍵と値を取り出し、鍵が `^T-\d{3}$` に合うものだけを `Map` に移す（合わない鍵は捨てる。全体は `null` にしない）。zod には `by_task` を除いた形を渡す (3) zod の **strict** で次を検証し、合わなければ `null`。型（zod 式）：
-  - `schema: z.literal("vgdd.kernel-state.v1")`、`generated_at: Iso`、`kernel_version: Short`、`policy_version: Short`
+- A1. `src/lib/kernel-state-schema.ts`（**`node:fs` を import しない**）に `pickKernelState(json: unknown): KernelState | null` を export する。手順：(1) `json` がオブジェクト（`null`・配列でない）でなければ `null` (2) `json.verdicts.by_task` がオブジェクトなら、`Object.entries` で鍵と値を取り出し、鍵が `^T-\d{3,4}$` に合うものだけを `Map` に移す（合わない鍵は捨てる。全体は `null` にしない）。zod には `by_task` を除いた形を渡す (3) zod の **strict** で次を検証し、合わなければ `null`。型（zod 式）：
+  - `schema: z.literal("vgdd.kernel-state.v1")`、`generated_at: Iso`、`kernel_version: Short.nullable()`、`policy_version: Short.nullable()`
   - `stopped: z.object({ active: z.boolean(), since: Iso.nullable() }).strict()`
-  - `judiciary: z.object({ status: z.enum(["ok","unavailable","down"]), kind: z.enum(["preflight_failed","judiciary_unavailable"]).nullable(), since: Iso.nullable() }).strict()`、refine：`status === "ok"` なら `kind === null`、そうでなければ `kind !== null`
+  - `judiciary: z.object({ status: z.enum(["ok","unavailable"]), kind: z.enum(["preflight_failed","judiciary_unavailable"]).nullable(), since: Iso.nullable() }).strict()`、refine：`status === "ok"` なら `kind === null`、そうでなければ `kind !== null`
   - `approvals: z.array(z.object({ task: TaskId, current: z.boolean(), approved_at: Iso.nullable() }).strict()).max(500)`（改正案 §9 の 7(c)：承認の記録に `ts` がなければ `null`）
-  - `held: z.array(z.object({ task: TaskId, since: Iso }).strict()).max(500)`
+  - `held: z.array(z.object({ task: TaskId, since: Iso.nullable() }).strict()).max(500)`
   - `rulings: z.object({ count: Count, tasks: z.array(TaskId).max(500) }).strict()`、`annulments: z.object({ count: Count }).strict()`
   - `verdicts: z.object({ count: Count }).strict()`（`by_task` は (2) で別に扱う。**`by_task` が無い・オブジェクトでなければ空の `Map`**。各値は `z.object({ judge: Verdict, codex: Verdict, security: Verdict, at: Iso }).strict()` で1件ずつ検証し、落ちた値（例：`codex: "SKIPPED"` の文字列。裁判所は `--no-codex` の `SKIPPED` を `null` に写す＝改正案への申し送り）は捨てる）
   - `tickets` は**持たない**（strict なので裁判所が出せば state 全体が `null` になる。改正案 §1 の表を「`tickets` は出さない（MUST NOT。`_board.json` にある）」に固定する申し送り）
   - `disagreements: z.object({ count: Count, tasks: z.array(TaskId).max(500) }).strict()`
-  - `evidence: z.object({ records: Count, chain_ok: z.boolean(), checkpoint_at: Iso.nullable(), last_record_at: Iso.nullable() }).strict()`
-  - `conformance: z.object({ passed: Count, total: Count, impl: Short, at: Iso }).strict().nullable()`、refine：`passed <= total`
-  - 補助：`Iso = z.string().min(10).max(40)`、`Short = z.string().min(1).max(40)`、`TaskId = z.string().regex(/^T-\d{3}$/)`、`Count = z.number().int().min(0).max(1_000_000)`、`Verdict = z.enum(["APPROVED","CHANGES_REQUIRED"]).nullable()`
+  - `evidence: z.object({ records: Count, chain_ok: z.boolean().nullable(), checkpoint_mismatches: Count.nullable(), checkpoint_at: Iso.nullable(), last_record_at: Iso.nullable() }).strict()`（`chain_ok` はハッシュチェーン、`checkpoint_mismatches` はチェックポイントとの食い違いの件数。`null` は「確かめていない」）
+  - `conformance: z.object({ passed: Count, total: Count, impl: z.enum(["repo","z3"]).nullable(), kernel_version: Short.nullable(), at: Iso.nullable() }).strict().nullable()`、refine：`passed <= total`
+  - 補助：`Iso = z.string().min(10).max(40)`、`Short = z.string().min(1).max(40)`、`TaskId = z.string().regex(/^T-\d{3,4}$/)`、`Count = z.number().int().min(0).max(1_000_000)`、`Verdict = z.enum(["APPROVED","CHANGES_REQUIRED"]).nullable()`
   - 返り値 `KernelState` は上の形で、`verdicts.by_task` だけ `ReadonlyMap<string, { judge; codex; security; at }>`
 - A2. `src/lib/kernel-state-schema.ts` に純粋関数 `summarizeKernel(state: KernelState, now: Date): KernelSummary` と **`formatJst(iso: string | null): string`**（`null` か `Date.parse` が `NaN` なら「—」、そうでなければ `formatMdHm(toJstIso(new Date(ms)))`。`@/lib/time` の `toJstIso`・`formatMdHm` を使う。表記は `formatMdHm` の書式に従う。注：T-draft-ui-consistency が `formatMdHm` をゼロ埋めに変える予定で、この票はその書式をそのまま使う）を export する。`KernelSummary` は：`approvedCurrent: number`（`current` が true の件数）、`approvalsSorted: KernelState["approvals"]`（`approved_at` の文字列の降順、同じなら `task` の昇順。**`approved_at` が `null` の行は末尾**、`null` 同士は `task` の昇順）、`verdictRows: { task; judge; codex; security; at; disagreed: boolean }[]`（`by_task` を `task` の昇順、`disagreed` は `disagreements.tasks` に含まれるか）、`heldCount: number`（`held.length`）、`rulingCount: number`（`rulings.tasks.length`）、`stale: boolean`（`generated_at` を `Date` にして `now` との差が **10 分**を超えるか、`Date` にできなければ true）。表示に使う件数は**配列の長さ**を使い、`count` は使わない（`count` と長さが食い違っても画面は長さ）
 - A3. `src/lib/kernel-state.ts` に `loadKernelState(root = process.cwd()): KernelState | null` を export する。読むのは `<root>/docs/governance/kernel-state.json` の1か所だけ。パスの組み立てに外からの入力は使わない。手順（この順）：(1) `<root>/docs` と `<root>/docs/governance` を `lstat` し、シンボリックリンクかディレクトリでなければ `null`（lstat と O_NOFOLLOW はパスの最後の要素にしか効かないため。`governance.ts` の `isRealDir` と同じ）(2) ファイルを `lstat` し、シンボリックリンクか通常ファイルでなければ `null`（FIFO やデバイスを読まない）(3) `O_RDONLY | O_NOFOLLOW` で開く (4) `fstat` で通常ファイルでなければ `null`、大きさが **1,048,576 バイトを超えれば** `null`（ちょうど 1,048,576 は読む。**この大きさの検査は `governance.ts` にはなく、この票で新しく書く**）(5) 読んで `JSON.parse` → `pickKernelState`。どの段階の失敗も `null`（例外の本文は使わない）。`governance.ts` の `isRealDir`・`readRegularFile` は export されていないので**写す**（`governance.ts` は変えない）
@@ -74,7 +74,7 @@ release.sh は統合の後に `_board.json` を作り直さない（次の gate-
   1. **書き出し日時**：「書き出し：<formatJst(generated_at)>」。`stale` が true なら横に「古い写しです（10分以上更新がありません）」（amber）
   2. **稼働／停止中**：`stopped.active` が false なら「稼働中」（emerald）、true なら「停止中（<formatJst(since)> から）」（red）。区画の中で最も大きい文字（`text-2xl` 以上）。`judiciary.status` が `ok` でなければ、その横に「司法の道具が使えません（<kind の日本語：preflight_failed＝起動時の点検で不足、judiciary_unavailable＝呼び出しの失敗>）」（amber）
   3. 法律の版：「Kernel <kernel_version>・フック <policy_version>」
-  4. **成立条件①〜⑤の表**（`docs/kernel.md` §3 の表を生きた数字で）。行は固定の5行、列は「成立条件・どう強制しているか（固定の文）・いまの数字」。いまの数字：①役割分離＝`conformance` があれば「適合性テスト <passed>/<total>（<impl>、<at の MM/DD HH:MM>）」、なければ「未記録」②仕様の統治＝「承認済み <approvedCurrent> 票」③独立司法＝「判定 <verdictRows.length> 件、不一致 <disagreements.tasks.length> 件」④Kernel による強制＝「held <heldCount> 件、裁定 <rulingCount> 件、取り消し <annulments.count> 件」⑤証跡＝「記録 <evidence.records> 件、ハッシュチェーン <chain_ok ? 改ざんなし : 不整合>、最後のチェックポイント <checkpoint_at の MM/DD HH:MM か —>」
+  4. **成立条件①〜⑤の表**（`docs/kernel.md` §3 の表を生きた数字で）。行は固定の5行、列は「成立条件・どう強制しているか（固定の文）・いまの数字」。いまの数字：①役割分離＝`conformance` があれば「適合性テスト <passed>/<total>（<impl>、<at の MM/DD HH:MM>）」、なければ「未記録」②仕様の統治＝「承認済み <approvedCurrent> 票」③独立司法＝「判定 <verdictRows.length> 件、不一致 <disagreements.tasks.length> 件」④Kernel による強制＝「held <heldCount> 件、裁定 <rulingCount> 件、取り消し <annulments.count> 件」⑤証跡＝「記録 <evidence.records> 件、ハッシュチェーン <chain_ok が true なら 改ざんなし、false なら 不整合、null なら 未確認>、チェックポイントの食い違い <checkpoint_mismatches> 件（null なら —）、最後のチェックポイント <formatJst(checkpoint_at)>」。食い違いが1件以上なら、その行の下に小さく「食い違いは裁判所の記録の取り方の競合でも生じる（OBS-055。p0.4.3 で修正）。改ざんかどうかはオーナーが verify-chain で確かめる」
   5. 承認済みの仕様の一覧：`approvalsSorted` を、票・承認日時（`formatJst(approved_at)`。`null` は「—」）・`current` が false なら「仕様が変わった（承認し直しが要る）」のバッジ
   6. held・裁定・取り消し：`held` の票と `since`、`rulings.tasks`、`annulments.count`
   7. 判定の一覧：`verdictRows` を表に（judge・Codex・security の3列。`null` は「—」。`disagreed` の行は amber）
@@ -135,6 +135,12 @@ release.sh は統合の後に `_board.json` を作り直さない（次の gate-
 | 6 | unmount の `abort()` が「読めませんでした」を誘発（StrictMode） | `signal.aborted` なら state を更新しない（A5） |
 | 7 | `by_task` の値単位の捨て方・無いときの扱い・⑤の作り方 | 空の Map、試験⑩、空白で詰めた JSON（A1・A8） |
 | 8 | Route Segment Config を足すとビルドが落ちる | A4 に「書かない。`connection()` は try の中」 |
+
+## 7b. 立法補佐の仕上げ（04:3x）
+
+- A1 の形を、法律 p0.4.3 の実装 `vgdd/scripts/kernel-state.mjs`（ブランチ `law/p0.4.3`）の出力と一字ずつ合わせた：`kernel_version`・`policy_version`・`held[].since`・`evidence.chain_ok` は null 可、`evidence.checkpoint_mismatches` を追加（本番の記録で 01:18:23 のチェックポイントの食い違い1件が出るため。原因は裁判所の競合 OBS-055）、`conformance` は `impl`（repo／z3）と `kernel_version` を持つ、`judiciary.status` は ok／unavailable の2つ、票の ID は3〜4桁
+- 書き出しは周回ごとに必ず書き直す（`generated_at` が生存の合図）。A2 の `stale`（10 分）はこれを前提にする。時刻は `+09:00` の形にそろえて出す（`+0900` は出さない）
+- 本番の記録で試しに書き出した値（04:11）：法律 p0.4.2・フック p0.4.0・稼働中・承認 12 票すべて有効・held 0・裁定 2（T-017・T-019）・取り消し 16・判定 114 件（22 票）・不一致 13 件（7 票）・証拠 4825 件
 
 ## 8. オーナーに聞くこと
 
