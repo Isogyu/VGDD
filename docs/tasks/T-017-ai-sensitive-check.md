@@ -89,3 +89,7 @@ depends_on: []
 
 - 2026-11-06T00:52:45+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=CHANGES_REQUIRED/1 件, codex=APPROVED/0 件）。オーナーの裁定へ）
 - 00:57 オーナーの裁定（立法補佐の伝達）：merge。judge の指摘は試験の `taro@example.com`（予約ドメインで架空）の1件だけで、Codex の judge・セキュリティ審査は APPROVED。行政の長が `status: review` に戻して同じ 68f4802 を再申請（コードの変更なし）
+
+- 2026-11-06T01:01:13+0900 gate-runner: judge と Codex が分かれたが、オーナーの裁定（統合）により進める：試験の本文の taro@example.com は RFC 2606 の予約ドメインで架空。統合済みの notes.test.ts・sensitive.test.ts にも同じ形がある。実害の小さい指摘（D-58③）。Codex の judge とセキュリティ審査は APPROVED
+
+- 2026-11-06T01:01:13+0900 gate-runner: status → review（判定に合格（judge=CHANGES_REQUIRED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
