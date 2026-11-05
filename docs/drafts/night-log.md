@@ -25,6 +25,7 @@
 | 03:1x | F-5：UI の票2枚（見た目の1本化、アクセシビリティの小修正。review-ui の票 B・C）。B の2回目の点検（8件）を反映：`approved_at` の null、`tickets` を持たない、読み込みの手順（ディレクトリのリンク・fstat・1MB は新規）、`formatJst`、abort、Route Segment Config。p0.4.3 案 §1 に申し送り（tickets は出さない、null の扱い、SKIPPED→null）。M12 の2回目と UI 2票の点検役を起動中 | `T-draft-ui-consistency.md`・`T-draft-a11y-fixes.md`（b28060e）、`T-draft-kernel-ui.md`・`kernel-p0.4.3-proposal.md`（a79f7bd） |
 | 03:20 | F-5：票 T-draft-fixed-failure-messages（AI の失敗の文を固定に、Claude クライアントの timeout・maxRetries を1か所に。review-security の票 C）。点検役を起動 | `T-draft-fixed-failure-messages.md`（100e0a8） |
 | 03:2x | M12 の2票の2回目の点検（14 件。SQLite をメモリ DB で実測）を反映：既存の DB は `--reset` では作り直せずファイルの削除だけ、`candidate_id` 列は FK の循環で `resetDemoData` が落ちるのでやめる、AI が1問目で `done` を返すと詰む → 答え 0 件でも終了、`isStale` の null で typecheck が落ちる、未決定のインタビュー候補を決定できる画面がない → 一覧から開く（f6e03a4）。UI の2票の点検（14 件）を反映：`formatMdHm` の書式変更で落ちる既存の試験 2 ファイル、`formatDateTime` の null、句点は文末だけ、`maxLength` の表（78a65d3）。M11・M13・M14 の2回目の点検（実装との突き合わせ）を起動 | 票の下書き4枚 |
+| 03:3x | 失敗の文の票の点検（8件）を反映（2fd80cc）。README の事実確認（読み取り専用、`npm test` も1回実行）：誤り 3（整理の失敗の文は固定でない、フックは p0.4.0、メールは `example.co.jp` も）・不正確 6 を反映。足すべき注意：途中整理の fixture がなくデモモードで「いまの理解を整理」が動かない、Node 25 の警告、`kernel.md` の「228件」と `vgdd-status` V2 の版が古い（オーナーへ） | `docs/drafts/README.md`（aaf672a） |
 
 ## 4:00 の報告（立法補佐へ。下書き、4:00 に確定）
 
