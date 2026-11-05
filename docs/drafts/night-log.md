@@ -16,4 +16,5 @@
 | 02:4x | E：README の下書き（数字は main から：test 268/22、画面 6、票 22 枚統合、コミット 198、適合性 231。保証できないことを明記）、3分デモの筋書きの下書き（Kernel の画面を 2:20〜、代替の表）。点検役を起動 | `docs/drafts/README.md`・`docs/drafts/demo-script.md`（56c464f） |
 | 02:5x | E の点検（Claude、12件：重い 5・中 5・軽 2）を反映。強制の層の表（実装と検証の状態）、数字の出どころと時刻、デモモードは再生で任意の入力に対応しないと明記、Kernel の区画は任意の項目に、「半日 → 30分」は原体験の語り。F-4：アプリの点検（安全・不具合／使いやすさ・アクセシビリティ）の読み取り専用の点検役を2体起動 | 同上（1aa4124） |
 | 02:5x | F-2b：今夜の統治の実績のまとめ（12 票の起草→承認→作業→判定→統合の時刻と件数、言えること・言えないこと）。F-3：既知の課題の判例の候補 17 件（前提・操作・期待の形）。F-4：画面の点検の結果（major 6・minor 9、票の案3つ） | `docs/drafts/governance-record-2026-11-05.md`・`conformance-candidates.md`・`review-ui.md`（83364df） |
-| 02:5x | F-4：安全と不具合の点検の結果（major 6・minor 9。開発用ルートに Origin の門がなく別サイトから seed --reset が打てる、整理の fixture の採取が今の DB のメモを実 API に送る、答えの機密の門がない、例外の本文が応答に出る、stale の候補が却下できない）。票の案 A〜D | `docs/drafts/review-security.md` |
+| 02:5x | F-4：安全と不具合の点検の結果（major 6・minor 9。開発用ルートに Origin の門がなく別サイトから seed --reset が打てる、整理の fixture の採取が今の DB のメモを実 API に送る、答えの機密の門がない、例外の本文が応答に出る、stale の候補が却下できない）。票の案 A〜D | `docs/drafts/review-security.md`（aa77e67） |
+| 03:0x | F-2a：比較実験の計画（3条件・5票・指標・言えないこと）、F-2c：適合性の段階（8段階）と重要度別の承認（`risk` の機械的な計算）の設計。F-5：安全の票 A の下書き（開発用ルートの門を共通化、採取をメモリの seed に）。F-1：p0.4.3 案の2回目の点検（既存の試験との衝突・実現性、読み取り専用）を起動 | `docs/drafts/comparison-experiment.md`・`kernel-stages-and-approval-levels.md`・`docs/tasks/drafts/T-draft-dev-routes-guard.md` |
