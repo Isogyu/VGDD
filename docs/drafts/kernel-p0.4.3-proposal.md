@@ -2,7 +2,7 @@
 
 - 位置づけ：**下書き**。法律の本体（`vgdd/`・`.claude/`）は書いていない。立法補佐が 4:00 から起草し、憲法審査とオーナーの承認を経て効力を持つ
 - 出どころ：2026-11-05 夜〜11-06 未明の運用で見つかった観察（OBS-049・051・053・054）と、Kernel の UI（票の下書き `docs/tasks/drafts/T-draft-kernel-ui.md`）の前提
-- 規範との対応：`vgdd/kernel/SPEC.md` p0.4.2 の §3（判定）・§4（仕様の統治）・§6（司法の独立）・§7（統合）・§8（停止）・§10（証跡）・§11（適合性）。判例（適合性テスト）の群の記号は `run.mjs` の既存の群（C1・C2・C3・G・H・K・N・A・L・M）に合わせ、新しい群は **S**（state：状態の書き出し）とする
+- 規範との対応：`vgdd/kernel/SPEC.md` p0.4.2 の §3（判定）・§4（仕様の統治）・§6（司法の独立）・§7（統合）・§8（停止）・§10（証跡）・§11（適合性）。判例（適合性テスト）の群の記号は `run.mjs` の既存の群（C1・C2・C3・G・H・K・N・A・L・M）に合わせ、新しい群は **ST**（state：状態の書き出し。`S1`〜 は C2 の既存の記号と衝突するため `ST1`〜 とする。2回目の点検の指摘 1）とする
 - 点検：Codex CLI はこの環境にないため（`codex not found`）、**Claude のサブエージェント（ツールなし、憲法審査の役）**で1回点検した。指摘と対応は末尾の §7
 
 ---
@@ -60,16 +60,16 @@
 
 | 記号 | 試すこと | 期待 |
 |---|---|---|
-| S1 | 書き出した JSON の全文に、禁止の形が含まれない：Z3 のパス、`/Users/`、`session_id`、`tool_use_id`、`reason` の本文の鍵（`findings`・`reason`・`message` の鍵が存在しない）、**16進 8 桁以上の連続（ハッシュの一部）**、改行を含む長い文字列（120 文字超の値がない） | 含まれない |
-| S2 | 行政の長の probes：`Write`/`Edit`/`Bash: echo x > docs/governance/kernel-state.json`/`Bash: mv x docs/governance/kernel-state.json`/`Bash: cp x docs/governance/kernel-state.json` | deny（フック）。sandbox の `denyWrite` は実セッションの記録で確かめる（V6 の形） |
-| S9 | 裁判所と夜間の代行のコードが `kernel-state.json` を**読まない**（`grep` で参照がない。判断の根拠にしない） | 参照なし |
-| S3 | 作業員の probes：worktree の中の同じパスへの Write | deny。差分に含めた申請は裁判所が保護パスで拒否（G の既存の形） |
-| S4 | STOP があるとき書き出すと `stopped.active` が true、`since` が STOP の1行目の時刻、理由の本文は含まれない | 一致 |
-| S5 | STOP を消すと次の周回で `stopped.active` が false | 一致 |
-| S6 | 承認の記録に main の指紋と一致しない行があるとき、`approvals[].current` が false | 一致 |
-| S7 | 内容が同じ周回では `generated_at` が変わらない。変わった周回では Z3 の `kernel_state.jsonl` が1行増える | 一致 |
-| S8 | 書き出しの失敗（ディスクに書けない）は裁判所の周回を止めず、`gate_events.jsonl` に `kernel_state_unwritten` を1行残す | 一致 |
-| M | 権限の表の自己検査：新しい権限 `CAP-KERNEL-STATE-WRITE`（allowed: gate_runner）と `CAP-KERNEL-STATE-READ`（allowed: すべて）に probes と参照する試験がある | 合格 |
+| ST1 | 書き出した JSON の全文に、禁止の形が含まれない：Z3 のパス、`/Users/`、`session_id`、`tool_use_id`、`reason` の本文の鍵（`findings`・`reason`・`message` の鍵が存在しない）、**16進 8 桁以上の連続（ハッシュの一部）**、改行を含む長い文字列（120 文字超の値がない） | 含まれない |
+| ST2 | 行政の長の probes：`Write`/`Edit`/`Bash: echo x > docs/governance/kernel-state.json`/`Bash: mv x docs/governance/kernel-state.json`/`Bash: cp x docs/governance/kernel-state.json` | deny（フック）。sandbox の `denyWrite` は実セッションの記録で確かめる（V6 の形） |
+| ST9 | 裁判所と夜間の代行のコードが `kernel-state.json` を**読まない**（`grep` で参照がない。判断の根拠にしない） | 参照なし |
+| ST3 | 作業員の probes：worktree の中の同じパスへの Write | deny。差分に含めた申請は裁判所が保護パスで拒否（G の既存の形） |
+| ST4 | STOP があるとき書き出すと `stopped.active` が true、`since` が `gate_events.jsonl` の `kernel_stop` の `ts`（STOP の1行目は「理由（ts）」の形で理由を含むので使わない）、理由の本文と `stop_id`（PID を含む）は含まれない | 一致 |
+| ST5 | STOP を消すと次の周回で `stopped.active` が false | 一致 |
+| ST6 | 承認の記録に main の指紋と一致しない行があるとき、`approvals[].current` が false（fixture の承認の行に `ts` がなければ `approved_at: null` を許す） | 一致 |
+| ST7 | 内容が同じ周回では書き込みが起きず `generated_at` が変わらない。変わった周回では Z3 の `kernel_state.jsonl` が1行増える | 一致 |
+| ST8 | 書き出しの失敗（ディスクに書けない）は裁判所の周回を止めず（`set -e` の下で `write_kernel_state \|\| log_event kernel_state_unwritten` の形）、`gate_events.jsonl` に `kernel_state_unwritten` を1行残す | 一致 |
+| M | 権限の表の自己検査：新しい権限 `CAP-KERNEL-STATE-WRITE`（allowed: gate_runner。`scenario_tests` は `ST1`〜）と `CAP-KERNEL-STATE-READ`（allowed: すべて。probes は `{main}/docs/governance/kernel-state.json` の Read → allow。作業員の `{self}` は worktree でファイルがないため `{main}` を使う）に probes と参照する試験がある。**`groupMeta` の照合を群＋id に**（今は id だけで、`ST1` と C2 の `S1` のような衝突を見分けられない） | 合格 |
 
 ### 残る限界
 
@@ -211,7 +211,10 @@
 - `vgdd/kernel/capabilities.json`：`kernel_version: p0.4.3`。新しい権限 `CAP-KERNEL-STATE-WRITE`・`CAP-KERNEL-STATE-READ`・`CAP-WORKER-START-AFTER-APPROVAL`（promise）
 - `vgdd/conformance/run.mjs`：S1〜S8、G14〜G18、C3 の5件、N の4件、M の自己検査。**前の版（p0.4.2）にかけて新しい試験だけが落ちることを確かめる**（SPEC §11）
 - `docs/kernel.md` §2・§3、`docs/vgdd-status.md` の表（K4：状態の書き出し）
-- 保護パス：`PROTECTED_RE` と フックの保護パスに `docs/governance/kernel-state.json`・`docs/governance/summary.json`
+- 保護パス：**4 か所**に `docs/governance/kernel-state.json`・`docs/governance/summary.json` を足す：フックの `isProtectedRel`（Edit・Write）と `BASH_PROTECTED_TOKENS`（Bash）、gate-runner の `PROTECTED_RE`、night-runner の `PROTECTED_RE`
+- `vgdd/scripts/judge.sh`・`judge-codex.sh`：「司法が使えない」の印（§9 の 3）、参考の全文を INPUT に（§4）、`--preflight`（§9 の 2）
+- `.gitignore`：`docs/governance/kernel-state.json*`（案 A）
+- `vgdd/scripts/night-runner.sh`：`should_stop` に `judiciary_down`、`allow_rules_for` の関数（§9 の 8・9）
 
 ## 7. 点検の記録
 
@@ -232,9 +235,28 @@
 | 11 | minor | `conformance.jsonl` の主体とチェーンとの関係 | 実行はオーナーだけ、チェーンとは別の追記だけの台帳と明記 |
 | 12 | minor | §7 がない | 本文の §7（この節）を埋めた |
 
+## 9. 2回目の点検（既存の試験との衝突・安全・実現性）と対応
+
+点検役：Claude のサブエージェント（読み取り専用。`run.mjs`・`capabilities.json`・`gate-runner.sh`・`night-runner.sh`・`judge.sh`・`judge-codex.sh`・`kernel-stop.sh`・`kernel-resume.sh`・`release.sh`・`policy.mjs`・`verify-chain.mjs` を読んで突き合わせた）。03:0x、指摘 12 件（major 6・medium 3・minor 3）。**衝突のなかった群**：C1・A・C2（記号を直せば）・C3（参考を `judge.sh` の INPUT に入れる限り）・G1〜G13（preflight を下の形にすれば）・H・K（案 A＋`.gitignore` なら）・L・N・M（指摘 1・5 を直せば）。対応（立法補佐の起草への申し送り）：
+
+| # | 重さ | 指摘 | 対応・申し送り |
+|---|---|---|---|
+| 1 | major | 新しい群 `S1`〜 が C2 の `S1`〜`S13` と衝突し、`groupMeta` は id だけで照合するので自己検査が空回りする | 記号を `ST1`〜`ST9` に改めた（§1）。`groupMeta` を群＋id で照合する形に（`run.mjs` の改正） |
+| 2 | major | 起動時の点検で `codex`・`claude` を必須にすると、LLM を呼ばない適合性テスト（代わりの司法のスクリプト）の G がすべて起動で止まる。`--no-codex` の運用もある | **§3 の 1 を改める**：preflight は `$BIN/judge.sh`・`judge-codex.sh`・`sandboxed-run.sh`・`spec-digest.mjs` が存在して実行でき、`jq`・`node`・`git` があることを確かめ、LLM の道具の有無は `judge.sh --preflight`／`judge-codex.sh --preflight`（`--no-codex` なら省く）に委ねる。代わりのスクリプトは 0 を返す。G14 は「代わりの `judge-codex.sh --preflight` が非 0 → 起動しない・`preflight_failed`・票と申請は不変」 |
+| 3 | major | 「0 バイト＝使えない」は gate-runner から見えない。judge.sh・judge-codex.sh は claude の出力が 0 バイトでも壊れていても同じ記録（`judge_parse_ok: false`、`CHANGES_REQUIRED`）を書く（T-015 の 00:20 はこの経路）。さらに **codex がファイルを書かずに終わると `cv` が `SKIPPED` のまま、judge が APPROVED なら「不一致」の minor 扱いで統合される穴** | **§3 の 2・4 を改める**：(a) `judge.sh`・`judge-codex.sh` に「司法が使えない」の明示の印を定義（記録に `judiciary_unavailable: true` を書いて終了コード 70、または記録を書かず 70）(b) gate-runner はその印で `judiciary_unavailable` に分岐し、**判定のファイルがないことも unavailable に数える**（`SKIPPED` は `--no-codex` のときだけ）(c) G15・G16 は「代わりの judge.sh が 127／印付きで終わる」と前提を明記 (d) §6 の更新対象に `judge.sh`・`judge-codex.sh` を足す。この穴（ファイルなし＝SKIPPED で統合）は**今の版で統合に至る経路**なので、p0.4.3 の優先度を上げる |
+| 4 | major | 「`update_board` の直後」は周回の終わりではない（統合した申請ごとに呼ばれる）。STOP の分岐は `continue` で周回の終わりを通らない。`set -euo pipefail` で書き出しの失敗が周回を止める | **§1 の規則 1 を改める**：記録のコミットの後、チェックポイントの前に1回。停止中にも書く案なら STOP の分岐の `continue` の前にも呼ぶ。`write_kernel_state \|\| log_event kernel_state_unwritten` の形。一時ファイル＋`mv -f`、同じなら書かない（`jq 'del(.generated_at)'` で比較）。`RUN_TOUCHED` は票だけなので案 A なら触れない |
+| 5 | major | promise だけの権限は今の `groupMeta`（probes／scenario_tests／verified_by のどれかが要る）で不合格。読み取りの probes の `{self}` は作業員では worktree で、案 A ではファイルがない | `CAP-WORKER-START-AFTER-APPROVAL` に `verified_by`（証拠ストアの観測と OBS-051。promise）を書き、`groupMeta` に「`enforced_by` が promise だけなら `known_gaps` が非空」の検査を足す。`CAP-KERNEL-STATE-READ` の probes は `{main}/docs/governance/kernel-state.json`（§1 の M に反映） |
+| 6 | major | 未追跡のファイルがあると `kernel-resume.sh`（`git status --porcelain`）の R7 で再開しない。一時ファイルが残れば再開を拒まれる。`docs/governance/` はまだない。案 B は SPEC §5「裁判所がコミットしてよいのは票と `_board.json` だけ（MUST）」に当たる | `.gitignore` は `docs/governance/kernel-state.json*`（一時ファイルを含む）。書き出しは `mkdir -p`。適合性テストの fixture の `.gitignore` にも同じ行。案 B を選ぶなら SPEC §5 の改正と G10 の期待の注記が要る（§8 の 1 に添える） |
+| 7 | medium | 「出どころ」の列が実際のファイルと合わない 5 項目 | (a) `held`：release は `held.jsonl` を更新せず `gate_events` に `merged`（via release）を書き `refs/vgdd/held/<task>` を消す → 出どころは「`held.jsonl` と gate_events の突合」か「`refs/vgdd/held/` の有無」(b) `stopped.since`：STOP の1行目は「理由（ts）」なので使わず、gate_events の `kernel_stop.ts`（ST4 に反映）(c) `approvals[].approved_at`：本番の記録は `ts` あり、fixture の行にはない → `null` を許す（ST6 に反映）(d) `evidence`：`verify-chain --summary-json` の `period.last` → `last_record_at`、`checkpoints.jsonl` の `ts` → `checkpoint_at` (e) `verdicts`：ファイル名の接尾辞（judge は `T-NNN-<sha12>.json`、Codex は `…-codex-judge.json`／`…-codex-security.json`、代わりは `-stub…`）で分類し「`codex` を含まない＝judge」に。`at` は `collected_at` |
+| 8 | medium | `judiciary_down` を夜間の代行が知らない（`should_stop` は STOP・gate の生死・`main_advanced_outside_gate` だけ）。連続回数はプロセス内の数では `--once` の試験で試せない | 連続回数は gate_events から導く（最後の成功／`judiciary_restored` 以後の `judiciary_unavailable` の数）。night-runner の `should_stop` に「RUN_START 以後の最新の `judiciary_down` に `judiciary_restored` が続いていない」を足す |
+| 9 | medium | §5 案①：dry-run は `run_worker` に到達せず、許可ルールの一覧を観測できない | `allow_rules_for <ticket>` を関数に切り出し（`files_allowed` → `case /*\|*..*)` の後で区切りごとに `[`/`]` を含むものを `*` に → `PROTECTED_RE` に一致すれば票を取らない）、dry-run の行と `lane_ev allow <rule>` に出す。「票を取らない」は `worktree add` の前のフィルタで。bash 3.2 で動く書き方。前検査（`[[ "$f" == "$a" ]]` は引用で文字どおり）の主張は正しい |
+| 10 | minor | §4：差分は作業ツリー対 BASE で 4000 行で切る既存の規則との重ね方、消えたファイル・バイナリ、X2（Codex が `judge.sh --emit-input` を使う）との関係 | 参考は `judge.sh` の INPUT に組み込む（§4-4 は自動で満たす）。一覧は `git diff --name-only "$BASE"`、削除・バイナリは「省略」1行。64KB/256KB と 4000 行の順序を明記。C3 に「差分の外のコメントにマーカー」の陽性／陰性の対照（(i)/(ii) で期待が変わる） |
+| 11 | minor | 保護パスの追加先は 4 か所（フックの `isProtectedRel`・`BASH_PROTECTED_TOKENS`、gate-runner と night-runner の別々の `PROTECTED_RE`） | §6 に 4 か所を列挙 |
+| 12 | minor | 新しい漏えいはない（裁定の存在と理由は票の §6 に既出、`disagreements` は `_board.json` に既出）。実装の注意：`stopped.since` を `head -n 1` で取ると理由が混ざる、`stop_id` の PID と欠けた道具の名は出さない | ST4 と「出さないもの」に反映。`judiciary.kind` は分類だけで道具の名は gate_events に留める |
+
 ## 8. オーナーに聞くこと
 
-1. §1 の置き方：案 A（追跡しない）か B（main に追跡）か。推奨は A
+1. §1 の置き方：案 A（追跡しない）か B（main に追跡）か。推奨は A（案 B は SPEC §5 の MUST の改正と G10 の注記が要る。§9 の 6）
 2. §1 の規則 4：停止中に裁判所が `kernel-state.json`（と Z3 の `kernel_state.jsonl`）を書くことを SPEC §8 に例外として列挙するか、停止中は書かないか
 3. §1 の `conformance`：`run.mjs --record` で Z3 に結果を残す運用でよいか（オーナーが実行する手順が1つ増える）
 4. §3 の 3：司法が連続3回使えないときの扱いは「新しい申請の処理をやめ周回は続ける（STOP とは別）」でよいか
