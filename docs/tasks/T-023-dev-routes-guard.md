@@ -1,7 +1,7 @@
 ---
 id: T-023
 title: 開発用ルート（seed・capture-fixtures）の門を capture-extras と同じにし、整理の fixture の採取を合成データだけにする（別サイトからの seed --reset と、今の DB のメモの外部送信を塞ぐ）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [約束6（漏えい防止）, M7-1, M4-4, D-56①]   # 記録用。司法には渡さない
@@ -85,3 +85,5 @@ depends_on: [T-020]
 2. `captureFixtures` の材料をメモリの seed だけにすると、「実際のメモで fixture を採る」ことはできなくなる（元から合成データだけが前提）。これでよいか
 
 - 2026-11-06T06:38:43+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-06T06:47:21+0900 release: status → merged（main=0ea5720107b4。夜間の判定に合格した候補 d741227f4ad2 を、オーナーが朝に承認して統合）
