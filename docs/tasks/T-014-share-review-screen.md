@@ -1,7 +1,7 @@
 ---
 id: T-014
 title: S-3 共有候補の確認の画面（承認・編集して承認・却下、抽象化の案、記録と取り下げ。M9・M6-3 の画面）
-status: blocked
+status: in_progress
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M9-1, M9-2, M9-4, M9-5, M6-3, M6-4, D-56]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1.2
 time_limit_min: 75
 security_review: false         # API・DB に触れない。画面だけ
 unattended: false
-branch: worktree-agent-a0d1d1ef8f90c7f73   # 作業員のブランチ（main 721b925 以降から）。統合キュー（p0.3.1）により main から分岐したまま申請
-worker: W12
+branch: worktree-agent-a39f593f96687a427   # 差し戻し対応の作業員のブランチ（d0143bc を cherry-pick）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W13
 files_allowed:
   - src/components/SummaryActions.tsx      # 「チームに共有する」への導線を1つ足すだけ
   - src/components/ShareReview.tsx         # 新設：S-3 の本体
@@ -86,3 +86,5 @@ depends_on: [T-010, T-011]
 - 2026-11-06T01:05:30+0900 gate-runner: judge と Codex が minor の指摘で分かれた。厳しい側の指摘を残して統合（judge=APPROVED, codex=CHANGES_REQUIRED）
 
 - 2026-11-06T01:07:36+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
+- 01:10 オーナーの裁定（立法補佐の伝達）：修正。Codex の指摘は major 1件（A3 の 3）。`ShareReview.tsx` で抽象化の案と「選んだ案で置き換える」が `c.stale` の分岐より前に描画され、古い候補でも置き換えの操作が残る。直し方：stale のときは抽象化の案・置き換え・承認・却下の操作をどれも出さない。§2 は変えない
+- 01:11 行政の長が W13 を起動（worktree `agent-a39f593f96687a427`）。d0143bc を cherry-pick し、stale のときは案・プレビュー・置き換え・3つのボタン・`flagged_body` の確認ボタンを出さず、注意書き2つと本文と A3 の 3 の文だけにして1コミットに amend する指示。W12 の worktree `agent-a0d1d1ef…` は触らない
