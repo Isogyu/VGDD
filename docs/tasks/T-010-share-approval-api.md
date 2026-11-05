@@ -1,7 +1,7 @@
 ---
 id: T-010
 title: 共有前の本人確認の裏側（共有候補の作成・承認・編集して承認・却下・取り下げ・記録。M9 の裏側）
-status: ready
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M9-1, M9-2, M9-3, M9-5, M6-1, D-56]   # 記録用。司法には渡さない
@@ -94,3 +94,5 @@ depends_on: []
 ## 6. 記録
 
 （統合後に追記）
+
+- 2026-11-05T22:50:56+0900 night-runner: 作業員の実装を前検査で確認（HEAD 6525714）。status → review で再申請（試行 1）
