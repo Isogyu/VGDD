@@ -92,7 +92,9 @@ front_list() { # ticket, key → 配列の要素（- で始まる行）
 RUN_TOUCHED=""   # p0.4.0：この周回で gate-runner 自身が書き換えた票（記録のコミットはこれだけに限る。OBS-044）
 ticket_dirty() { # rel → 0（真）＝ほかの誰かのコミットしていない変更が票にある。この周回に自分が書いた票は自分の変更として除く
   case " $RUN_TOUCHED " in *" $1 "*) return 1;; esac
-  ! git -C "$REPO" diff --quiet HEAD -- "$1" 2>/dev/null
+  # 未追跡の票も書きかけとみなす。git status が失敗したら書きかけとみなす（fail-closed。Codex の指摘 p0.4.2c #1）
+  local st; st="$(git -C "$REPO" status --porcelain --untracked-files=all -- "$1" 2>/dev/null)" || return 0
+  [ -n "$st" ]
 }
 dirty_wait() { # task, rel：書きかけのある票の申請は処理しない（判定も記録も統合もせず、申請を残す）
   # p0.4.2（OBS-050）：p0.4.0 までは記録だけして票を書き換え、書きかけが gate-runner の名前で main に入った。
@@ -278,6 +280,8 @@ process_request() {
     fail "$task" "セキュリティ審査が差し戻し" && mv "$req" "$DONE_DIR/"; return
   fi
   if [ "$NO_CODEX" -eq 0 ] && [ "$jv" != "$cv" ]; then
+    # p0.4.2：不一致・裁定の記録の前に書きかけを確かめる（待つなら何も記録しない。Codex の指摘 p0.4.2c #3）
+    if ticket_dirty "docs/tasks/$(basename "$t")"; then dirty_wait "$task" "docs/tasks/$(basename "$t")"; return; fi
     # 不一致：critical・major の有無が分かれたら blocked。minor だけなら厳しい側の指摘を票に残して統合（D-47③）
     local jsev csev
     jsev="$(jq -r '[.judge.findings[]? | select(.severity=="critical" or .severity=="major")] | length' "$jfile" 2>/dev/null || echo 0)"
@@ -310,10 +314,11 @@ process_request() {
   # p0.3.1：--hold（夜間）では統合しない。合格した候補を Z3 に記録し、朝にオーナーが release.sh で確かめて統合する（約束9・11）
   if [ "$HOLD" -eq 1 ]; then
     git -C "$REPO" update-ref "refs/vgdd/held/$task" "$candidate"   # 候補のコミットを残しておくための参照（中身の照合は Z3 の記録で行う）
+    # p0.4.2：票の記録に成功したときだけ held を確定し、申請を移す（書きかけが生じていれば申請を残す。Codex の指摘 p0.4.2c #2）
+    set_ticket_status "$task" "review" "判定に合格（judge=$jv codex=${cv}）。夜間のため統合せず、朝のオーナーの承認を待つ" || return
     jq -nc --arg ts "$(ts)" --arg t "$task" --arg r "$actual" --arg c "$candidate" --arg m "$main_sha" --arg j "$jv" --arg x "$cv" \
       '{ts:$ts,task:$t,request:$r,candidate:$c,main_at_check:$m,judge:$j,codex:$x}' >> "$Z3/evidence/held.jsonl"
     log_event "held" "$task" "\"request\":\"${actual:0:12}\",\"candidate\":\"${candidate:0:12}\",\"judge\":\"$jv\",\"codex\":\"$cv\""
-    set_ticket_status "$task" "review" "判定に合格（judge=$jv codex=${cv}）。夜間のため統合せず、朝のオーナーの承認を待つ"
     mv "$req" "$DONE_DIR/"
     echo "  ⏸ $task は合格。朝のオーナーの承認を待つ（候補 ${candidate:0:12}）"
     return
@@ -335,7 +340,8 @@ process_request() {
     fail "$task" "fast-forward できない（想定外。候補 ${candidate:0:12} が main を親に持たない）" && mv "$req" "$DONE_DIR/"; return
   fi
   local merged; merged="$(git -C "$REPO" rev-parse --short=12 HEAD)"
-  set_ticket_status "$task" "merged" "main=$merged judge=$jv codex=$cv"
+  # p0.4.2：統合は取り消さない。直前の確認の後に書きかけが生じて票に書けなければ、その事実を記録する（オーナーが票を merged に直す）
+  set_ticket_status "$task" "merged" "main=$merged judge=$jv codex=$cv" || log_event "ticket_status_unwritten" "-" "\"for\":\"$task\",\"status\":\"merged\",\"main\":\"$merged\""
   log_event "merged" "$task" "\"main\":\"$merged\",\"judge\":\"$jv\",\"codex\":\"$cv\""
   update_board
   # p0.2.3：記録のコミットは1回の処理の最後にまとめる。ここでコミットすると main が進み、
