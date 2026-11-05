@@ -66,3 +66,5 @@ S-3（T-014 の `ShareReview`）で、本人が押したときだけ、共有候
 
 - 2026-11-06T01:33:49+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=CHANGES_REQUIRED/1 件, codex=APPROVED/0 件）。オーナーの裁定へ）
 - 01:39 オーナーの裁定（立法補佐の伝達）：merge。judge の指摘は、AI の区画を出す条件（T-014 の `stale` の早期 return）が差分の外にあって見えなかったための誤検知。Codex は APPROVED。行政の長が `status: review` に戻して同じ a921350 を再申請（コードの変更なし）
+
+- 2026-11-06T01:41:55+0900 gate-runner: judge と Codex が分かれたが、オーナーの裁定（統合）により進める：AI の区画は描画の最後の return の中にあり、その前の早い戻り（status が pending でない・stale）で決定済み・古い候補は別の画面を返す（T-014 で統合済みの行のため差分に入らず、judge から見えなかった）。結果の反映も pending かつ stale でないときだけ。Codex の judge は APPROVED
