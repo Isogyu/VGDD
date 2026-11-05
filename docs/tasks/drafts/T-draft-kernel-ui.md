@@ -2,18 +2,19 @@
 id: T-draft-kernel-ui
 title: 統治のライブ画面に「Kernel」の区画を足す（法律の版・稼働／停止・成立条件①〜⑤の強制と試験・承認済みの仕様・held・裁定・判定と不一致・ハッシュチェーン）
 status: draft
-requirements: [A1, A2, A3, A4, A5, A6, A7, A8]   # この票の §2（requirements_source: ticket）
+requirements: [A1, A2, A3, A4, A5, A6, A7, A8, A9]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-55①, D-59③, ADR-017, ADR-028]   # 記録用。司法には渡さない
 proposal_from: 2026-11-06 02:2x 行政の長の下書き（28_night_plan_max.md §1 B）。前提は改正案 p0.4.3 §1（裁判所が docs/governance/kernel-state.json を書き出す）。立法補佐が仕上げ、オーナーの approve-spec の後に着手
-estimate_h: 1.2
-time_limit_min: 75
+estimate_h: 1.3
+time_limit_min: 80
 security_review: false         # 読むのは docs/ の下の JSON だけ。API・DB・外部に触れない
 unattended:
 branch: null
 worker: null
 files_allowed:
-  - src/lib/kernel-state.ts                # 新設：kernel-state.json の読み込みと検証（純粋関数＋読み込み）
+  - src/lib/kernel-state-schema.ts         # 新設：形の検証と表示用の整形（純粋関数だけ。node:fs を使わない。画面からも読む）
+  - src/lib/kernel-state.ts                # 新設：ファイルの読み込み（node:fs）
   - src/lib/kernel-state.test.ts           # 新設
   - src/app/api/governance/kernel/route.ts # 新設：GET
   - src/components/KernelPanel.tsx         # 新設：Kernel の区画
@@ -32,12 +33,12 @@ files_forbidden:
   - merge-requests/**
   - package.json
   - package-lock.json
-depends_on: [kernel-p0.4.3]   # 改正案 p0.4.3 §1 の書き出しが法律として反映されてから（ファイルがないときの表示は先に作れる）
+depends_on: [kernel-p0.4.3]   # 改正案 p0.4.3 §1 がオーナーに承認され、kernel-state.json の形（vgdd.kernel-state.v1）が固定されてから。形が変わればこの票は差し替える（strict で検証するため、項目の追加1つで state 全体が null になる）
 ---
 
 ## 1. 目的
 
-デモの3分の中で「AI が憲法と法律のもとで動いた証拠」を**5秒で**伝える。統治のライブ画面（`/governance`、T-013）の先頭に「Kernel」の区画を足し、裁判所が書き出す `docs/governance/kernel-state.json`（改正案 p0.4.3 §1。表示用の写し、判断の根拠にしない）を読んで、法律の版・**稼働／停止中**の大きな表示・成立条件①〜⑤ごとの「どう強制しているか」と適合性テストの件数・承認済みの仕様・held・裁定・判定と不一致・ハッシュチェーンの検証結果を出す。生のログは出さない。審査：深さと実行20（統制の実在）、デモ25。
+デモの3分の中で「AI が憲法と法律のもとで動いた証拠」を**5秒で**伝える。統治のライブ画面（`/governance`、T-013）の先頭に「Kernel」の区画を足し、裁判所が書き出す `docs/governance/kernel-state.json`（改正案 p0.4.3 §1。**表示用の写し。判断の根拠にしない**）を読んで、法律の版・**稼働／停止中**の大きな表示・成立条件①〜⑤ごとの「どう強制しているか」と適合性テストの件数・承認済みの仕様・held・裁定・判定と不一致・ハッシュチェーンの検証結果を出す。生のログは出さない。審査：深さと実行20（統制の実在）、デモ25。
 
 ### 置き方の案（2つ。推奨は①）
 
@@ -52,38 +53,52 @@ release.sh は統合の後に `_board.json` を作り直さない（次の gate-
 
 ## 2. 受け入れ条件
 
-- A1. `src/lib/kernel-state.ts` に `pickKernelState(json: unknown): KernelState | null` を export する。zod の **strict** で `vgdd.kernel-state.v1` を検証し、合わなければ `null`。項目は次のとおり（改正案 p0.4.3 §1 の表に合わせる。ここに**ない項目があれば strict で落ちる**）：`schema: "vgdd.kernel-state.v1"`、`generated_at: string`、`kernel_version: string`、`policy_version: string`、`stopped: { active: boolean; since: string | null }`、`judiciary: { status: "ok" | "unavailable" | "down"; kind: "preflight_failed" | "judiciary_unavailable" | null; since: string | null }`、`approvals: { task: string; current: boolean; approved_at: string }[]`、`held: { task: string; since: string }[]`、`rulings: { count: number; tasks: string[] }`、`annulments: { count: number }`、`verdicts: { count: number; by_task: Record<string, { judge: "APPROVED" | "CHANGES_REQUIRED" | null; codex: "APPROVED" | "CHANGES_REQUIRED" | null; security: "APPROVED" | "CHANGES_REQUIRED" | null; at: string }> }`、`disagreements: { count: number; tasks: string[] }`、`evidence: { records: number; chain_ok: boolean; checkpoint_at: string | null; last_record_at: string | null }`、`conformance: { passed: number; total: number; impl: string; at: string } | null`。`by_task` の鍵は `^T-\d{3}$` に合うものだけ残し、合わない鍵は捨てる（`Object.prototype` の鍵を拾わないよう、結果は `Map<string, …>` か `Object.create(null)` で持つ）
-- A2. `src/lib/kernel-state.ts` に `loadKernelState(root = process.cwd()): KernelState | null` を export する。読むのは `<root>/docs/governance/kernel-state.json` の1か所だけ。`src/lib/governance.ts` と同じく、`lstat` で確かめてシンボリックリンクなら「ない」として扱い、`O_NOFOLLOW` で開き、**1MB を超えるファイルは読まない**（`null`）。パスの組み立てに外からの入力は使わない。読めない・JSON でない・検証に落ちる、のどれも `null`
-- A3. `GET /api/governance/kernel` を新設する。引数を取らず、`await connection()` の後に 200 `{ state: loadKernelState() }`（`state` は `null` でありうる）。例外は 500 `{ error: "kernel_unavailable" }`（例外の本文を応答に入れない）
-- A4. `src/components/KernelPanel.tsx`（クライアント部品）は、開いたときに `fetch("/api/governance/kernel", { cache: "no-store" })` で取り、次を表示する。`state` が `null`（ファイルがない・読めない・形が違う）なら、区画の中に「Kernel の状態の書き出しがありません（裁判所が稼働していないか、この環境では公開していません）」の1行だけを出し、下の 1〜7 は出さない：
-  1. **稼働／停止中**：`stopped.active` が false なら「稼働中」（emerald）、true なら「停止中（<since> から）」（red）。区画の中で最も大きい文字（`text-2xl` 以上）。`judiciary.status` が `ok` でなければ、その横に「司法の道具が使えません（<kind>）」（amber）
-  2. 法律の版：「Kernel <kernel_version>・フック <policy_version>」
-  3. **成立条件①〜⑤の表**（`docs/kernel.md` §3 の表を生きた数字で）。行は固定の5行で、列は「成立条件・どう強制しているか（固定の文）・いまの数字」。いまの数字は次のとおり：①役割分離＝`conformance` があれば「適合性テスト <passed>/<total>（<impl>、<at>）」、なければ「未記録」②仕様の統治＝「承認済み <approvals のうち current が true の数> 票」③独立司法＝「判定 <verdicts.count> 件、不一致 <disagreements.count> 件」④Kernel による強制＝「held <held.length> 件、裁定 <rulings.count> 件、取り消し <annulments.count> 件」⑤証跡＝「記録 <evidence.records> 件、ハッシュチェーン <chain_ok ? 改ざんなし : 不整合>、最後のチェックポイント <checkpoint_at か —>」
-  4. 承認済みの仕様の一覧：`approvals` を `approved_at` の新しい順に、票・承認日時（`MM/DD HH:MM`）・`current` が false なら「仕様が変わった（承認し直しが要る）」のバッジ
-  5. held・裁定・取り消し：`held` の票と `since`、`rulings.tasks`、`annulments.count`
-  6. 判定の一覧：`verdicts.by_task` を票の昇順に、judge・Codex・security の結論を3列（`null` は「—」）、`disagreements.tasks` に入る票は行を amber に
-  7. 注意の1行（常に表示）：「生のログは公開していない。ここにあるのは裁判所が書き出した件数と結論だけ」
-  失敗（応答が 2xx でない・通信の失敗・`state` の形が違う）は「Kernel の状態を読めませんでした」の1行
-- A5. `src/components/GovernanceView.tsx` の見出し（`<header>`）の直後、「統治の数字」の `<section>` の前に `<KernelPanel />` を1つ差し込む。それ以外（既存の区画・文・API の呼び出し）は変えない。`KernelPanel` は自分で fetch するので、`GovernanceView` の `data` には触れない
-- A6. `KernelPanel` は `@/lib/kernel-state` を**型だけ** `import type` で使い、実行時の import はしない（`node:fs` を使うモジュールのため）。文字列をキーにする辞書は `Map` で持つ。`dangerouslySetInnerHTML`・`console`・`localStorage` を使わない。表示する文字列（票の ID・版・時刻）は React の文字列としてだけ描画する
-- A7. `src/lib/kernel-state.test.ts` に、下の①〜⑦を**それぞれ1件以上の `it(`**で試す（`loadKernelState` は一時ディレクトリの `root` で）：①正しい JSON が通り、各項目が入る ②未知の項目が1つあると `null`（strict）③`by_task` に `constructor`・`__proto__`・`T-1`（3桁でない）の鍵があると捨てられ、`T-015` は残る ④ファイルがないと `null`、シンボリックリンクなら `null` ⑤1MB 超は `null` ⑥JSON でないと `null` ⑦`stopped.active: true` と `judiciary.status: "down"` の値がそのまま入る（表示の分岐の前提）
-- A8. `npm run -s test`（既存の試験のすべて）・`npm run -s typecheck`・`npm run -s lint` が通る（決定論的な監査の結果で確かめる）。差分のファイルは次の5つだけ：`src/lib/kernel-state.ts`（新設）、`src/lib/kernel-state.test.ts`（新設）、`src/app/api/governance/kernel/route.ts`（新設）、`src/components/KernelPanel.tsx`（新設）、`src/components/GovernanceView.tsx`
+- A1. `src/lib/kernel-state-schema.ts`（**`node:fs` を import しない**）に `pickKernelState(json: unknown): KernelState | null` を export する。手順：(1) `json` がオブジェクト（`null`・配列でない）でなければ `null` (2) `json.verdicts.by_task` がオブジェクトなら、`Object.entries` で鍵と値を取り出し、鍵が `^T-\d{3}$` に合うものだけを `Map` に移す（合わない鍵は捨てる。全体は `null` にしない）。zod には `by_task` を除いた形を渡す (3) zod の **strict** で次を検証し、合わなければ `null`。型（zod 式）：
+  - `schema: z.literal("vgdd.kernel-state.v1")`、`generated_at: Iso`、`kernel_version: Short`、`policy_version: Short`
+  - `stopped: z.object({ active: z.boolean(), since: Iso.nullable() }).strict()`
+  - `judiciary: z.object({ status: z.enum(["ok","unavailable","down"]), kind: z.enum(["preflight_failed","judiciary_unavailable"]).nullable(), since: Iso.nullable() }).strict()`、refine：`status === "ok"` なら `kind === null`、そうでなければ `kind !== null`
+  - `approvals: z.array(z.object({ task: TaskId, current: z.boolean(), approved_at: Iso }).strict()).max(500)`
+  - `held: z.array(z.object({ task: TaskId, since: Iso }).strict()).max(500)`
+  - `rulings: z.object({ count: Count, tasks: z.array(TaskId).max(500) }).strict()`、`annulments: z.object({ count: Count }).strict()`
+  - `verdicts: z.object({ count: Count }).strict()`（`by_task` は (2) で別に扱う。各値は `z.object({ judge: Verdict, codex: Verdict, security: Verdict, at: Iso }).strict()` で1件ずつ検証し、落ちた値は捨てる）
+  - `disagreements: z.object({ count: Count, tasks: z.array(TaskId).max(500) }).strict()`
+  - `evidence: z.object({ records: Count, chain_ok: z.boolean(), checkpoint_at: Iso.nullable(), last_record_at: Iso.nullable() }).strict()`
+  - `conformance: z.object({ passed: Count, total: Count, impl: Short, at: Iso }).strict().nullable()`、refine：`passed <= total`
+  - 補助：`Iso = z.string().min(10).max(40)`、`Short = z.string().min(1).max(40)`、`TaskId = z.string().regex(/^T-\d{3}$/)`、`Count = z.number().int().min(0).max(1_000_000)`、`Verdict = z.enum(["APPROVED","CHANGES_REQUIRED"]).nullable()`
+  - 返り値 `KernelState` は上の形で、`verdicts.by_task` だけ `ReadonlyMap<string, { judge; codex; security; at }>`
+- A2. `src/lib/kernel-state-schema.ts` に純粋関数 `summarizeKernel(state: KernelState, now: Date): KernelSummary` を export する。`KernelSummary` は：`approvedCurrent: number`（`current` が true の件数）、`approvalsSorted: KernelState["approvals"]`（`approved_at` の文字列の降順、同じなら `task` の昇順）、`verdictRows: { task; judge; codex; security; at; disagreed: boolean }[]`（`by_task` を `task` の昇順、`disagreed` は `disagreements.tasks` に含まれるか）、`heldCount: number`（`held.length`）、`rulingCount: number`（`rulings.tasks.length`）、`stale: boolean`（`generated_at` を `Date` にして `now` との差が **10 分**を超えるか、`Date` にできなければ true）。表示に使う件数は**配列の長さ**を使い、`count` は使わない（`count` と長さが食い違っても画面は長さ）
+- A3. `src/lib/kernel-state.ts` に `loadKernelState(root = process.cwd()): KernelState | null` を export する。読むのは `<root>/docs/governance/kernel-state.json` の1か所だけ。パスの組み立てに外からの入力は使わない。手順：`lstat` でシンボリックリンクなら `null` → `O_RDONLY | O_NOFOLLOW` で開く → `fstat` で大きさが **1,048,576 バイトを超えれば** `null`（ちょうど 1,048,576 は読む）→ 読んで `JSON.parse` → `pickKernelState`。どの段階の失敗も `null`（例外の本文は使わない）。`src/lib/governance.ts` の補助関数は export されていないので**写す**（`governance.ts` は変えない）
+- A4. `GET /api/governance/kernel` を新設する。引数を取らず、`await connection()` の後に 200 `{ state: loadKernelState() }`（`state` は `null` でありうる）。例外は 500 `{ error: "kernel_unavailable" }`（例外の本文を応答に入れない）
+- A5. `src/components/KernelPanel.tsx`（クライアント部品）は、開いたときに**1回だけ** `fetch("/api/governance/kernel", { cache: "no-store", signal })` で取り（再読み込みのボタンは置かない。unmount で `AbortController` の `abort()`）、応答の `state` を **`pickKernelState` で検証し直す**（`@/lib/kernel-state-schema` を実行時に import。`@/lib/kernel-state` は import しない）。`null`（ファイルがない・読めない・形が違う）なら、区画の中に「Kernel の状態の書き出しがありません（裁判所が稼働していないか、この環境では公開していません）」の1行だけを出す。そうでなければ `summarizeKernel(state, new Date())` の結果で次を出す：
+  1. **書き出し日時**：「書き出し：<generated_at を JST の MM/DD HH:MM>」。`stale` が true なら横に「古い写しです（10分以上更新がありません）」（amber）
+  2. **稼働／停止中**：`stopped.active` が false なら「稼働中」（emerald）、true なら「停止中（<since の MM/DD HH:MM> から）」（red）。区画の中で最も大きい文字（`text-2xl` 以上）。`judiciary.status` が `ok` でなければ、その横に「司法の道具が使えません（<kind の日本語：preflight_failed＝起動時の点検で不足、judiciary_unavailable＝呼び出しの失敗>）」（amber）
+  3. 法律の版：「Kernel <kernel_version>・フック <policy_version>」
+  4. **成立条件①〜⑤の表**（`docs/kernel.md` §3 の表を生きた数字で）。行は固定の5行、列は「成立条件・どう強制しているか（固定の文）・いまの数字」。いまの数字：①役割分離＝`conformance` があれば「適合性テスト <passed>/<total>（<impl>、<at の MM/DD HH:MM>）」、なければ「未記録」②仕様の統治＝「承認済み <approvedCurrent> 票」③独立司法＝「判定 <verdictRows.length> 件、不一致 <disagreements.tasks.length> 件」④Kernel による強制＝「held <heldCount> 件、裁定 <rulingCount> 件、取り消し <annulments.count> 件」⑤証跡＝「記録 <evidence.records> 件、ハッシュチェーン <chain_ok ? 改ざんなし : 不整合>、最後のチェックポイント <checkpoint_at の MM/DD HH:MM か —>」
+  5. 承認済みの仕様の一覧：`approvalsSorted` を、票・承認日時（MM/DD HH:MM）・`current` が false なら「仕様が変わった（承認し直しが要る）」のバッジ
+  6. held・裁定・取り消し：`held` の票と `since`、`rulings.tasks`、`annulments.count`
+  7. 判定の一覧：`verdictRows` を表に（judge・Codex・security の3列。`null` は「—」。`disagreed` の行は amber）
+  8. 注意の1行（常に表示）：「生のログは公開していない。ここにあるのは裁判所が書き出した件数と結論だけ」
+  失敗（応答が 2xx でない・通信の失敗・`state` が検証に落ちる）は「Kernel の状態を読めませんでした」の1行。**日時の整形**：JST に固定し、`Date` にできない文字列は「—」（生の文字列は出さない）
+- A6. `src/components/GovernanceView.tsx` の見出し（`<header>`）の直後、「統治の数字」の `<section>` の前に `<KernelPanel />` を1つ差し込む。それ以外（既存の区画・文・API の呼び出し）は変えない。`KernelPanel` は自分で fetch するので、`GovernanceView` の `data` には触れない
+- A7. `KernelPanel` が実行時に import してよい `@/lib` は `kernel-state-schema` と `time` だけ。`@/lib/kernel-state`（`node:fs`）は import しない。文字列をキーにする辞書は `Map` で持つ。`dangerouslySetInnerHTML`・`console`・`localStorage` を使わない。表示する文字列は React の文字列としてだけ描画する。**`src/lib/kernel-state.ts`・`kernel-state-schema.ts` を import するのは、この票の新設ファイルと `KernelPanel` だけ**（ほかのモジュールが状態を読んで判断に使う経路を作らない）
+- A8. `src/lib/kernel-state.test.ts` に、下の①〜⑨を**それぞれ1件以上の `it(`**で試す（`loadKernelState` は一時ディレクトリの `root` で）：①正しい JSON が通り、各項目が入る ②未知の項目が1つあると `null`（strict）③`by_task` に `constructor`・`__proto__`・`T-1`・`T-draft-x` の鍵があると捨てられ、`T-015` は残り、結果は `Map` で `Object.prototype` の鍵を持たない ④ファイルがないと `null`、シンボリックリンクなら `null` ⑤ちょうど 1,048,576 バイトは読み、1,048,577 バイトは `null` ⑥JSON でないと `null` ⑦`judiciary.status: "ok"` で `kind` が非 `null` なら `null`、`conformance.passed > total` なら `null`（refine）⑧`summarizeKernel`：`approvedCurrent` の数、`approvalsSorted` が降順で同時刻は `task` の昇順、`verdictRows` が `task` の昇順で `disagreed` が付く、`generated_at` が 11 分前なら `stale` が true で 9 分前なら false、`Date` にできない `generated_at` は true ⑨`stopped.active: true` と `judiciary.status: "down", kind: "judiciary_unavailable"` の値がそのまま入る
+- A9. `npm run -s test`（既存の試験のすべて）・`npm run -s typecheck`・`npm run -s lint` が通る（決定論的な監査の結果で確かめる）。差分のファイルは次の6つだけ：`src/lib/kernel-state-schema.ts`（新設）、`src/lib/kernel-state.ts`（新設）、`src/lib/kernel-state.test.ts`（新設）、`src/app/api/governance/kernel/route.ts`（新設）、`src/components/KernelPanel.tsx`（新設）、`src/components/GovernanceView.tsx`
 
 ## 3. 開発用テスト
 
-- `kernel-state.test.ts`：A7 の観点。画面はユーザー役が統合の後に確かめる（ファイルがないときの1行、裁判所が書き出した後の表示、`kernel-stop.sh` の後に「停止中」が出ること＝K2 の本番の確認を兼ねる）
+- `kernel-state.test.ts`：A8 の観点。画面はユーザー役が統合の後に確かめる（ファイルがないときの1行、裁判所が書き出した後の表示、`kernel-stop.sh` の後に「停止中」が出ること＝K2 の本番の確認を兼ねる、裁判所を止めて 10 分後に「古い写しです」が出ること）
 - デモの5秒：`/governance` を開いた直後に「稼働中」と「適合性テスト N/N」が見える
 
 ## 4. 手順の案
 
 1. `npm ci --cache "$TMPDIR/npm-cache"` を単独のコマンドで最初に1回
-2. 読み込みと検証は `src/lib/governance.ts` の `pickSummary`・`readJson`（lstat・O_NOFOLLOW・1MB）の形に合わせる。`governance.ts` は変えない（同じ補助関数が要れば `kernel-state.ts` に写す）
-3. 見た目は `GovernanceView` の `Tile` に合わせる（zinc 系、稼働は emerald、停止は red、司法の注意は amber）
+2. 読み込みは `src/lib/governance.ts` の `readJson`（lstat・O_NOFOLLOW・1MB）の形に合わせて `kernel-state.ts` に写す。`governance.ts` は変えない
+3. 見た目は `GovernanceView` の `Tile` に合わせる（zinc 系、稼働は emerald、停止は red、司法の注意と古い写しは amber）
 4. コミットは1つ。メッセージの先頭は票の ID
 
 ## 5. 統合審査
 
-決定論的な監査＋ judge ＋ Codex judge。要件は main にコミット済みのこの票の §2。`kernel-state.json` の**書き出し**（裁判所側。改正案 p0.4.3 §1）はこの票の範囲外で、法律の反映の後に本番で確かめる。それまでは A4 の「ありません」の1行が出る。
+決定論的な監査＋ judge ＋ Codex judge。要件は main にコミット済みのこの票の §2。`kernel-state.json` の**書き出し**（裁判所側。改正案 p0.4.3 §1）はこの票の範囲外で、法律の反映の後に本番で確かめる。それまでは A5 の「ありません」の1行が出る。
 
 ## 6. 記録
 
@@ -91,10 +106,25 @@ release.sh は統合の後に `_board.json` を作り直さない（次の gate-
 
 ## 7. 点検の記録
 
-**Claude の点検済み、Codex は未点検**（Codex は sandbox の中から呼べない。4:00 から立法補佐が行う）。（点検の後に追記）
+**Claude の点検済み、Codex は未点検**（Codex は sandbox の中から呼べない。4:00 から立法補佐が行う）。点検役：Claude のサブエージェント（ツールなし）。02:2x、指摘 10 件（major 6・minor 4）。対応：
+
+| # | 指摘 | 対応 |
+|---|---|---|
+| 1 | `by_task` の型（Record）と Map の指示が矛盾。zod の record では `__proto__` の汚染を検証の後に捨てることになる | A1 で「zod に渡す前に `Object.entries` で Map へ移す」順に固定。型は `ReadonlyMap` |
+| 2 | 画面側に形を検査する手段がない（型だけの import） | 検証（zod）を `node:fs` を使わない `kernel-state-schema.ts` に分け、画面が実行時に `pickKernelState` で検証し直す（A5・A7）。files_allowed に1ファイル追加 |
+| 3 | 古い写しが「稼働中」と緑で出る | 書き出し日時を常に表示し、10 分超は「古い写しです」（amber）。`stale` は純粋関数で計算（A2・A5-1） |
+| 4 | 画面のロジック（件数・並び）を機械的に確かめられない | `summarizeKernel` を純粋関数に出し、A8 の⑧で試す |
+| 5 | スキーマの型・上限・`T-NNN` の制限が未確定 | A1 を zod 式で全項目、`max(500)`、`TaskId` をすべての票に、`Iso`・`Short`・`Count` の補助型 |
+| 6 | strict と「p0.4.3 で形が変わる」の衝突 | depends_on に「形が固定されてから。変われば票を差し替える」。版を書く |
+| 7 | `judiciary.kind`・`count` と長さ・`passed ≤ total` の整合 | refine を A1 に。表示は配列の長さを使う（A2） |
+| 8 | 日時の書式・タイムゾーン・不正な値 | JST 固定、`Date` にできなければ「—」、同時刻は `task` の昇順（A2・A5） |
+| 9 | `readJson` の再利用か写しか、1MB の境界 | `governance.ts` は export していないので写す。境界は 1,048,576 を読み 1,048,577 は `null`（A3・A8⑤） |
+| 10 | fetch の運用（回数・abort） | 1回だけ、再読み込みなし、unmount で abort（A5） |
+| 整合 | `kernel-state` を他のモジュールが読んで判断に使う経路 | A7 に「import するのは新設ファイルと `KernelPanel` だけ」 |
 
 ## 8. オーナーに聞くこと
 
 1. 置き方は①（`/governance` の先頭に区画）でよいか
-2. `kernel-state.json` の形は改正案 p0.4.3 §1 の表に依る。立法補佐の起草で項目が変われば A1 を合わせる
+2. `kernel-state.json` の形は改正案 p0.4.3 §1 の表に依る。立法補佐の起草で項目が変われば A1 を合わせ、票を差し替える
 3. `_board.json` を release の後に作り直す直し（法律の変更）を p0.4.3 に含めるか
+4. 「古い写し」の閾値 10 分は、裁判所の周回の間隔（既定）に合わせて決める。間隔が違えば変える
