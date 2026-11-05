@@ -1,7 +1,7 @@
 ---
 id: T-019
 title: S-3 に「AI でも確かめる」を置き、AI の候補を決定論的な検出と分けて見せる（M6-2 の画面）
-status: ready
+status: in_progress
 requirements: [A1, A1b, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M6-2, M6-4, M9-1]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 0.5
 time_limit_min: 45
 security_review: false         # API・DB に触れない。画面だけ
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a55eb031f995ad30b   # 作業員のブランチ（main 86972b2 付近から）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W16
 files_allowed:
   - src/components/ShareReview.tsx
 files_forbidden:
@@ -60,3 +60,4 @@ S-3（T-014 の `ShareReview`）で、本人が押したときだけ、共有候
 ## 6. 記録
 
 （統合後に追記）
+- 01:26 行政の長が W16 を起動（worktree `agent-a55eb031f995ad30b`）。仕様はオーナーが 01:11 に approve-spec で承認済み（立法補佐の伝達）。依存の T-014（01:25、65d7173）・T-017（01:04）は release で統合済みで、`ShareReview.tsx` と `ai-check` のルートが main にあることを確認
