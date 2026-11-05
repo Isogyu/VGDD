@@ -15,6 +15,7 @@ worker: null
 files_allowed:
   - src/lib/seed.ts
   - src/lib/seed.test.ts
+  - src/lib/ai/demo.test.ts   # W1 の作業を作業名だけで取っている2か所に user_id の条件を足すだけ（A3）
 files_forbidden:
   - src/lib/db/schema.sql
   - src/lib/sessions.ts
@@ -49,8 +50,9 @@ depends_on: []
   - 初回の投入の試験：`work_sessions` の件数 3 → 4、`notes` 12 → 15、`shared_knowledge` 1 → 2（`session_summaries` は 1 のまま、`insertedTasks` は `["W1", "W2", "W3"]` のまま）
   - M1-4 のヒントの試験：新人A の `teamKnowledge` の件数 1 → 2、新人B の `teamKnowledge` の件数 1 → 2（`teamKnowledge[0].display_name` が「新人A」であることは変えない。承認日時の新しい順なので新人A が先）
   - reset の試験：開始直後の `work_sessions` の件数 4 → 5、`r.reset` の期待値を `{ share_candidates: 0, shared_knowledge: 2, session_summaries: 1, notes: 15, work_sessions: 5 }` に、reset の後の `work_sessions` の件数 3 → 4、`teamKnowledge` の件数 1 → 2
+  - `src/lib/ai/demo.test.ts` の既存の試験で、`SELECT id FROM work_sessions WHERE task_name = ?` で W1（と W2・W3）の作業を取っている2か所（26行目・42行目付近）を、`SELECT id FROM work_sessions WHERE task_name = ? AND user_id = 'newcomer_a'` に変える（先輩C の W1 の作業が先に取れてしまうため。データを足す仕様の変更による。それ以外は変えない）
   - 新しい試験を2件以上足す：①seed の後、`listProcedureSources(DEMO_TASK_W1, db)`（`@/lib/procedure`）が2件で、1件目が先輩C（承認日時の古い順）②先輩C の W1 の作業が終了済みで、メモが3件、2回目の seed で増えない
-- A4. `npm run -s test`（既存の試験と追加分のすべて）・`npm run -s typecheck`・`npm run -s lint` が通る（決定論的な監査の結果で確かめる）。差分のファイルは `src/lib/seed.ts` と `src/lib/seed.test.ts` の2つだけ。メモと共有の本文は A1・A2 の文と1文字も違わない（架空。実在の会社名・人名・製品名を含まない）
+- A4. `npm run -s test`（既存の試験と追加分のすべて）・`npm run -s typecheck`・`npm run -s lint` が通る（決定論的な監査の結果で確かめる）。差分のファイルは `src/lib/seed.ts`・`src/lib/seed.test.ts`・`src/lib/ai/demo.test.ts` の3つだけ。足すメモと共有の本文は A1・A2 の文と1文字も違わない（本文が架空であることは起草の時に立法補佐とオーナーが確かめる。司法が確かめるのは一致だけ）
 
 ## 3. 開発用テスト
 
