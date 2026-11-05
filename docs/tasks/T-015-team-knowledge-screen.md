@@ -1,7 +1,7 @@
 ---
 id: T-015
 title: S-4 チームの知恵の画面（承認済みの共有の一覧と、手順書の原案・判断のポイント。M5・C2 の画面）
-status: review
+status: in_progress
 requirements: [A1, A2, A3, A4, A5, A5b, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M5-1, M5-2, M5-3, M5-4, M9-3, C2, D-62]   # 記録用。司法には渡さない
@@ -75,5 +75,7 @@ depends_on: [T-012]
 
 （統合後に追記）
 - 23:40 行政の長が W6 を起動（worktree `agent-a9b7f50fdcfb584fa`、main 11c86a8 から）。依存の T-012 は 23:25 に release で統合済み。T-014 は依存の T-011 が差し戻し中のため未着手
-- 23:47 W6 の報告：コミット 266083a（新設5ファイル、+442。所要約10分）。test 204（既存 198＋6）・typecheck・lint 合格（警告1件は既存の `vgdd/conformance/run.mjs`）。T-012 の型・応答・`error` 名は §2 と一致。票の解釈：根拠が複数のときは「根拠：」を付けて「、」で並べる、応答に `notice` がなければ T-012 と同じ固定の文を出す、読み直しの後に届いた原案は捨てる。拒否2件（scratchpad への Write、`git -C` の add。どちらも worktree の外・`git -C` の規則どおりで、回避せず worktree 内の plain な git で代替）。画面の描画は未確認（統合後にユーザー役が W1 の流れで確かめる）
-- 23:50 行政の長が差分を確認（`files_allowed` の5ファイルのみ、すべて新設。`listTeamKnowledge` は `shared_knowledge` と `users` だけを読み `withdrawn_at IS NULL`、並びは task_name・approved_at・id の昇順。route は例外で `knowledge_unavailable` だけを返す。部品は `@/lib/procedure`・`@/lib/team-knowledge` を `import type` だけ、`dangerouslySetInnerHTML`・`console`・`localStorage` なし。試験は①〜④に `it(` 6件）。`status: review` で main にコミットし申請（security_review: true。gate-runner `--hold` なら合格は held、統合は release.sh）
+- 23:44 W6 の報告：コミット 266083a（新設5ファイル、+442。所要約10分）。test 204（既存 198＋6）・typecheck・lint 合格（警告1件は既存の `vgdd/conformance/run.mjs`）。T-012 の型・応答・`error` 名は §2 と一致。票の解釈：根拠が複数のときは「根拠：」を付けて「、」で並べる、応答に `notice` がなければ T-012 と同じ固定の文を出す、読み直しの後に届いた原案は捨てる。拒否2件（scratchpad への Write、`git -C` の add。どちらも worktree の外・`git -C` の規則どおりで、回避せず worktree 内の plain な git で代替）。画面の描画は未確認（統合後にユーザー役が W1 の流れで確かめる）
+- 23:45 行政の長が差分を確認（`files_allowed` の5ファイルのみ、すべて新設。`listTeamKnowledge` は `shared_knowledge` と `users` だけを読み `withdrawn_at IS NULL`、並びは task_name・approved_at・id の昇順。route は例外で `knowledge_unavailable` だけを返す。部品は `@/lib/procedure`・`@/lib/team-knowledge` を `import type` だけ、`dangerouslySetInnerHTML`・`console`・`localStorage` なし。試験は①〜④に `it(` 6件）。`status: review` で main にコミットし申請（security_review: true。gate-runner `--hold` なら合格は held、統合は release.sh）
+
+- 2026-11-05T23:48:58+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
