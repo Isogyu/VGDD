@@ -1,7 +1,7 @@
 ---
 id: T-014
 title: S-3 共有候補の確認の画面（承認・編集して承認・却下、抽象化の案、記録と取り下げ。M9・M6-3 の画面）
-status: review
+status: blocked
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M9-1, M9-2, M9-4, M9-5, M6-3, M6-4, D-56]   # 記録用。司法には渡さない
@@ -84,3 +84,5 @@ depends_on: [T-010, T-011]
 - 01:03 行政の長が差分を確認（`files_allowed` の5ファイルのみ。`@/lib/sharing` は `import type` だけ、実行時の `@/lib` は `sensitive`・`abstraction` の2つ、`dangerouslySetInnerHTML`・`console`・`localStorage` の書き込みなし、`DECIDE_FAILURES` は Map、`confirmFlagged` の送り直しと `stale_candidate`・`flagged_body` の分岐、注意書き2つ、2000・500 の事前確認を読んだ）。①の解釈は司法の判断に委ねる。`status: review` で main にコミットし申請
 
 - 2026-11-06T01:05:30+0900 gate-runner: judge と Codex が minor の指摘で分かれた。厳しい側の指摘を残して統合（judge=APPROVED, codex=CHANGES_REQUIRED）
+
+- 2026-11-06T01:07:36+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
