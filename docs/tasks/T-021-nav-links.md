@@ -1,7 +1,7 @@
 ---
 id: T-021
 title: 作業画面の見出しに、チームの知恵・共有の記録・統治のライブ画面への導線を置く
-status: ready
+status: in_progress
 requirements: [A1, A2, A3]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M7-2, M8-2]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 0.2
 time_limit_min: 25
 security_review: false
 unattended: true
-branch: null
-worker: null
+branch: worktree-agent-a78465bf2bc659142   # 作業員のブランチ（main 1b09519 付近から）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W15
 files_allowed:
   - src/components/WorkScreen.tsx
 files_forbidden:
@@ -58,3 +58,4 @@ depends_on: []
 ## 6. 記録
 
 （統合後に追記）
+- 01:17 行政の長が W15 を起動（worktree `agent-a78465bf2bc659142`）。仕様はオーナーが 01:12 に approve-spec で承認済み（立法補佐の伝達）。T-020 と並行（触るファイルは重ならない）

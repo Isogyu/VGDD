@@ -1,7 +1,7 @@
 ---
 id: T-020
 title: デモ用の保存済みの AI 出力（手順書の原案・AI の検出）を実 API で採取する仕組み（M4-4・M8-2 の拡張）
-status: ready
+status: in_progress
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-4, M8-2, M5-1, M6-2, D-62]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 0.7
 time_limit_min: 50
 security_review: true          # 外部 API を呼ぶ開発用のルート
 unattended: true
-branch: null
-worker: null
+branch: worktree-agent-a1db65563f70a6a0c   # 作業員のブランチ（main 1b09519 付近から）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W14
 files_allowed:
   - src/lib/ai/capture-extras.ts               # 新設
   - src/lib/ai/capture-extras.test.ts          # 新設
@@ -76,3 +76,4 @@ API キーのない審査員の環境（デモモード）でも、W1 の手順�
 ## 6. 記録
 
 （統合後に追記）
+- 01:17 行政の長が W14 を起動（worktree `agent-a1db65563f70a6a0c`）。仕様はオーナーが 01:11 に approve-spec で承認済み（立法補佐の伝達）。T-021 と並行（触るファイルは重ならない）
