@@ -1,7 +1,7 @@
 ---
 id: T-009
 title: docs/ideas.md に「その後」の列を足し、M10 で見送った案を追記する（V8 夜間ハーネスの試験運転用の小さな票）
-status: ready
+status: review
 requirements: [A1, A2, A3, A4]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-55, D-37]   # 関連する決定（記録用。司法には渡さない）。約束11（見送った案は docs/ideas.md に残す）
@@ -58,3 +58,5 @@ depends_on: []
 
 （統合後に行政の長が追記）
 - 00:24 立法補佐（Pro）が §2 を確認（1ファイルだけ、表の列と行を値まで指定、差分で判定できる。unattended: true は文書だけの票として妥当）。main に固定（D-49②）
+
+- 2026-11-05T20:24:28+0900 night-runner: 作業員の実装を前検査で確認（HEAD 3ed97a3）。status → review で再申請（試行 1）
