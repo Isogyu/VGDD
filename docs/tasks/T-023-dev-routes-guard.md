@@ -83,3 +83,5 @@ depends_on: [T-020]
 
 1. 機能凍結の前に通すことを認めるか（修正だが新しい振る舞い＝Origin で 403 が入る）
 2. `captureFixtures` の材料をメモリの seed だけにすると、「実際のメモで fixture を採る」ことはできなくなる（元から合成データだけが前提）。これでよいか
+
+- 2026-11-06T06:38:43+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）

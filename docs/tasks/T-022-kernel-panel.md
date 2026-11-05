@@ -159,3 +159,5 @@ release.sh は統合の後に `_board.json` を作り直さない（次の gate-
 3. `_board.json` を release の後に作り直す直し（法律の変更）を p0.4.3 に含めるか
 4. 「古い写し」の閾値 10 分は、裁判所の周回の間隔（既定）に合わせて決める。間隔が違えば変える
 5. Kernel の区画が `/api/governance` の成功に従属する点（A6）を受け入れるか、早期 return の前に置く構造の変更をするか
+
+- 2026-11-06T06:36:35+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
