@@ -10,9 +10,11 @@ set -euo pipefail
 REPO="${VGDD_REPO:-$HOME/tsubuyaki-worklog/app}"; Z3="${VGDD_Z3_DIR:-$HOME/tsubuyaki-z3}"
 git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.sshCommand=ssh "$@"; }
 [ "$(shasum -a 256 "$REPO/.git/config" | cut -c1-64)" = "$(cat "$Z3/evidence/git-config.baseline" 2>/dev/null)" ] || { echo ".git/config が基準値と違う（fail-closed）" >&2; exit 70; }
+[ ! -f "$Z3/STOP" ] || { echo "Kernel の停止中は統合しない（kernel-resume.sh で再開してから。p0.4.0）" >&2; exit 70; }
 [ "$(git -C "$REPO" branch --show-current)" = "main" ] || { echo "main の checkout で実行する" >&2; exit 64; }
 [ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ] || { echo "main に未コミットの変更がある" >&2; exit 64; }
 for task in "$@"; do
+  [ ! -f "$Z3/STOP" ] || { echo "Kernel が停止した。${task} 以降は統合しない" >&2; exit 70; }   # p0.4.0：票ごとに停止を見る（Codex の指摘 #6）
   rec="$(jq -c --arg t "$task" 'select(.task==$t)' "$Z3/evidence/held.jsonl" | tail -n 1)"
   [ -n "$rec" ] || { echo "✗ ${task}：夜間の合格の記録がない" >&2; exit 1; }
   req="$(printf '%s' "$rec" | jq -r .request)"; cand="$(printf '%s' "$rec" | jq -r .candidate)"

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "vgdd.kernel-decision.v1",
+  "title": "Governance Kernel の判定の記録（証拠ストア tool_calls.jsonl の type: tool_call の行）",
+  "description": "誰が（agent_type・cwd・session）、何を（operation・target）要求し、Kernel がどう判定したか（decision）、なぜか（reason）。各行は直前の行の SHA-256（prev_hash）を持ち、ハッシュチェーンになる（ADR-009）。言語に依存しない契約で、policy.mjs はその参照実装。",
+  "type": "object",
+  "required": ["event_id", "seq", "prev_hash", "policy_version", "hook_event", "timestamp", "type", "agent_type", "actor", "cwd", "operation", "target", "decision", "reason"],
+  "properties": {
+    "event_id": { "type": "string", "pattern": "^evt-[0-9]{6,}$" },
+    "seq": { "type": "integer", "minimum": 1 },
+    "prev_hash": { "type": "string", "pattern": "^sha256:(genesis|[0-9a-f]{64})$" },
+    "policy_version": { "type": "string" },
+    "hook_event": { "const": "PreToolUse" },
+    "timestamp": { "type": "string" },
+    "session_id": { "type": ["string", "null"] },
+    "tool_use_id": { "type": ["string", "null"] },
+    "run_id": { "type": ["string", "null"] },
+    "agent_id": { "type": ["string", "null"] },
+    "agent_type": { "type": ["string", "null"], "description": "null は行政の長（本体）" },
+    "actor": { "type": "object", "required": ["kind", "role"] },
+    "cwd": { "type": ["string", "null"] },
+    "repo_root": { "type": ["string", "null"] },
+    "is_worktree": { "type": "boolean" },
+    "git_branch": { "type": ["string", "null"] },
+    "git_head": { "type": ["string", "null"] },
+    "type": { "const": "tool_call" },
+    "operation": { "type": ["string", "null"] },
+    "target": { "type": ["string", "null"] },
+    "decision": { "enum": ["allow", "deny"] },
+    "reason": { "type": "string", "minLength": 1 }
+  }
+}

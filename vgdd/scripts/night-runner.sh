@@ -62,7 +62,8 @@ check_git_config   # p0.3.1c：定義だけで呼ばれていなかった（Code
 
 # ---- 上限（キューの limits。引数が優先） --------------------------------------------------------------
 lim() { jq -r --arg k "$1" --arg d "$2" '.limits[$k] // $d' "$QUEUE"; }
-PARALLEL="${PARALLEL:-$(lim parallel 2)}"; UNTIL="${UNTIL:-$(lim until 06:30)}"
+PARALLEL="${PARALLEL:-$(lim parallel 1)}"   # p0.4.0：既定は逐次（ADR-020。MVP は単一の作業員で逐次。並行はキューで明示したときだけ）
+UNTIL="${UNTIL:-$(lim until 06:30)}"
 MAX_TICKETS="$(lim max_tickets 6)"; MAX_JUDGE="$(lim max_judge_calls 20)"
 MAX_TOK_TICKET="$(lim max_tokens_per_ticket 2000000)"; MAX_TOK_TOTAL="$(lim max_tokens_total 12000000)"
 MIN_FREE_GB="$(lim min_free_gb 3)"
@@ -85,6 +86,8 @@ note() { lane_ev note "$1"; log "$1"; }
 
 # ---- 票の読み取り（gate-runner と同じ関数） ------------------------------------------------------------
 ticket_path() { ls "$REPO"/docs/tasks/"$1"-*.md 2>/dev/null | head -n 1; }
+# p0.4.0：統治の項目（files_allowed）は main にコミットされた票（承認した仕様）から読む。作業ツリーの票は使わない
+main_ticket() { local f="${TMPDIR:-/tmp}/night-ticket-$$-$(basename "$1")"; git -C "$REPO" show "main:docs/tasks/$(basename "$1")" > "$f"; echo "$f"; }
 front() { sed -n '/^---$/,/^---$/p' "$1" | sed -n "s/^$2: *//p" | head -n 1 | sed 's/ *#.*$//'; }
 front_list() {
   awk -v key="$2" '
@@ -120,6 +123,7 @@ judge_calls_tonight() { find "$VERDICTS" -name '*.json' -newer "$QUEUE" 2>/dev/n
 past_until() { [ "$(date +%H:%M)" \> "$UNTIL" ] && [ "$(date +%H)" -lt 12 ]; }
 should_stop() {
   if [ -f "$STOP_FILE" ]; then STOP_REASON="オーナーの停止（STOP ファイル）"; return 0; fi
+  if [ -f "$Z3/STOP" ]; then STOP_REASON="Kernel の停止中（$(head -n 1 "$Z3/STOP")）"; return 0; fi   # p0.4.0：kernel-stop.sh（ADR-027）
   if ! ( check_git_config ) >/dev/null 2>&1; then STOP_REASON="共有の .git/config が基準値と違う（OBS-033・041）"; return 0; fi
   if past_until; then STOP_REASON="時刻 ${UNTIL} を過ぎた"; return 0; fi
   if ! gate_alive; then STOP_REASON="gate-runner が動いていない"; return 0; fi
@@ -158,7 +162,7 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
     # worktree の外を指す項目は許可しない（保護パスは deny・フック・sandbox が別に止める。憲法審査 20261105-202059 の注意）
     case "$f" in /*|*..*) note "${task}: files_allowed の ${f} は worktree の外を指しうるため許可しない"; continue;; esac
     allow+=("Edit(/${wt}/${f})" "Write(/${wt}/${f})")
-  done < <(front_list "$t" files_allowed)
+  done < <(front_list "$(main_ticket "$t")" files_allowed)
   [ "${#allow[@]}" -gt 0 ] || { note "${task}: files_allowed が空のため作業員を起動しない"; return 1; }
   # settings.json の allow は信頼されていない workspace では無視されるため、同じものをここで渡す（広げない）
   allow+=("Bash(git add *)" "Bash(git commit *)" "Bash(npx --no-install *)")
@@ -182,7 +186,7 @@ precheck() { # task, wt → 0 なら申請へ。stdout に理由
   [ "$n" -ge 1 ] || { echo "コミットがない"; return 1; }
   local changed; changed="$(git -C "$REPO" diff --name-only "main...night/$task")"
   printf '%s\n' "$changed" | grep -Eq "$PROTECTED_RE" && { echo "保護パスへの変更: $(printf '%s\n' "$changed" | grep -E "$PROTECTED_RE" | tr '\n' ' ')"; return 1; }
-  local allowed; allowed="$(front_list "$t" files_allowed)"; local outside="" f a okf
+  local allowed; allowed="$(front_list "$(main_ticket "$t")" files_allowed)"; local outside="" f a okf
   while IFS= read -r f; do
     [ -n "$f" ] || continue; okf=0
     while IFS= read -r a; do
@@ -272,6 +276,9 @@ for task in $QUEUE_TASKS; do
   [ "$(front "$t" requirements_source)" = "ticket" ] || { note "${task}: requirements_source が ticket ではない"; SKIPPED=$((SKIPPED+1)); continue; }
   [ "$(front "$t" unattended)" = "true" ] || { note "${task}: unattended: true ではない（オーナーの判断が要る票）"; SKIPPED=$((SKIPPED+1)); continue; }
   depends_merged "$t" || { note "${task}: depends_on が未統合。後に回す"; SKIPPED=$((SKIPPED+1)); continue; }
+  # p0.4.0：仕様がオーナーに承認されていない票は作業員に渡さない（gate-runner も同じ照合で止める。ADR-005・成立条件②）
+  node "$Z3/bin/spec-digest.mjs" --repo "$REPO" --ref main --ticket "docs/tasks/$(basename "$t")" --check "$Z3/evidence/spec_approvals.jsonl" >/dev/null 2>&1 \
+    || { note "${task}: 仕様がオーナーに承認されていない（approve-spec.sh）"; SKIPPED=$((SKIPPED+1)); continue; }
   [ "$TAKEN" -lt "$MAX_TICKETS" ] || { note "1晩の票の上限 ${MAX_TICKETS}"; break; }
   if should_stop; then note "停止: ${STOP_REASON}"; break; fi
   if [ "$DRY" -eq 1 ]; then log "（dry-run）${task} をレーンに割り当てる"; TAKEN=$((TAKEN+1)); continue; fi

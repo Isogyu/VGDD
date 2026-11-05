@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // VGDD Phase 1 — Policy Engine（PreToolUse / PostToolUse / PostToolUseFailure / PermissionDenied フック）
-// policy_version: p0.2.1（本稼働。D-45〜D-47、OBS-012・OBS-013、誤検知の修正 OBS-014）
+// policy_version: p0.4.0（本稼働。D-45〜D-47、OBS-012・OBS-013、誤検知の修正 OBS-014、Governance Kernel の停止 ADR-027）
 //
 // 役割：
 //   1. PreToolUse：すべてのツール呼び出しの直前に動き、保護パスへの操作を拒否し、判定を証拠ストアに1行記録する（type: tool_call）
@@ -42,6 +42,11 @@
 //      (b) 保護語の直前の区切りと、閉じ込め・リンク判定のパス抽出に > < | & ; ( を加える
 //   変更しないもの：引用符の中の `>` は引き続き書き込みの気配と見なす（`sh -c "… > CLAUDE.md"` を止めるため）
 //
+// p0.4.0 の変更点（Governance Kernel。ADR-027・ADR-010、成立条件④）：
+//   - 行政の長が main に直接コミットしてよいのは docs/ の下だけ（judgeHeadMainCommit。ステージと同じコマンドの git add を見る）
+//   - Z3 に STOP があれば（オーナーが kernel-stop.sh で置く）、読み取りのツール（Read・Glob・Grep）以外のすべての操作を拒否する（Bash はすべて拒否）。
+//     読み取りも通常の判定（Z3 の読み取り禁止など）を通す。再開は kernel-resume.sh（チェーン・git の設定・main を確かめてから）
+//
 // 保証できないこと（README に明記する）：
 //   - Bash の判定は文字列照合。パスの分割・変数展開・別名による回避は完全には防げない。書き込みは sandbox の denyWrite で補う
 //   - 人が承認画面で「許可」を押した操作は止められない（記録は残る）
@@ -52,8 +57,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 
-const POLICY_VERSION = 'p0.3.1'; // OBS-013（リンクの実体で判定、作業員の閉じ込め）と OBS-014（誤検知4件の修正）を含む
+const POLICY_VERSION = 'p0.4.0'; // OBS-013（リンクの実体で判定、作業員の閉じ込め）、OBS-014（誤検知4件の修正）、Kernel の停止（ADR-027）を含む
 const HOME = os.homedir();
 const Z3 = process.env.VGDD_Z3_DIR || path.join(HOME, 'tsubuyaki-z3');
 const EVIDENCE = process.env.VGDD_EVIDENCE_PATH || path.join(Z3, 'evidence', 'tool_calls.jsonl');
@@ -341,6 +347,9 @@ function splitSegments(cmd) {
   return segs;
 }
 
+// p0.4.0：git の全体のオプション（-c 鍵=値、--no-pager など）を挟んだ commit も commit として見る。
+//   以前は `git -c user.name=x commit` が main へのコミットの照合をすり抜けた（作者名を偽る経路でもある）
+const GIT_COMMIT_RE = /\bgit\s+((-c|--config-env)\s+\S+\s+|--[\w-]+(=\S+)?\s+|-[pP]\s+)*commit\b/;
 /** ホームの .git と main を守る：git の対象の向け直し、main への統合・参照の書き換えを拒否 */
 function judgeGitScope(command, git, agentType) {
   if (/\bGIT_(DIR|WORK_TREE|COMMON_DIR|INDEX_FILE)=/.test(command)) {
@@ -383,10 +392,55 @@ function judgeGitScope(command, git, agentType) {
     if (git.branch === 'main' && /\bgit\s+(rebase|reset|cherry-pick|am|apply|revert)\b/.test(seg)) {
       return `main 上での git ${seg.match(/\bgit\s+(\w+)/)[1]} は禁止（main の履歴は gate-runner だけが進める）`;
     }
-    if (git.branch === 'main' && agentType && /\bgit\s+commit\b/.test(seg)) {
+    if (git.branch === 'main' && agentType && GIT_COMMIT_RE.test(seg)) {
       return `作業員（${agentType}）が main に直接コミットしようとしている（票のブランチで作業する）`;
     }
+    if (git.branch === 'main' && !agentType && GIT_COMMIT_RE.test(seg)) {
+      const why = judgeHeadMainCommit(command, git);
+      if (why) return why;
+    }
   }
+  return null;
+}
+
+/**
+ * p0.4.0：行政の長が main に直接コミットしてよいのは docs/ の下（票・記録・文書）だけ（成立条件④。Codex の指摘 #16）。
+ * ソースは作業員のブランチから裁判所を通って入る。判定：
+ *   ・commit のセグメントは決まった形だけ（-q・-m・--message・-F・--file・-s・--signoff・-v）。-a・--all・パスの指定・--amend・-i・-o などは拒否
+ *   ・同じコマンドの git add は、対象がすべて docs/ の下のパスのときだけ（-A・.・-u・グロブは拒否）。git rm・git mv・git apply などは拒否
+ *   ・すでにステージされたファイル（git diff --cached）がすべて docs/ の下
+ * git を読めなければ拒否（fail-closed）。コミットの本文は preprocessCommand で MSG に置き換わっている
+ */
+const HEAD_COMMIT_FORM = /^\s*git\s+commit(\s+(-q|--quiet|-s|--signoff|-v|--verbose|-m\s+MSG|--message(=|\s+)MSG|-F\s+\S+|--file(=|\s+)\S+|<<HEREDOC_BODY_REMOVED))*\s*$/;
+function judgeHeadMainCommit(command, git) {
+  const pre = preprocessCommand(command);
+  const docsOnly = (p) => /^docs\/[^*?[\]{}]+$/.test(p.replace(/^\.\//, '')) && !p.includes('..');
+  for (const seg of splitSegments(pre)) {
+    if (!/(^|[\s(])git\s/.test(seg)) continue;
+    if (GIT_COMMIT_RE.test(seg)) {
+      if (!HEAD_COMMIT_FORM.test(seg)) return `行政の長の main へのコミットは「git commit -m …」の形だけ（-a・パスの指定・--amend などは不可）：「${seg.trim().slice(0, 60)}」`;
+      continue;
+    }
+    const add = seg.match(/^\s*git\s+add\s+(.*)$/);
+    if (add) {
+      const paths = add[1].split(/\s+/).filter(Boolean).map((t) => t.replace(/^["']|["']$/g, ''));
+      if (paths.length === 0 || paths.some((t) => t.startsWith('-') && t !== '--') || paths.filter((t) => t !== '--').some((t) => !docsOnly(t))) {
+        return `行政の長が main にコミットしてよいのは docs/ の下だけ。git add の対象が docs/ の外（または -A・. など）：「${seg.trim().slice(0, 60)}」`;
+      }
+      continue;
+    }
+    if (/\bgit\s+(rm|mv|apply|am|checkout|restore|stash|reset|cherry-pick|revert|merge|rebase)\b/.test(seg)) {
+      return `main へのコミットと同じコマンドで git の書き込み（${seg.trim().slice(0, 40)}）をしている`;
+    }
+  }
+  let staged;
+  try {
+    staged = execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-C', git.repo_root, 'diff', '--cached', '--name-only'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 4000 });
+  } catch {
+    return 'ステージされたファイルを確かめられないため、main へのコミットを拒否（fail-closed）';
+  }
+  const outside = staged.split('\n').filter(Boolean).filter((f) => !f.startsWith('docs/'));
+  if (outside.length) return `行政の長が main にコミットしてよいのは docs/ の下だけ。ステージに docs/ の外がある：${outside.slice(0, 3).join(' ')}（ソースは作業員のブランチから裁判所を通す）`;
   return null;
 }
 
@@ -509,12 +563,30 @@ function confinement(input, cwd) {
   return { root: wtRoot ? realish(wtRoot) : null, label: agentType || 'worktree' };
 }
 
+/** p0.4.0：Kernel の停止（ADR-027）。Z3 の STOP の1行目（理由）を返す。STOP は Z3 にあり、エージェントは作れず消せない */
+function kernelStop() {
+  const f = path.join(Z3, 'STOP');
+  if (!fs.existsSync(f)) return null;
+  return (fs.readFileSync(f, 'utf8').split('\n')[0] || '理由なし').slice(0, 200);
+}
+
 function judge(input, projectDir, git) {
   const tool = input.tool_name || '';
   const ti = input.tool_input || {};
   const cwd = input.cwd || process.cwd();
   const agentType = input.agent_type || null;
   const confine = confinement(input, cwd);
+
+  // p0.4.0：停止中は、読み取りのツール（Read・Glob・Grep）以外をすべて拒否する。読み取りも以下の通常の判定を通す。
+  //   Bash は読み取り専用に見えても拒否する。文字列の照合では `sort -o`・`node -e` などの書き込みを見分けきれないため（Codex の指摘 #5）
+  const stop = kernelStop();
+  if (stop) {
+    const readOnly = tool === 'Read' || tool === 'Glob' || tool === 'Grep';
+    if (!readOnly) {
+      return { target: tool === 'Bash' ? String(ti.command || '').slice(0, 200) : ti.file_path || null, decision: 'deny',
+        reason: `Kernel の停止中（${stop}）。読み取り以外の操作はできない。再開はオーナーが kernel-resume.sh で行う` };
+    }
+  }
 
   const expandHome = (p) => (p && (p === '~' || p.startsWith('~/')) ? path.join(HOME, p.slice(1)) : p);
   const abs = (p) => (p ? path.resolve(cwd, expandHome(p)) : null);

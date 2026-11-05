@@ -11,7 +11,8 @@
 #     --no-codex  Codex judge を省く（Codex が使えない環境の試運転用。judge だけで統合する。README に明記すること）
 #
 # 1申請の流れ（1つでも落ちれば統合しない。判定は Z3 の evidence/verdicts/ と gate_events.jsonl に残る）:
-#   1 申請と票の整合（status: review、HEAD が一致）
+#   1 申請と票の整合（status: review、HEAD が一致）。p0.4.0：main の票の仕様がオーナーに承認されている（spec-digest.mjs）
+#   （Kernel の停止中＝Z3 に STOP があるあいだは、申請を処理しない。p0.4.0）
 #   2 統合キュー（p0.3.1 案）：main を含まないブランチは、一時 worktree で「最新の main ＋ 申請の SHA」の候補を作る（衝突なら needs_rebase）。
 #     以後の検査・判定・統合は候補に対して行う。鎖で積まなくてよく、前の票が止まっても後ろの票は止まらない
 #   3 差分が票の files_allowed の中だけ。保護パスが含まれていれば即拒否
@@ -86,8 +87,15 @@ front_list() { # ticket, key → 配列の要素（- で始まる行）
     inlist && !/^  / { inlist=0 }
   ' "$1"
 }
+RUN_TOUCHED=""   # p0.4.0：この周回で gate-runner 自身が書き換えた票（記録のコミットはこれだけに限る。OBS-044）
 set_ticket_status() { # task, status, note
   local t; t="$(ticket_path "$1")"; [ -n "$t" ] || return 0
+  local rel="docs/tasks/$(basename "$t")"
+  # 書き換える前に、ほかの誰かのコミットしていない変更が票にあれば記録する（裁判所の名前で他人の変更を main に入れないため）
+  if ! git -C "$REPO" diff --quiet HEAD -- "$rel" 2>/dev/null; then
+    log_event "ticket_dirty_before_gate" "$1" "\"file\":\"$rel\""
+  fi
+  case " $RUN_TOUCHED " in *" $rel "*) ;; *) RUN_TOUCHED="$RUN_TOUCHED $rel";; esac
   sed -i '' -E "s/^status: .*/status: $2/" "$t"
   printf '\n- %s gate-runner: status → %s%s\n' "$(ts)" "$2" "${3:+（$3）}" >> "$t"
 }
@@ -118,6 +126,9 @@ process_request() {
   local task branch sha reqs trel src_main
   task="$(jq -r '.task' "$req")"; branch="$(jq -r '.branch' "$req")"; sha="$(jq -r '.head' "$req")"
   echo "▶ ${task}（$branch @ ${sha}）"
+  # p0.4.0：この申請の処理は、ここで取った main の完全な SHA に固定する（仕様の照合・差分・候補・司法・統合のすべて）。
+  #   照合の後に行政が未承認の仕様を main にコミットしても、その main では検査しない（Codex の指摘 #4。確認と使用の時刻の差）
+  local main_sha; main_sha="$(git -C "$REPO" rev-parse main)"
   local t; t="$(ticket_path "$task")"
   [ -n "$t" ] || { fail "$task" "票が見つからない" "blocked"; mv "$req" "$DONE_DIR/"; return; }
 
@@ -125,9 +136,14 @@ process_request() {
   [ "$(front "$t" status)" = "review" ] || { fail "$task" "票の status が review ではない（$(front "$t" status)）"; mv "$req" "$DONE_DIR/"; return; }
   # p0.2.1（OBS-015②）：基盤の票は main にコミット済みの票の requirements_source を見る。作業ツリーの票だけが ticket なら差し戻す
   trel="docs/tasks/$(basename "$t")"
-  src_main="$(git -C "$REPO" show "main:$trel" 2>/dev/null | sed -n '/^---$/,/^---$/p' | sed -n 's/^requirements_source: *//p' | head -n 1 | sed 's/ *#.*$//' | tr -d ' ')"
+  src_main="$(git -C "$REPO" show "$main_sha:$trel" 2>/dev/null | sed -n '/^---$/,/^---$/p' | sed -n 's/^requirements_source: *//p' | head -n 1 | sed 's/ *#.*$//' | tr -d ' ')"
   if [ "$(front "$t" requirements_source)" = "ticket" ] && [ "$src_main" != "ticket" ]; then
     fail "$task" "基盤の票（requirements_source: ticket）が main にコミットされていない、または main の票と違う。票は作業前に main にコミットする" "blocked"; mv "$req" "$DONE_DIR/"; return
+  fi
+  # p0.4.0：仕様の承認（Governance Kernel の Approval Gate。ADR-005・成立条件②）。main の票の仕様（統治の項目と受け入れ条件）の指紋が、
+  #   オーナーの承認の記録（Z3 の spec_approvals.jsonl。行政は書けない）と合わなければ、判定も統合もしない。承認は approve-spec.sh
+  if ! node "$BIN/spec-digest.mjs" --repo "$REPO" --ref "$main_sha" --ticket "$trel" --check "$Z3/evidence/spec_approvals.jsonl" >/dev/null 2>&1; then
+    fail "$task" "仕様（main の票の統治の項目と受け入れ条件）がオーナーに承認されていない、または承認の後に変わった。approve-spec.sh で承認する" "blocked"; mv "$req" "$DONE_DIR/"; return
   fi
   git -C "$REPO" rev-parse --verify -q "$branch" >/dev/null || { fail "$task" "ブランチ $branch がない" "blocked"; mv "$req" "$DONE_DIR/"; return; }
   local actual; actual="$(git -C "$REPO" rev-parse "$branch")"
@@ -144,12 +160,12 @@ process_request() {
   #   その候補に対して行う。候補は main を親に持つので、統合は常に fast-forward（検査した木＝統合される木。p0.3.0 の SHA の固定は保つ）。
   #   衝突すれば needs_rebase で差し戻す。鎖で積まなくてよく、前の票が止まっても後ろの票は止まらない（OBS-019・OBS-024 の連鎖の解消）。
   #   p0.2.4 の「記録のコミットだけ遅れている」場合もこの経路で吸収する。
-  local candidate="$actual" main_sha; main_sha="$(git -C "$REPO" rev-parse main)"
+  local candidate="$actual"
   local wt; wt="$(mktemp -d "${TMPDIR:-/tmp}/gate-$task-XXXX")"
-  if git -C "$REPO" merge-base --is-ancestor main "$actual"; then
+  if git -C "$REPO" merge-base --is-ancestor "$main_sha" "$actual"; then
     git -C "$REPO" worktree add --detach "$wt" "$actual" >/dev/null 2>&1
   else
-    git -C "$REPO" worktree add --detach "$wt" main >/dev/null 2>&1
+    git -C "$REPO" worktree add --detach "$wt" "$main_sha" >/dev/null 2>&1
     if ! git -C "$wt" -c user.name=gate-runner -c user.email=gate-runner@local merge --no-ff --no-edit -q \
          -m "gate-runner: $task を main ${main_sha:0:12} と組み合わせた候補（申請 ${actual:0:12}）" "$actual" >/dev/null 2>&1; then
       git -C "$wt" merge --abort >/dev/null 2>&1 || true
@@ -162,12 +178,15 @@ process_request() {
   # 以後、差分の範囲（3・4）は申請の SHA の変更分（main...${actual}）で見る。監査・判定・統合は候補の木（${wt}、${candidate}）で行う
 
   # 3 差分の範囲
-  local changed; changed="$(git -C "$REPO" diff --name-only "main...$actual")"
+  local changed; changed="$(git -C "$REPO" diff --name-only "$main_sha...$actual")"
   if printf '%s\n' "$changed" | grep -Eq "$PROTECTED_RE"; then
     git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true
     fail "$task" "保護パスへの変更が含まれている: $(printf '%s\n' "$changed" | grep -E "$PROTECTED_RE" | tr '\n' ' ')" "blocked"; mv "$req" "$DONE_DIR/"; return
   fi
-  local allowed; allowed="$(front_list "$t" files_allowed)"
+  # p0.4.0：files_allowed・security_review・requirements は main にコミットされた票（承認した仕様）から読む。
+  #   作業ツリーの票は行政の長がコミットせずに書き換えられるため、統治の項目には使わない（status と §6 の記録は作業ツリーで扱う）
+  local tmain="${TMPDIR:-/tmp}/gate-ticket-$$.md"; git -C "$REPO" show "$main_sha:$trel" > "$tmain"   # 申請ごとに上書き
+  local allowed; allowed="$(front_list "$tmain" files_allowed)"
   local outside=""
   while IFS= read -r f; do
     [ -n "$f" ] || continue
@@ -185,11 +204,11 @@ process_request() {
   [ -z "$outside" ] || { git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true; fail "$task" "files_allowed の外を変更している:$outside"; mv "$req" "$DONE_DIR/"; return; }
 
   # 4 秘密情報・実名
-  if git -C "$REPO" diff "main...$actual" | grep -nE 'sk-ant-api03-[A-Za-z0-9]{40,}|BEGIN (RSA|OPENSSH|PRIVATE)|@gmail\.com|password *=|AKIA[0-9A-Z]{16}' >/dev/null; then
+  if git -C "$REPO" diff "$main_sha...$actual" | grep -nE 'sk-ant-api03-[A-Za-z0-9]{40,}|BEGIN (RSA|OPENSSH|PRIVATE)|@gmail\.com|password *=|AKIA[0-9A-Z]{16}' >/dev/null; then
     git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true
     fail "$task" "秘密情報らしい文字列が差分にある" "blocked"; mv "$req" "$DONE_DIR/"; return
   fi
-  if [ -f "$Z3/eval/banned-terms.txt" ] && git -C "$REPO" diff "main...$actual" | grep -nFf "$Z3/eval/banned-terms.txt" >/dev/null; then
+  if [ -f "$Z3/eval/banned-terms.txt" ] && git -C "$REPO" diff "$main_sha...$actual" | grep -nFf "$Z3/eval/banned-terms.txt" >/dev/null; then
     git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true
     fail "$task" "実案件・実名の語が差分にある（Z3 の一覧に一致）" "blocked"; mv "$req" "$DONE_DIR/"; return
   fi
@@ -210,27 +229,27 @@ process_request() {
   fi
 
   # 6〜9 司法（Claude judge → Codex judge → 不一致 → セキュリティ）
-  reqs="$(front_list "$t" requirements | tr '\n' ',' | sed 's/,$//')"
-  [ -n "$reqs" ] || reqs="$(front "$t" requirements | tr -d '[]' | tr -d ' ')"
+  reqs="$(front_list "$tmain" requirements | tr '\n' ',' | sed 's/,$//')"
+  [ -n "$reqs" ] || reqs="$(front "$tmain" requirements | tr -d '[]' | tr -d ' ')"
   # p0.2.1：基盤の票（requirements_source: ticket）は、docs/requirements.md ではなく票の受け入れ条件を要件として渡す（--ticket）。
   #   judge.sh は main にコミット済みの票（git show main:docs/tasks/…）から節と「- A1.」… の ID を読み、ブランチの票と違えば fail-closed（OBS-015②）
   local -a reqargs
   if [ "$src_main" = "ticket" ]; then reqargs=(--ticket "$trel"); else reqargs=(--req "$reqs"); fi
   local jout="$VERDICTS/$task-$sha-judge.json"
-  ( cd "$wt" && "$BIN/judge.sh" "${reqargs[@]}" --base main --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
+  ( cd "$wt" && "$BIN/judge.sh" "${reqargs[@]}" --base "$main_sha" --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
   local jfile; jfile="$(ls -t "$VERDICTS/$task-"*.json 2>/dev/null | grep -v codex | head -n 1)"
   local jv="CHANGES_REQUIRED"; [ -n "$jfile" ] && jv="$(jq -r '.final_verdict' "$jfile")"
   local cv="SKIPPED" cfile=""
   if [ "$NO_CODEX" -eq 0 ]; then
-    ( cd "$wt" && "$BIN/judge-codex.sh" "${reqargs[@]}" --base main --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
+    ( cd "$wt" && "$BIN/judge-codex.sh" "${reqargs[@]}" --base "$main_sha" --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
     cfile="$(ls -t "$VERDICTS/$task-"*-codex-judge.json 2>/dev/null | head -n 1)"
     [ -n "$cfile" ] && cv="$(jq -r '.final_verdict' "$cfile")"
   fi
   # p0.3.0a：セキュリティ審査は、監査を済ませた同じ一時 worktree（同じ SHA、node_modules あり）で行う。
   #   別の worktree を作ると依存がなく、審査の中の監査が「vitest が見つからない」で落ちていた（OBS-025）
   local sv="SKIPPED"
-  if [ "$(front "$t" security_review)" = "true" ] && [ "$NO_CODEX" -eq 0 ]; then
-    ( cd "$wt" && "$BIN/judge-codex.sh" --security "${reqargs[@]}" --base main --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
+  if [ "$(front "$tmain" security_review)" = "true" ] && [ "$NO_CODEX" -eq 0 ]; then
+    ( cd "$wt" && "$BIN/judge-codex.sh" --security "${reqargs[@]}" --base "$main_sha" --task "$task" --out "$VERDICTS" ) >/dev/null 2>&1 || true
     local sfile; sfile="$(ls -t "$VERDICTS/$task-"*-codex-security.json 2>/dev/null | head -n 1)"
     sv="CHANGES_REQUIRED"; [ -n "$sfile" ] && sv="$(jq -r '.final_verdict' "$sfile")"
   fi
@@ -264,6 +283,14 @@ process_request() {
     fi
   fi
 
+  # p0.4.0：不可逆な操作（held の記録・統合）の直前に、停止と main の前進を確かめ直す（Codex の指摘 #4・#6）。
+  #   停止していれば申請を残して戻る。main が進んでいれば、次の周回で最新の main と組み合わせて検査し直す
+  if [ -f "$Z3/STOP" ]; then echo "  ⏹ ${task}: 判定の間に Kernel が停止した。申請は残す"; return; fi
+  if [ "$(git -C "$REPO" rev-parse main)" != "$main_sha" ]; then
+    echo "  ↻ ${task}: 検査中に main が進んだ。次の周回で検査し直す" >&2
+    log_event "requeued" "$task" "\"reason\":\"main advanced during inspection\",\"main_at_check\":\"${main_sha:0:12}\""
+    return
+  fi
   # p0.3.1：--hold（夜間）では統合しない。合格した候補を Z3 に記録し、朝にオーナーが release.sh で確かめて統合する（約束9・11）
   if [ "$HOLD" -eq 1 ]; then
     git -C "$REPO" update-ref "refs/vgdd/held/$task" "$candidate"   # 候補のコミットを残しておくための参照（中身の照合は Z3 の記録で行う）
@@ -303,19 +330,32 @@ process_request() {
 }
 
 echo "gate-runner 起動: repo=$REPO interval=${INTERVAL}s codex=$([ "$NO_CODEX" -eq 1 ] && echo off || echo on)"
+STOPPED_LOGGED=0
 while :; do
   check_git_config
+  # p0.4.0：Kernel の停止中（Z3 の STOP。kernel-stop.sh）は申請を処理しない。判定も統合もせず、申請はそのまま残す
+  if [ -f "$Z3/STOP" ]; then
+    [ "$STOPPED_LOGGED" -eq 1 ] || { echo "⏹ Kernel の停止中：$(head -n 1 "$Z3/STOP")。申請は処理しない"; STOPPED_LOGGED=1; }
+    [ "$ONCE" -eq 1 ] && break
+    sleep "$INTERVAL"; continue
+  fi
+  STOPPED_LOGGED=0
   shopt -s nullglob
   for req in "$REQ_DIR"/*.json; do
+    [ ! -f "$Z3/STOP" ] || break   # p0.4.0：同じ周回の次の申請の前にも停止を見る（Codex の指摘 #6）
     process_request "$req" || echo "  ! $req の処理で例外" >&2
   done
   shopt -u nullglob
   # p0.2.3：この回の記録（統合・差し戻し）を1つのコミットにまとめる
-  if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no -- docs/tasks)" ]; then
-    git -C "$REPO" add "docs/tasks/" && git -C "$REPO" -c user.name=gate-runner -c user.email=gate-runner@local commit -q \
-      -m "gate-runner: 記録（統合: ${RUN_MERGED:-なし}）" || true
+  # p0.4.0：コミットするのは、この周回で gate-runner が書き換えた票と _board.json だけ（OBS-044）。
+  #   以前は docs/tasks/ を丸ごと add しており、ほかの誰かのコミットしていない変更（README や別の票）まで gate-runner の名前で main に入った
+  touched="$RUN_TOUCHED"; [ -z "$(git -C "$REPO" status --porcelain -- docs/tasks/_board.json)" ] || touched="$touched docs/tasks/_board.json"
+  if [ -n "${touched// /}" ]; then
+    # shellcheck disable=SC2086
+    git -C "$REPO" add -- $touched && git -C "$REPO" -c user.name=gate-runner -c user.email=gate-runner@local commit -q \
+      -m "gate-runner: 記録（統合: ${RUN_MERGED:-なし}）" -- $touched || true
   fi
-  RUN_MERGED=""
+  RUN_MERGED=""; RUN_TOUCHED=""
   # p0.3.0：証拠ストアのチェックポイント（件数と末尾の行のハッシュ）。末尾の切り詰めを verify-chain で検出する（D-56③）
   for lf in "$Z3/evidence/tool_calls.jsonl" "$EVENTS"; do
     [ -s "$lf" ] || continue

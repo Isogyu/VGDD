@@ -102,7 +102,7 @@ V6 と同じ方法（実際に試して「保証できる／できない」を�
 
 ### 3.1 条件（gate-runner が順に検査する。1つでも落ちれば統合しない）
 
-1. 申請（`merge-requests/T-NNN.json`）の票が存在し、`status: review`、ブランチの HEAD が申請の SHA と一致する
+1. 申請（`merge-requests/T-NNN.json`）の票が存在し、`status: review`、ブランチの HEAD が申請の SHA と一致する。**p0.4.0：main の票の仕様（統治の項目と受け入れ条件）の指紋に、オーナーの承認の記録（Z3 の `spec_approvals.jsonl`）がある**（なければ司法を呼ぶ前に `blocked`。`vgdd/kernel/SPEC.md` §4）。Kernel の停止中（Z3 の `STOP`）は申請を処理しない
 2. **統合キュー**（p0.3.1 案、D-55③）：ブランチが main を含んでいればそのまま。含んでいなければ、gate-runner が一時 worktree で **main に申請の SHA を試しに merge**（`--no-ff`、コミットは一時 worktree の中だけ）して「候補のコミット」を作る。衝突すれば `needs_rebase` で差し戻す。以後の検査・判定（3〜9）は候補のコミットに対して行い、差分の範囲（3）は `main...<申請の SHA>` で見る。**鎖で積まなくてよい**：各票は main から分岐し、前の票が止まっても後ろの票は止まらない
 3. `git diff main...task/T-NNN --name-only` が票の `files_allowed` の中だけ。**`.claude/**`・`CLAUDE.md`・`.github/**`・`vgdd/**`・`docs/requirements.md`・`merge-requests/**` が含まれていれば即拒否**（憲法の保護）
 4. 差分に秘密情報らしい文字列・実名の形がない（既存の push 前の grep と同じ。Z3 の実名リストも照合）
@@ -329,10 +329,15 @@ printf '%s' "$INPUT" | codex exec - \
 
 > **p0.3.1 での変更（憲法審査 OBS-035②、オーナーの決定 2026-11-05）**：夜間の gate-runner は `--hold` で動かし、**判定に合格しても統合しない**。合格した候補を Z3 の `held.jsonl` に記録し、朝にオーナーが画面と判定を確かめて `vgdd/scripts/release.sh T-NNN …` で統合する（約束9・11：1機能ごとにオーナーが見て選ぶ）。release.sh は、今の main と申請の SHA から組み直し、入る変更が夜に判定した変更と一字一句同じであることと、組み合わせた木の監査（sandbox の中）を確かめてから統合する。
 
+## 12. Governance Kernel（p0.4.0。ADR-001〜033 の採用 2026-11-05）
+
+この設計は、ADR-001〜033 の採用により **Governance Kernel** として整理し直した。対応と状況は `docs/kernel.md`、規範は `vgdd/kernel/SPEC.md`、役割と権限の表は `vgdd/kernel/capabilities.json`、適合性テストは `vgdd/conformance/run.mjs`。p0.4.0 で足した強制：①仕様の承認（`approve-spec.sh`。裁判所と夜間の代行が照合）②Kernel 全体の停止と、安全を確かめてからの再開（`kernel-stop.sh`・`kernel-resume.sh`、フックの停止モード）③夜間の既定を逐次に。
+
 ## 更新履歴
 
 | 日時 | 内容 |
 |---|---|
+| 2026-11-05 22:00 | p0.4.0（Governance Kernel）：§3.1 の 1 に仕様の承認と停止、§12 を追加 |
 | 2026-11-04 22:2x（案） | **統合キュー**（p0.3.1 案。オーナーの指示 22:10）：§3.1 の 2 と 10 を改正。main を含まない申請は gate-runner が「最新の main ＋ 申請の SHA」の候補を一時 worktree で作って検査し、候補を fast-forward で統合。鎖で積まない。前の票が止まっても後ろは止まらない。`vgdd/scripts/gate-runner.sh` の差分は scratchpad |
 | 2026-11-04 2x:xx（案） | 夜間ハーネス（D-55③）：§1 に night-runner・夜間の worker・書記の行、§3.2 の事後検知に `night-runner` の例外、§11 を追加。`vgdd/scripts/night-runner.sh`・`morning-report.mjs` を新設（未試験）。票の front matter に `unattended` |
 | 2026-11-03 16:11 | 初版（設計案）。`docs/vgdd-operations.md` の内容を取り込み、D-47 の修正と公式ドキュメントの確認結果を反映 |
