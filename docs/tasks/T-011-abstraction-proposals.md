@@ -1,7 +1,7 @@
 ---
 id: T-011
 title: 機密の検出箇所ごとの抽象化の案と、本人が選んだ案だけの置き換え（M6-3 の裏側）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M6-3, M6-1, M9-1]   # 記録用。司法には渡さない
@@ -76,3 +76,5 @@ depends_on: []
 - 00:43 行政の長が差分を確認（`files_allowed` の2ファイルのみ。filter の位置と条件、追加の試験の入力を読んだ）。`status: review` で main にコミットし再申請（差し戻し1回目）
 
 - 2026-11-06T00:54:31+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-06T00:56:43+0900 release: status → merged（main=721b925a6118。夜間の判定に合格した候補 2f85f100f2be を、オーナーが朝に承認して統合）
