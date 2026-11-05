@@ -1,7 +1,7 @@
 ---
 id: T-015
 title: S-4 チームの知恵の画面（承認済みの共有の一覧と、手順書の原案・判断のポイント。M5・C2 の画面）
-status: ready
+status: in_progress
 requirements: [A1, A2, A3, A4, A5, A5b, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M5-1, M5-2, M5-3, M5-4, M9-3, C2, D-62]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1.0
 time_limit_min: 60
 security_review: true          # 新しい API ルート1本
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a9b7f50fdcfb584fa   # 作業員のブランチ（main 11c86a8 から）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W6
 files_allowed:
   - src/lib/team-knowledge.ts              # 新設：承認済みの共有の一覧（読むだけ）
   - src/lib/team-knowledge.test.ts         # 新設
@@ -74,3 +74,4 @@ depends_on: [T-012]
 ## 6. 記録
 
 （統合後に追記）
+- 23:40 行政の長が W6 を起動（worktree `agent-a9b7f50fdcfb584fa`、main 11c86a8 から）。依存の T-012 は 23:25 に release で統合済み。T-014 は依存の T-011 が差し戻し中のため未着手

@@ -1,7 +1,7 @@
 ---
 id: T-016
 title: lint の対象から作業員の worktree（.claude/worktrees/）を外す
-status: ready
+status: in_progress
 requirements: [A1, A2, A3]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: []
@@ -10,8 +10,8 @@ estimate_h: 0.1
 time_limit_min: 20
 security_review: false
 unattended: true
-branch: null
-worker: null
+branch: worktree-agent-a956de1c175478ed1   # 作業員のブランチ（main 11c86a8 から）
+worker: W7
 files_allowed:
   - eslint.config.mjs
 files_forbidden:
@@ -53,3 +53,4 @@ depends_on: []
 ## 6. 記録
 
 （統合後に追記）
+- 23:41 行政の長が W7 を起動（worktree `agent-a956de1c175478ed1`、main 11c86a8 から）。夜間キューの案（`docs/tasks/night-queue.proposed.json`）はないため昼の作業員で実施
