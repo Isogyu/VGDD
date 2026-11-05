@@ -1,7 +1,7 @@
 ---
 id: T-017
 title: 共有候補への AI の追加の検出（決定論的な検出に足すだけ。M6-2 の裏側）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6, A7, A8]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M6-2, M6-1, M6-4, M9-1]   # 記録用。司法には渡さない
@@ -93,3 +93,5 @@ depends_on: []
 - 2026-11-06T01:01:13+0900 gate-runner: judge と Codex が分かれたが、オーナーの裁定（統合）により進める：試験の本文の taro@example.com は RFC 2606 の予約ドメインで架空。統合済みの notes.test.ts・sensitive.test.ts にも同じ形がある。実害の小さい指摘（D-58③）。Codex の judge とセキュリティ審査は APPROVED
 
 - 2026-11-06T01:01:13+0900 gate-runner: status → review（判定に合格（judge=CHANGES_REQUIRED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-06T01:04:29+0900 release: status → merged（main=1df675ecd344。夜間の判定に合格した候補 a89b053a3f6c を、オーナーが朝に承認して統合）
