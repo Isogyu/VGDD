@@ -1,7 +1,7 @@
 ---
 id: T-018
 title: デモの合成データに先輩C の W1 の記録と承認済みの共有を足す（M5 のデモ用）
-status: ready
+status: in_progress
 requirements: [A1, A2, A3, A4]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M7-1, M5-1, M5-2, D-62]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 0.3
 time_limit_min: 30
 security_review: false
 unattended: true
-branch: null
-worker: null
+branch: worktree-agent-a17de9e84f5dc0bc3   # 作業員のブランチ（main 07792ba 付近から）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W11
 files_allowed:
   - src/lib/seed.ts
   - src/lib/seed.test.ts
@@ -71,3 +71,4 @@ depends_on: []
 ## 6. 記録
 
 （統合後に追記）
+- 00:39 行政の長が W11 を起動（worktree `agent-a17de9e84f5dc0bc3`）。仕様はオーナーが 00:25 に approve-spec で承認済み（立法補佐の伝達）

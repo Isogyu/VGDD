@@ -1,7 +1,7 @@
 ---
 id: T-017
 title: 共有候補への AI の追加の検出（決定論的な検出に足すだけ。M6-2 の裏側）
-status: ready
+status: in_progress
 requirements: [A1, A2, A3, A4, A5, A6, A7, A8]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M6-2, M6-1, M6-4, M9-1]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1.0
 time_limit_min: 60
 security_review: true          # 新しい API ルートと外部 API の呼び出し
 unattended: false              # 角かっこを含むパスがある（OBS-049）
-branch: null
-worker: null
+branch: worktree-agent-a5f080c85255abf8e   # 作業員のブランチ（main 07792ba 付近から）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W10
 files_allowed:
   - src/lib/ai-sensitive.ts                 # 新設：プロンプト・検証・統合
   - src/lib/ai-sensitive.test.ts            # 新設
@@ -83,3 +83,4 @@ depends_on: []
 ## 6. 記録
 
 （統合後に追記）
+- 00:39 行政の長が W10 を起動（worktree `agent-a5f080c85255abf8e`）。仕様はオーナーが 00:25 に approve-spec で承認済み（立法補佐の伝達）。昼の作業員で実施（`[shareId]` のパスがあるため。OBS-049）

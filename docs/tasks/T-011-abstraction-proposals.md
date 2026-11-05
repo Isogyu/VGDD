@@ -10,8 +10,8 @@ estimate_h: 0.4
 time_limit_min: 40
 security_review: false         # 純粋関数だけ。ルート・DB・AI に触れない
 unattended: true
-branch: worktree-agent-adf6a1c2fb01ee932   # 作業員のブランチ（0e69137）。統合キュー（p0.3.1）により main から分岐したまま申請
-worker: W4
+branch: worktree-agent-a56e2f0d88e7a8b94   # 差し戻し対応の作業員のブランチ（main 07792ba 付近から、0e69137 を cherry-pick）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W9
 files_allowed:
   - src/lib/abstraction.ts        # 新設：純粋関数
   - src/lib/abstraction.test.ts   # 新設
@@ -70,3 +70,5 @@ depends_on: []
 - 23:08 行政の長が差分を確認（`files_allowed` の2ファイルのみ、禁止語なし、A1〜A6。A5 の①〜⑩に `it(` が対応、16件）。`status: review` で main にコミットし申請（gate-runner `--hold`。合格は held、統合は朝に release.sh）
 
 - 2026-11-05T23:14:28+0900 gate-runner: status → in_progress（judge=CHANGES_REQUIRED, codex=CHANGES_REQUIRED（両方が差し戻し））
+- 00:38 立法補佐からの伝達（オーナー経由）：judge・Codex の指摘は major 1件（A3）。`proposeAbstractions` が不正な flag（start・end が NaN・小数など）を捨てる前に並べ替えており、NaN との比較で並べ替えが崩れて flag の順番と顧客・プロジェクトの採番が狂う（例：start が 6・NaN・0 の並びで 0 の flag が 6 の後に処理される）。直し方：先に検証して捨ててから並べ替える。NaN を含む並びで順番と採番が崩れない試験を足す。§2 は変えない
+- 00:39 行政の長が W9 を起動（worktree `agent-a56e2f0d88e7a8b94`）。0e69137 を cherry-pick し、filter を sort の前に移して1コミットに amend、`abstraction.test.ts` に NaN・小数を含む並びの試験を足す指示。W4 の worktree `agent-adf6a1c2…` は触らない
