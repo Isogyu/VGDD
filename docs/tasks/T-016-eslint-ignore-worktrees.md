@@ -1,7 +1,7 @@
 ---
 id: T-016
 title: lint の対象から作業員の worktree（.claude/worktrees/）を外す
-status: review
+status: merged
 requirements: [A1, A2, A3]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: []
@@ -62,3 +62,5 @@ depends_on: []
 - 00:38 立法補佐からの伝達：オーナーが 00:25 に approve-spec で承認済み（指紋は main 9272008 の票と一致）。行政の長が `status: review` に戻して同じ 8edbe97 を再申請（コードの変更なし）
 
 - 2026-11-06T00:47:37+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-06T00:50:55+0900 release: status → merged（main=f7f857719b6b。夜間の判定に合格した候補 51d8d22372f5 を、オーナーが朝に承認して統合）
