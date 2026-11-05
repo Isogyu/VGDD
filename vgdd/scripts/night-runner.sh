@@ -149,9 +149,22 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
   local t; t="$(ticket_path "$task")"; local trel="docs/tasks/$(basename "$t")"
   local limit; limit="$(front "$t" time_limit_min)"; limit="${limit:-45}"
   local out="$LOGS/${task}-${attempt}.json"
-  log "▶ ${task} 作業員を起動（試行 ${attempt}、上限 ${limit}+10 分、worktree ${wt}）"
+  # p0.3.2：headless では許可の確認に答える人がおらず、確認待ちは拒否になる（V8 で Edit・Write が拒否された。OBS-042）。
+  # 票の files_allowed の Edit・Write と、コミットに要る git add・git commit だけを、この起動に限って許可する。
+  # 権限ルールの deny、フック、sandbox はそのまま効く。files_allowed の外の変更は precheck が落とす
+  local allow=() f
+  while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    # worktree の外を指す項目は許可しない（保護パスは deny・フック・sandbox が別に止める。憲法審査 20261105-202059 の注意）
+    case "$f" in /*|*..*) note "${task}: files_allowed の ${f} は worktree の外を指しうるため許可しない"; continue;; esac
+    allow+=("Edit(/${wt}/${f})" "Write(/${wt}/${f})")
+  done < <(front_list "$t" files_allowed)
+  [ "${#allow[@]}" -gt 0 ] || { note "${task}: files_allowed が空のため作業員を起動しない"; return 1; }
+  # settings.json の allow は信頼されていない workspace では無視されるため、同じものをここで渡す（広げない）
+  allow+=("Bash(git add *)" "Bash(git commit *)" "Bash(npx --no-install *)")
+  log "▶ ${task} 作業員を起動（試行 ${attempt}、上限 ${limit}+10 分、worktree ${wt}、許可 ${#allow[@]} 件）"
   ( cd "$wt" && run_with_timeout "$(( (limit + 10) * 60 ))" claude -p --agent worker --output-format json --max-turns 80 \
-      "$(worker_prompt "$task" "$trel" "$extra")" ) > "$out" 2> "$LOGS/${task}-${attempt}.err" || true
+      --allowedTools "${allow[@]}" -- "$(worker_prompt "$task" "$trel" "$extra")" ) > "$out" 2> "$LOGS/${task}-${attempt}.err" || true
   local tok; tok="$(jq -r '(.usage.input_tokens // 0) + (.usage.output_tokens // 0)' "$out" 2>/dev/null || echo 0)"
   lane_ev tokens "$tok"
   if grep -q -i -E 'usage limit|rate limit|利用上限' "$out" "$LOGS/${task}-${attempt}.err" 2>/dev/null; then
