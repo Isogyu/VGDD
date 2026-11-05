@@ -1,7 +1,7 @@
 ---
 id: T-022
 title: 統治のライブ画面に「Kernel」の区画を足す（法律の版・稼働／停止・成立条件①〜⑤の強制と試験・承認済みの仕様・held・裁定・判定と不一致・ハッシュチェーン）
-status: ready
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7, A8, A9]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-55①, D-59③, ADR-017, ADR-028]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 3
 time_limit_min: 180             # Codex の点検 #13：厳格な読み込み・通信の往復・12 分類の試験を含む
 security_review: true          # 新しい GET の API がファイルを読む（Codex の点検 #13）
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a13d89d1cd0b8a9d7   # 作業員のブランチ（main 691ef66 から）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W18
 files_allowed:
   - src/lib/kernel-state-schema.ts         # 新設：形の検証と表示用の整形（純粋関数だけ。node:fs を使わない。画面からも読む）
   - src/lib/kernel-state.ts                # 新設：ファイルの読み込み（node:fs）
@@ -104,7 +104,12 @@ release.sh は統合の後に `_board.json` を作り直さない（次の gate-
 
 ## 6. 記録
 
-（統合後に追記）
+- 06:24 W18 が着手（worktree `agent-a13d89d1cd0b8a9d7`）。仕様はオーナーが 06:19 に approve-spec で承認済み（Kernel の写しの `approvals[].current` と、オーナーの着手の指示で確かめた）。T-023 と並行（触るファイルは重ならない）
+- W18 の報告：HEAD `ce610871d4b774fb89a9b2a82a6400a740c4f32c`。test 292 件（23 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:602` で差分の外）。**画面と API は動かしていない**（ブラウザーの表示、`GET /api/governance/kernel` の実呼び出し、`npm run build` は未確認。§3 で統合の後に確かめる）
+- 本番の `kernel-state.json` は `pickKernelState` に通していない（`node` で読むコマンドはフックが拒否）。W18 が先頭と末尾を目で A1 と突き合わせ、抜粋を書き写した試験が通った。統合の後に `/governance` が (c) の表示になるかで確かめる
+- 補った解釈・逸脱：(1) `now` を state で持つ（A5 の `summarizeKernel(state, new Date())` の形と違う。取得の後と 60 秒ごとに更新）(2) 読み込み中は文を出さず空の `<section aria-busy>` (3) **`conformance.kernel_version` は画面に出していない**（A5 の末尾に「null なら —」とあるが、1〜8 に出し場所がない）(4) h2「Kernel」と一覧の小見出し、判定の表の列「票」を足し、空の一覧は「—」(5) 食い違いの注記は⑤の数字のセルの下側 (6) `checkpoint_mismatches` が null なら「件」を付けない (7) A8 の外に試験を数件足した。試験の先頭のコメントは「値はすべて架空」だが、本番の形を書き写した試験には実在の票 ID と時刻が入る（件数と結論だけ）
+- 拒否された操作：W18 の Bash 3件をフックが拒否した（本番の写しを `node -e` で読む、`git -C`、worktree の絶対パスを変数に入れる）。W18 は回避せず、`files_allowed` の中の試験に置き換えた
+- 06:31 行政の長が差分を確認（`files_allowed` の6つだけ、追加 970・削除 0、`GovernanceView.tsx` は import 1行と差し込みだけ。`kernel-state` を参照するのは新設の5ファイルだけ。禁止語と秘密情報の形なし。A1〜A9 と読み合わせ、固定の文は §2 と一致。行政の長は試験と画面を自分では動かしていない）。`status: review` で main にコミットし申請
 
 ## 7. 点検の記録
 
