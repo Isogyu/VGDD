@@ -1,7 +1,7 @@
 ---
 id: T-017
 title: 共有候補への AI の追加の検出（決定論的な検出に足すだけ。M6-2 の裏側）
-status: review
+status: blocked
 requirements: [A1, A2, A3, A4, A5, A6, A7, A8]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M6-2, M6-1, M6-4, M9-1]   # 記録用。司法には渡さない
@@ -86,3 +86,5 @@ depends_on: []
 - 00:39 行政の長が W10 を起動（worktree `agent-a5f080c85255abf8e`）。仕様はオーナーが 00:25 に approve-spec で承認済み（立法補佐の伝達）。昼の作業員で実施（`[shareId]` のパスがあるため。OBS-049）
 - 00:44 W10 の報告：コミット 68f4802（新設4ファイル、+723。所要約10分）。A1〜A8 達成。試験は①〜⑮をそれぞれ1件以上（⑩は成功・失敗の2件）、ほかに strict の違反・重複と並び順・コードフェンス・プロンプトの中身・override も試験、追加21件で test 219・typecheck・lint 合格。仕様が決めていない点の選択：demo の `model` は `demo(<model>)`（T-012 と同じ）、定数 `AI_SENSITIVE_NOTICE`・`AI_SENSITIVE_MAX_ATTEMPTS`・`AI_SENSITIVE_MAX_CHARS` と結果の型を export、provider の生成の例外は `provider_unavailable`（attempts 0）、候補は `checkShareWithAi` 内で手順の案3の SELECT で直接読む。`[shareId]` への Write は拒否されなかった。逸脱・拒否なし。ルートの HTTP 層は未試験（関数まで）
 - 00:45 行政の長が差分を確認（`files_allowed` の4ファイルのみ。`console` なし、`notes` を読まない、INSERT は試験の中だけ、`known` は `deterministic.map` で回ごとに別に作る、失敗の `message` は固定の文）。`status: review` で main にコミットし申請（security_review: true）
+
+- 2026-11-06T00:52:45+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=CHANGES_REQUIRED/1 件, codex=APPROVED/0 件）。オーナーの裁定へ）
