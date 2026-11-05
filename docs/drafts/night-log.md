@@ -24,6 +24,7 @@
 | 03:1x | 票4枚の点検（計 24 件）を反映（4f5b898）：答えの門は route の試験の形（`stubEnv`＋`setProviderOverride`）と SessionView の `pendingAnswers`、「該当メモを除いて送る」が無限に出る穴、stale の却下は既存の試験⑦⑫の期待値、失敗の扱いは `setMessage` 16 箇所の規則と対象 10 箇所、S1 は seed の新人A の本文に `【つまずき】` の行がない（前提が偽）→ seed を 4 行の形に。F-1：B（Kernel の UI）の2回目の点検（p0.4.3 §1 との一致・既存コード）を起動 | 票の下書き4枚 |
 | 03:1x | F-5：UI の票2枚（見た目の1本化、アクセシビリティの小修正。review-ui の票 B・C）。B の2回目の点検（8件）を反映：`approved_at` の null、`tickets` を持たない、読み込みの手順（ディレクトリのリンク・fstat・1MB は新規）、`formatJst`、abort、Route Segment Config。p0.4.3 案 §1 に申し送り（tickets は出さない、null の扱い、SKIPPED→null）。M12 の2回目と UI 2票の点検役を起動中 | `T-draft-ui-consistency.md`・`T-draft-a11y-fixes.md`（b28060e）、`T-draft-kernel-ui.md`・`kernel-p0.4.3-proposal.md`（a79f7bd） |
 | 03:20 | F-5：票 T-draft-fixed-failure-messages（AI の失敗の文を固定に、Claude クライアントの timeout・maxRetries を1か所に。review-security の票 C）。点検役を起動 | `T-draft-fixed-failure-messages.md`（100e0a8） |
+| 03:2x | M12 の2票の2回目の点検（14 件。SQLite をメモリ DB で実測）を反映：既存の DB は `--reset` では作り直せずファイルの削除だけ、`candidate_id` 列は FK の循環で `resetDemoData` が落ちるのでやめる、AI が1問目で `done` を返すと詰む → 答え 0 件でも終了、`isStale` の null で typecheck が落ちる、未決定のインタビュー候補を決定できる画面がない → 一覧から開く（f6e03a4）。UI の2票の点検（14 件）を反映：`formatMdHm` の書式変更で落ちる既存の試験 2 ファイル、`formatDateTime` の null、句点は文末だけ、`maxLength` の表（78a65d3）。M11・M13・M14 の2回目の点検（実装との突き合わせ）を起動 | 票の下書き4枚 |
 
 ## 4:00 の報告（立法補佐へ。下書き、4:00 に確定）
 
@@ -39,7 +40,8 @@
 | F-2 研究 | `docs/drafts/comparison-experiment.md`、`governance-record-2026-11-05.md`、`kernel-stages-and-approval-levels.md` | — | 各 2〜3 件 |
 | F-3 判例の候補 | `docs/drafts/conformance-candidates.md`（17 件） | — | 2 件 |
 | F-4 アプリの点検 | `docs/drafts/review-security.md`（major 6・minor 9）、`review-ui.md`（major 6・minor 9） | 読み取り専用の点検役 | 票にするか |
-| F-5 点検由来・未着手の票 | `T-draft-dev-routes-guard`（最優先：別サイトから seed --reset が打てる、採取が今の DB のメモを外部に送る）、`T-draft-answers-flagged-gate`、`T-draft-share-stale-reject`、`T-draft-ui-error-handling`、`T-draft-s1-common-struggles`、`T-draft-m15-anonymous-brainstorm` | 各1回 | 票ごと §8 |
+| F-5 点検由来・未着手の票 | `T-draft-dev-routes-guard`（最優先：別サイトから seed --reset が打てる、採取が今の DB のメモを外部に送る）、`T-draft-answers-flagged-gate`、`T-draft-share-stale-reject`、`T-draft-ui-error-handling`、`T-draft-ui-consistency`、`T-draft-a11y-fixes`、`T-draft-fixed-failure-messages`、`T-draft-s1-common-struggles`、`T-draft-m15-anonymous-brainstorm` | 各1回（読み取り専用で実装と突き合わせ） | 票ごと §8 |
+| 2回目の点検 | A（run.mjs 等と突き合わせ 12 件）、B（p0.4.3 §1 と既存コード 8 件）、M12 ×2（SQLite を実測 14 件）、M11・M13・M14（起動中） | — | — |
 
 **立法補佐に特に見てほしいこと**
 1. p0.4.3 案 §9 の 3：**codex が判定のファイルを書かずに終わると `cv` が `SKIPPED` のまま、judge が APPROVED なら minor の不一致として統合される穴**（今の版で統合に至る経路）。p0.4.3 の優先度を上げる根拠

@@ -43,19 +43,19 @@ depends_on: []
 
 ## 2. 受け入れ条件
 
-- A1. `src/lib/summarize.ts`：`provider.summarize` の例外のうち `ProviderUnavailableError` 以外のときの `message` を、固定の文 **「AI の呼び出しに失敗しました」** にする（今の `AI の呼び出しに失敗しました：${e.message}` から例外の文を外す）。`ProviderUnavailableError` の `message` は内製の固定の文なのでそのまま。`getProvider()` の例外（provider の生成）も、`ProviderUnavailableError` なら `e.message`、それ以外は「AI が使えません」の固定の文（例外の文を使わない）。`reason`・`attempts`・ほかの振る舞いは変えない
-- A2. `src/lib/ai/claude.ts` に `createAnthropicClient(apiKey: string): Anthropic` を export し、`new Anthropic({ apiKey, timeout: 30000, maxRetries: 1 })` を返す（AI の検出と同じ値。整理・原案の既定 10 分・2 回をこれにそろえる）。`claude.ts` の `ClaudeProvider`、`procedure-provider.ts` の `ClaudeProcedureProvider`、`sensitive-provider.ts` の `ClaudeSensitiveProvider` は、それぞれの `new Anthropic(...)` をこの関数の呼び出しに置き換える（ほかは変えない）
-- A3. `src/lib/summarize.test.ts`（既存）に、下の①〜③を**それぞれ1件以上の `it(`**で足す（既存の `it(` と期待値は変えない）：①mock provider が `new Error("秘密の文 abc123")` を投げると `reason: "provider_unavailable"`・`message` が「AI の呼び出しに失敗しました」で、`message` に `abc123` が含まれない ②`ProviderUnavailableError("デモの保存済みの結果がありません")` を投げると `message` がその文のまま ③`opts.provider` を渡さず `getProvider()` が `ProviderUnavailableError` 以外の例外を投げる状況（`setProviderOverride` で生成時に投げる provider を渡す、または `TSUBUYAKI_AI_PROVIDER` の環境変数で不正な名を指定）で `message` が「AI が使えません」
-- A4. `npm run -s test`（既存の試験と追加分のすべて）・`npm run -s typecheck`・`npm run -s lint` が通る（決定論的な監査の結果で確かめる）。差分のファイルは `files_allowed` の最大5つ。ルート（`src/app/api/**`）は変えない（`message` をそのまま返す今の形で、固定の文になる）
+- A1. `src/lib/summarize.ts`：小さな純粋関数 `providerFailureMessage(e: unknown): string` を export する（`src/lib/ai-sensitive.ts` の `failureMessage` と同じ形）：`e instanceof ProviderUnavailableError` なら `e.message`（内製の固定の文）、それ以外は定数 **`PROVIDER_FAILED_MESSAGE = "AI の呼び出しに失敗しました"`**（`procedure.ts` と同じ文・同じ定数名。export する）。`provider.summarize` の例外（今は `AI の呼び出しに失敗しました：${e.message}` と例外の文を連結）と `getProvider()` の例外（provider の生成）の **両方**でこの関数の返り値を `message` にする（先例の `procedure.ts`・`ai-sensitive.ts` と同じ割り当て。「AI が使えません」の文はこの票では使わない）。`reason`・`attempts`・ほかの振る舞いは変えない
+- A2. `src/lib/ai/claude.ts` に `createAnthropicClient(apiKey: string, opts: { timeoutMs?: number } = {}): Anthropic` を export し、`new Anthropic({ apiKey, timeout: opts.timeoutMs ?? 60000, maxRetries: 1 })` を返す。使う側：`claude.ts` の `ClaudeProvider`（整理）は既定の 60 秒、`procedure-provider.ts` の `ClaudeProcedureProvider`（原案）は既定の 60 秒、`sensitive-provider.ts` の `ClaudeSensitiveProvider`（検出）は `{ timeoutMs: 30000 }`（今の値のまま）。3 箇所の `new Anthropic(...)` をこの関数の呼び出しに置き換え、**`./claude` からの import に `createAnthropicClient` を足す**（`import Anthropic from "@anthropic-ai/sdk"` は `private client: Anthropic` の型のために残すか `import type` に変える。どちらでもよい）。ほかは変えない。注：所要の実測は fixture の採取 1 回あたり約 6〜7 秒（`demo-fixtures/final-*.json` の `captured_at` の間隔。メモ 4 件）だけで、原案の実測はない。SDK は timeout も再試行するので、`maxRetries: 1` では失敗の確定まで最長 timeout の 2 倍
+- A3. `src/lib/summarize.test.ts`（既存 8 件の `it(` は削除も変更もしない）に、下の①〜③を**それぞれ1件以上の `it(`**で足す：①mock provider が `new Error("秘密の文 abc123")` を投げると `reason` が `"provider_unavailable"`、`message` が `"AI の呼び出しに失敗しました"` と**完全一致**（`toBe`）、`message` に `abc123` が含まれない（`not.toContain`）②`new ProviderUnavailableError("デモの保存済みの結果がありません")` を投げると `message` がその文と完全一致 ③`providerFailureMessage` の単体：`new Error("xyz789")` → `PROVIDER_FAILED_MESSAGE` と完全一致で `xyz789` を含まない、`new ProviderUnavailableError("固定の文")` → `"固定の文"`、文字列 `"abc"` や `null` → `PROVIDER_FAILED_MESSAGE`（`getProvider()` が `ProviderUnavailableError` 以外を投げる状況は今の実装では作れないので、生成時の経路は関数の単体で確かめる）
+- A4. `npm run -s test`（既存の試験と追加分のすべて）・`npm run -s typecheck`・`npm run -s lint` が通る（決定論的な監査の結果で確かめる）。差分のファイルは `files_allowed` の最大5つ。ルート（`src/app/api/**`）は変えない（`message` をそのまま返す今の形で、固定の文になる）。`answers/route.ts` の `provider_unavailable` が 422 である不一致（review-security #9）は**この票の範囲外**
 
 ## 3. 開発用テスト
 
-- A3 の観点。実 API の失敗（キーが無効）の文は、オーナーがキーなしの環境で `/api/sessions/<id>/summarize` を呼んで「AI が使えません（…）」の固定の文が出ることを確かめる
+- A3 の観点。実 API の失敗の文は、オーナーが **無効なキー**（`ANTHROPIC_API_KEY=sk-ant-invalid`）で起動し、`POST /api/sessions/<id>/summarize` が 503 で `message` が「AI の呼び出しに失敗しました」、request id や HTTP の文を含まないことを確かめる（キーなしはデモモードになるので、この確認には使えない）
 
 ## 4. 手順の案
 
 1. `npm ci --cache "$TMPDIR/npm-cache"` を単独のコマンドで最初に1回
-2. `timeout` 30 秒は整理（メモ 12 件程度）と原案（共有 20 件まで）でも足りる見込みだが、実 API で超えれば `provider_unavailable`「AI の呼び出しに失敗しました」になる。値はオーナーに聞く（§8）
+2. `timeout` は整理・原案 60 秒、検出 30 秒（A2）。実 API で超えれば `provider_unavailable`「AI の呼び出しに失敗しました」になる。値はオーナーに聞く（§8）
 3. コミットは1つ。メッセージの先頭は票の ID
 
 ## 5. 統合審査
@@ -68,9 +68,9 @@ depends_on: []
 
 ## 7. 点検の記録
 
-**Claude の点検済み、Codex は未点検**（4:00 から立法補佐が行う）。（この票は点検前）
+**Claude の点検済み、Codex は未点検**（4:00 から立法補佐が行う）。点検役：Claude のサブエージェント（読み取り専用。SDK の既定値も確認）。03:2x、指摘 8 件（重い 3・中 3・軽 2）。対応：#1 `getProvider()` が PUE 以外を投げる状況は作れない → 写像を純粋関数 `providerFailureMessage` にして単体で試す（A1・A3③）／#2 文の割り当てが先例と逆 → PUE 以外はすべて `PROVIDER_FAILED_MESSAGE`、文は完全一致（A1・A3）／#3 「キーなし」はデモモードになる → 無効なキーでの確認に（§3）／#4 import の変更を明記（A2）／#5 `toBe` と明記（A3）／#6 timeout の実測は採取 6〜7 秒だけ → 用途ごとに渡せる形、整理・原案 60 秒・検出 30 秒、実測なしと注記（A2）／#7 #9 の範囲（A4）／#8 既存 8 件と件数を明記（A3）
 
 ## 8. オーナーに聞くこと
 
-1. `timeout` 30 秒・`maxRetries` 1 を整理と原案にも使うか（原案は材料が多いと長くかかる。60 秒にする案）
+1. `timeout` を整理・原案 60 秒、検出 30 秒、`maxRetries` 1 でよいか（原案の所要は実測がない）
 2. 機能凍結の前に通すか（修正）
