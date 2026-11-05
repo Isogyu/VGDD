@@ -1,7 +1,7 @@
 ---
 id: T-014
 title: S-3 共有候補の確認の画面（承認・編集して承認・却下、抽象化の案、記録と取り下げ。M9・M6-3 の画面）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M9-1, M9-2, M9-4, M9-5, M6-3, M6-4, D-56]   # 記録用。司法には渡さない
@@ -80,3 +80,5 @@ depends_on: [T-010, T-011]
 
 （統合後に追記）
 - 00:57 行政の長が W12 を起動（worktree `agent-a0d1d1ef8f90c7f73`）。依存の T-010（23:25）・T-011（00:56、721b925）は release で統合済み。前提（T-011 の3関数の export、T-010 の `ShareCandidate` 型と error 名、`SummaryActions` の props）を main で確認。辞書は Map を使う指示（T-015 の差し戻しの教訓）
+- 01:02 W12 の報告：コミット d0143bc（5ファイル、+658。新設4＋`SummaryActions.tsx` に import と Link の2行。所要約5分）。A1〜A7 達成（A3 は 1〜7・6b とも）。test 224（既存 219＋試験ファイルの追加なし、件数は main の進行分）・typecheck・lint 合格。票の解釈：①A2 の GET が失敗したときは POST せず「共有の記録を読めませんでした」を出して止める（承認済みの有無が分からず二重承認を避けるため。票に記載なし） ②`error` のない失敗は「HTTP <status>」、通信の失敗は「通信の失敗」を括弧に ③票にない表示：文字数 `n / 2000 文字`、理由が 500 超の文、送信中は入力を触れなくする、「← 整理結果へ」 ④`ShareRecords` は決定の名前・日時・失敗の文の関数を `ShareReview` から import。拒否1件：`npm ci --cache "$TMPDIR/npm-cache"` を他のコマンドと続けて実行した際に worktree の分離の確認が「変数 TMPDIR を含む複合コマンド」として拒否（回避せず、絶対パスの単独の `npm ci` で実行）。`[id]` への Write は拒否なし。画面は未確認
+- 01:03 行政の長が差分を確認（`files_allowed` の5ファイルのみ。`@/lib/sharing` は `import type` だけ、実行時の `@/lib` は `sensitive`・`abstraction` の2つ、`dangerouslySetInnerHTML`・`console`・`localStorage` の書き込みなし、`DECIDE_FAILURES` は Map、`confirmFlagged` の送り直しと `stale_candidate`・`flagged_body` の分岐、注意書き2つ、2000・500 の事前確認を読んだ）。①の解釈は司法の判断に委ねる。`status: review` で main にコミットし申請
