@@ -119,7 +119,8 @@ verdict_of() { # file → APPROVED | CHANGES_REQUIRED | UNAVAILABLE
   #   judge-codex.sh の parse_ok が false。CLI の空の応答・認証切れ・利用の上限。p0.4.2 では CHANGES_REQUIRED・指摘0件として数え、
   #   もう一方が APPROVED なら minor の不一致として統合された。Codex の指摘 #1 critical）
   local v=""
-  [ -s "$1" ] && v="$(jq -s -r 'if length == 1 and (.[0] | type) == "object" and (.[0].judge_parse_ok != false) and (.[0].parse_ok != false) then (.[0].final_verdict // "") else "" end' "$1" 2>/dev/null)" || v=""
+  local flag="judge_parse_ok"; case "$1" in *-codex-*) flag="parse_ok";; esac   # 成り立ったことの印は true の真偽が必須（欠けも使えない。Codex の3回目の監査 #1）
+  [ -s "$1" ] && v="$(jq -s -r --arg k "$flag" 'if length == 1 and (.[0] | type) == "object" and (.[0][$k] == true) then (.[0].final_verdict // "") else "" end' "$1" 2>/dev/null)" || v=""
   case "$v" in APPROVED|CHANGES_REQUIRED) echo "$v";; *) echo "UNAVAILABLE";; esac
 }
 JUDICIARY_MAX_FAILS=3               # p0.4.3：同じ申請の SHA で司法が使えなかった回数の上限。超えたらオーナーの判断へ（blocked）
@@ -312,6 +313,7 @@ process_request() {
   if [ "$sv" != "SKIPPED" ] && [ "$sv" != "APPROVED" ]; then
     fail "$task" "セキュリティ審査が差し戻し" && mv "$req" "$DONE_DIR/"; return
   fi
+  local route="agreed"   # p0.4.3：held の記録に通り方を残す（agreed・minor_disagreement・ruling。release が確かめる。Codex の3回目の監査 #2）
   if [ "$NO_CODEX" -eq 0 ] && [ "$jv" != "$cv" ]; then
     # p0.4.2：不一致・裁定の記録の前に書きかけを確かめる（待つなら何も記録しない。Codex の指摘 p0.4.2c #3）
     if ticket_dirty "docs/tasks/$(basename "$t")"; then dirty_wait "$task" "docs/tasks/$(basename "$t")"; return; fi
@@ -325,12 +327,14 @@ process_request() {
       #   裁定は申請の SHA に結び付く（後から差し替えた申請には効かない）。監査の不合格・セキュリティ審査の不合格・保護パスには効かない
       local ruling; ruling="$(jq -c --arg t "$task" --arg s "$actual" 'select(.task==$t and .sha==$s and .decision=="merge")' "$Z3/evidence/rulings.jsonl" 2>/dev/null | tail -n 1)"
       if [ -n "$ruling" ]; then
+        route="ruling"
         log_event "owner_ruling" "$task" "\"sha\":\"${actual:0:12}\",\"judge\":\"$jv\",\"codex\":\"$cv\",\"ruling\":$ruling"
         ticket_edit "$task" "" "$(ts) gate-runner: judge と Codex が分かれたが、オーナーの裁定（統合）により進める：$(printf '%s' "$ruling" | jq -r '.reason')"   || return   # p0.4.2：書きかけがあれば申請を残して戻る（Codex の指摘 #1）
       else
         fail "$task" "judge と Codex の判定が重大な指摘で分かれた（judge=$jv/$jsev 件, codex=$cv/$csev 件）。オーナーの裁定へ" "blocked" && mv "$req" "$DONE_DIR/"; return
       fi
     else
+      route="minor_disagreement"
       ticket_edit "$task" "" "$(ts) gate-runner: judge と Codex が minor の指摘で分かれた。厳しい側の指摘を残して統合（judge=${jv}, codex=${cv}）" || return
     fi
   fi
@@ -351,7 +355,8 @@ process_request() {
     set_ticket_status "$task" "review" "判定に合格（judge=$jv codex=${cv}）。夜間のため統合せず、朝のオーナーの承認を待つ" || return
     # p0.4.3：held の記録に、判定の版と Codex を省いたか（--no-codex）と security の結論を残す。release はこれを確かめる（Codex の指摘 #3）
     jq -nc --arg ts "$(ts)" --arg t "$task" --arg r "$actual" --arg c "$candidate" --arg m "$main_sha" --arg j "$jv" --arg x "$cv" --arg sv "$sv" --argjson nc "$([ "$NO_CODEX" -eq 1 ] && echo true || echo false)" \
-      '{ts:$ts,task:$t,request:$r,candidate:$c,main_at_check:$m,judge:$j,codex:$x,security:$sv,no_codex:$nc,law:"p0.4.3"}' >> "$Z3/evidence/held.jsonl"
+      --arg route "$route" --argjson sr "$([ "$(front "$tmain" security_review)" = "true" ] && echo true || echo false)" \
+      '{ts:$ts,task:$t,request:$r,candidate:$c,main_at_check:$m,judge:$j,codex:$x,security:$sv,no_codex:$nc,route:$route,security_required:$sr,law:"p0.4.3"}' >> "$Z3/evidence/held.jsonl"
     log_event "held" "$task" "\"request\":\"${actual:0:12}\",\"candidate\":\"${candidate:0:12}\",\"judge\":\"$jv\",\"codex\":\"$cv\""
     mv "$req" "$DONE_DIR/"
     echo "  ⏸ $task は合格。朝のオーナーの承認を待つ（候補 ${candidate:0:12}）"

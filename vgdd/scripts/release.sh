@@ -46,8 +46,15 @@ for task in "$@"; do
       and (.judge == "APPROVED" or .judge == "CHANGES_REQUIRED")
       and (if .no_codex then .codex == "SKIPPED" and .judge == "APPROVED" else (.codex == "APPROVED" or .codex == "CHANGES_REQUIRED") end)
       and (.judge == "APPROVED" or .codex == "APPROVED")
-      and (.security == "SKIPPED" or .security == "APPROVED")' >/dev/null 2>&1; then
+      and (.security == "SKIPPED" or .security == "APPROVED")
+      and (.security_required | type == "boolean")
+      and (if .security_required and (.no_codex | not) then .security == "APPROVED" else true end)
+      and (if .no_codex or .judge == .codex then .route == "agreed" else (.route == "minor_disagreement" or .route == "ruling") end)' >/dev/null 2>&1; then
     echo "✗ ${task}：夜間の合格の記録に、成り立った司法の判定がない（Codex の欠落・両方の差し戻し・security の不合格など）。統合しない" >&2; exit 1
+  fi
+  # 裁定で通った held は、オーナーの裁定（Z3 の rulings.jsonl）がこの票のこの申請の SHA について「統合」であることを照合し直す
+  if [ "$(printf '%s' "$rec" | jq -r .route)" = "ruling" ] && [ -z "$(jq -c --arg t "$task" --arg s "$(printf '%s' "$rec" | jq -r .request)" 'select(.task==$t and .sha==$s and .decision=="merge")' "$Z3/evidence/rulings.jsonl" 2>/dev/null | tail -n 1)" ]; then
+    echo "✗ ${task}：裁定で通った夜間の合格の記録だが、この申請へのオーナーの裁定が見つからない。統合しない" >&2; exit 1
   fi
   git -C "$REPO" cat-file -e "$cand^{commit}" || { echo "✗ ${task}：候補のコミットがない" >&2; exit 1; }
   if git -C "$REPO" merge-base --is-ancestor "$req" main; then

@@ -304,6 +304,11 @@ function groupC3() {
     ['J4', 'findings が配列でない', wrap('{"verdict":"APPROVED","findings":"なし"}'), 0],
     ['J5', 'CLI が非0で終わる（中身は正しい判定）', wrap(okVerdict), 1],
     ['J6', 'CLI の応答が is_error', JSON.stringify({ type: 'result', is_error: true, result: okVerdict }), 0],
+    // Codex の3回目の監査 #1：スキーマの必須の欠け・配列・末尾の壊れ・スキーマにない重さ
+    ['J8', '必須の項目が欠けた判定（{"verdict":"APPROVED","findings":[]}）', wrap('{"verdict":"APPROVED","findings":[]}'), 0],
+    ['J9', '正しい判定を1件含む配列', wrap(`[${okVerdict}]`), 0],
+    ['J10', '正しい判定の末尾に壊れた文字', wrap(`${okVerdict} broken`), 0],
+    ['J11', 'スキーマにない重さ（info）と理由の欠けた指摘', wrap(JSON.stringify({ ...JSON.parse(okVerdict), findings: [{ severity: 'info', category: 'test', file: null, line: null, requirement_id: null }] })), 0],
   ];
   for (const [id, label, out, rc] of cases) {
     const rec = realJudge('judge.sh', [], out, rc);
@@ -311,10 +316,13 @@ function groupC3() {
   }
   const good = realJudge('judge.sh', [], wrap(okVerdict), 0);
   record('C3', 'J7', '本物の judge.sh：形の正しい判定は成り立つ（judge_parse_ok: true。陽性の対照）', !!good && good.judge_parse_ok === true, good ? `final=${good.final_verdict}` : '記録がない');
-  for (const [id, label, out, rc] of [['X3', '空の JSON {}', '{}', 0], ['X4', '不正な verdict', '{"verdict":"INVALID","findings":[]}', 0], ['X5', 'CLI が非0で終わる', okVerdict, 1]]) {
+  for (const [id, label, out, rc] of [['X3', '空の JSON {}', '{}', 0], ['X4', '不正な verdict', '{"verdict":"INVALID","findings":[]}', 0], ['X5', 'CLI が非0で終わる', okVerdict, 1],
+    ['X7', '必須の項目が欠けた判定', '{"verdict":"APPROVED","findings":[]}', 0], ['X8', '正しい判定を1件含む配列', `[${okVerdict}]`, 0], ['X9', '正しい判定の末尾に壊れた文字', `${okVerdict} broken`, 0]]) {
     const rec = realJudge('judge-codex.sh', [], out, rc);
     record('C3', id, `本物の judge-codex.sh：${label} は判定として成り立たない（parse_ok: false）`, !!rec && rec.parse_ok === false, rec ? `parse_ok=${rec.parse_ok}` : '記録がない');
   }
+  const fenced = realJudge('judge.sh', [], wrap('```json\n' + okVerdict + '\n```'), 0);
+  record('C3', 'J12', '本物の judge.sh：全体を ```json で囲んだだけの正しい判定は成り立つ（陽性の対照）', !!fenced && fenced.judge_parse_ok === true, fenced ? '' : '記録がない');
   const goodC = realJudge('judge-codex.sh', [], okVerdict, 0);
   record('C3', 'X6', '本物の judge-codex.sh：形の正しい判定は成り立つ（陽性の対照）', !!goodC && goodC.parse_ok === true, goodC ? '' : '記録がない');
 }
@@ -328,7 +336,7 @@ out=""; task=""; while [ $# -gt 0 ]; do case "$1" in --out) out="$2"; shift 2;; 
 echo called >> "$out/../judge-called.log"
 [ -z "\${STUB_JUDGE_NOFILE:-}" ] || exit 1
 [ -z "\${STUB_JUDGE_RAW:-}" ] || { printf '%s' "$STUB_JUDGE_RAW" > "$out/$task-$(git rev-parse HEAD | cut -c1-12).json"; exit 0; }
-printf '{"final_verdict":"%s","judge":{"findings":[]}}\\n' "\${STUB_VERDICT:-CHANGES_REQUIRED}" > "$out/$task-$(git rev-parse HEAD | cut -c1-12).json"
+printf '{"final_verdict":"%s","judge_parse_ok":true,"judge":{"findings":[]}}\\n' "\${STUB_VERDICT:-CHANGES_REQUIRED}" > "$out/$task-$(git rev-parse HEAD | cut -c1-12).json"
 `;
 const STUB_CODEX = `#!/bin/bash
 case " $* " in *" --preflight "*) [ -z "\${STUB_CODEX_PREFLIGHT_FAIL:-}" ] || exit 69; exit 0;; esac
@@ -701,7 +709,7 @@ function releaseFixture(name, { audit = 0, otherCandidate = false, heldExtra = {
   };
   const req = mk(`task/${id}`, 'src/lib/a.ts', 'export const v = 2;\n');
   const cand = otherCandidate ? mk('task/other', 'src/lib/a.ts', 'export const v = 99;\n') : req;
-  write(path.join(fx.z3, 'evidence/held.jsonl'), JSON.stringify({ task: id, request: req, candidate: cand, main_at_check: mainAt, judge: 'APPROVED', codex: 'APPROVED', security: 'SKIPPED', no_codex: false, law: 'p0.4.3', ...heldExtra }) + '\n');
+  write(path.join(fx.z3, 'evidence/held.jsonl'), JSON.stringify({ task: id, request: req, candidate: cand, main_at_check: mainAt, judge: 'APPROVED', codex: 'APPROVED', security: 'SKIPPED', no_codex: false, route: 'agreed', security_required: false, law: 'p0.4.3', ...heldExtra }) + '\n');
   touch(path.join(fx.z3, 'evidence/gate_events.jsonl'));
   write(path.join(fx.z3, 'bin/sandboxed-run.sh'), `#!/bin/bash\nexit ${audit}\n`); fs.chmodSync(path.join(fx.z3, 'bin/sandboxed-run.sh'), 0o755);
   const env = { ...process.env, ...UTF8, VGDD_Z3_DIR: fx.z3, VGDD_REPO: fx.main };
@@ -734,6 +742,27 @@ function groupL() {
   L = releaseFixture('l7', { heldExtra: { codex: 'SKIPPED', no_codex: false } });
   r = L.run();
   record('L', 'L7', '--no-codex でないのに Codex が SKIPPED の夜間の合格の記録は統合しない', r.status === 1 && /成り立った司法の判定がない/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
+  L = releaseFixture('l10', { heldExtra: { route: 'ruling', judge: 'CHANGES_REQUIRED', codex: 'APPROVED' } });
+  r = L.run();
+  record('L', 'L10', '裁定で通った夜間の合格の記録でも、この申請へのオーナーの裁定が Z3 になければ統合しない', r.status === 1 && /裁定が見つからない/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
+  L = releaseFixture('l11', { heldExtra: { security_required: true, security: 'SKIPPED' } });
+  r = L.run();
+  record('L', 'L11', 'セキュリティ審査が必須の票で、その判定がない夜間の合格の記録は統合しない', r.status === 1 && /成り立った司法の判定がない/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
+  // 一続き（Codex の3回目の監査 #3）：本物の裁判所が --hold で書いた held を、本物の release が読んで統合する
+  const gl = gateFixture('l12', { ticket: { security: true } });
+  const gh = runGate(gl, 'APPROVED', ['--hold']);
+  const rl = sh('bash', [path.join(IMPL.bin, 'release.sh'), gl.id], { env: { ...process.env, ...UTF8, VGDD_Z3_DIR: gl.z3, VGDD_REPO: gl.main }, cwd: gl.main, timeout: 120000 });
+  const heldRec = (fs.readFileSync(path.join(gl.z3, 'evidence/held.jsonl'), 'utf8').trim().split('\n').pop() || '');
+  record('L', 'L12', '一続き：裁判所が夜間に書いた held（security 必須の票、3つの司法が APPROVED）を release が確かめて統合する（陽性の対照）',
+    gh.events.some((e) => e.type === 'held') && rl.status === 0 && sh('git', ['-C', gl.main, 'merge-base', '--is-ancestor', gl.head, 'main']).status === 0
+      && /"route":"agreed"/.test(heldRec) && /"security_required":true/.test(heldRec) && /"security":"APPROVED"/.test(heldRec), `held=${heldRec.slice(0, 120)} exit=${rl.status} ${rl.stderr.trim().slice(0, 100)}`);
+  // 一続きの陰性：判定の記録を書き換えて held の security を SKIPPED にしても、release は統合しない
+  const gl2 = gateFixture('l13', { ticket: { security: true } });
+  runGate(gl2, 'APPROVED', ['--hold']);
+  const hp = path.join(gl2.z3, 'evidence/held.jsonl');
+  fs.writeFileSync(hp, fs.readFileSync(hp, 'utf8').replace('"security":"APPROVED"', '"security":"SKIPPED"'));
+  const rl2 = sh('bash', [path.join(IMPL.bin, 'release.sh'), gl2.id], { env: { ...process.env, ...UTF8, VGDD_Z3_DIR: gl2.z3, VGDD_REPO: gl2.main }, cwd: gl2.main, timeout: 120000 });
+  record('L', 'L13', '一続きの陰性：裁判所の held から security の合格を消すと、release は統合しない', rl2.status === 1 && sh('git', ['-C', gl2.main, 'merge-base', '--is-ancestor', gl2.head, 'main']).status !== 0, `exit ${rl2.status}`);
   L = releaseFixture('l8', { heldExtra: { law: 'unknown' } });
   r = L.run();
   record('L', 'L8', '未知の版の印の夜間の合格の記録は統合しない', r.status === 1 && /未知の版/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);

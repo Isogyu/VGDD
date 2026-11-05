@@ -90,13 +90,27 @@ OUT_FILE="${OUT_DIR}/${TASK}-${HEAD_SHA}-codex-${MODE}.json"
 export RAW AUDIT_STATE TASK BRANCH HEAD_SHA BASE STAMP REQ MODE REQ_SOURCE CLI_RC
 node - > "$OUT_FILE" <<'NODE'
 const raw = process.env.RAW || '';
-let verdict = null;
-const m = raw.match(/\{[\s\S]*\}/);
-if (m) { try { verdict = JSON.parse(m[0]); } catch {} }
-// p0.4.3（Codex の再監査 #1 critical）：judge.sh と同じ「判定として成り立つ」条件
-const SEV = new Set(['critical', 'major', 'minor', 'info']);
-const wellFormed = (v) => !!v && typeof v === 'object' && !Array.isArray(v) && (v.verdict === 'APPROVED' || v.verdict === 'CHANGES_REQUIRED')
-  && Array.isArray(v.findings) && v.findings.every((f) => f && typeof f === 'object' && SEV.has(f.severity));
+// p0.4.3（Codex の3回目の監査 #1 critical）：判定のスキーマ（vgdd.verdict.v1）の完全な検証。余分なキー・欠けたキー・型・列挙値のどれかが違えば false
+const VERDICT_KEYS = ['schema', 'verdict', 'deterministic_audits_passed', 'requirements', 'findings', 'summary'];
+const REQ_KEYS = ['id', 'status', 'evidence'];
+const FIND_KEYS = ['severity', 'category', 'file', 'line', 'requirement_id', 'reason'];
+const exactKeys = (o, keys) => !!o && typeof o === 'object' && !Array.isArray(o) && Object.keys(o).length === keys.length && keys.every((k) => Object.prototype.hasOwnProperty.call(o, k));
+const strOrNull = (v) => v === null || typeof v === 'string';
+const wellFormed = (v) => exactKeys(v, VERDICT_KEYS) && v.schema === 'vgdd.verdict.v1' && (v.verdict === 'APPROVED' || v.verdict === 'CHANGES_REQUIRED')
+  && typeof v.deterministic_audits_passed === 'boolean' && typeof v.summary === 'string'
+  && Array.isArray(v.requirements) && v.requirements.every((r) => exactKeys(r, REQ_KEYS) && typeof r.id === 'string' && ['met', 'not_met', 'unverified'].includes(r.status) && typeof r.evidence === 'string')
+  && Array.isArray(v.findings) && v.findings.every((f) => exactKeys(f, FIND_KEYS) && ['critical', 'major', 'minor'].includes(f.severity)
+    && ['requirement', 'correctness', 'security', 'test', 'protected_path', 'input'].includes(f.category) && strOrNull(f.file)
+    && (f.line === null || Number.isInteger(f.line)) && strOrNull(f.requirement_id) && typeof f.reason === 'string');
+// 本文全体を1つの JSON オブジェクトとして読む（前後の空白と、全体を囲む ```json の囲みだけを許す。正規表現で途中を取り出さない）
+const parseWhole = (text) => {
+  let t = String(text || '').trim();
+  const fence = t.match(/^```(?:json)?\s*\n([\s\S]*?)\n```$/);
+  if (fence) t = fence[1].trim();
+  try { const o = JSON.parse(t); return o && typeof o === 'object' && !Array.isArray(o) ? o : null; } catch { return null; }
+};
+// judge.sh と同じ「判定として成り立つ」条件（本文全体が1つの JSON オブジェクトで、スキーマに完全に合う）
+const verdict = parseWhole(raw);
 const malformed = process.env.CLI_RC !== '0' || !wellFormed(verdict);
 const auditState = process.env.AUDIT_STATE || 'not_run';
 const record = {

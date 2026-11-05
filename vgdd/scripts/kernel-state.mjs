@@ -85,7 +85,7 @@ for (const f of vfiles) {
   const kind = m[3] === 'judge' ? 'codex' : m[3] === 'security' ? 'security' : 'judge';
   const full = path.join(EV, 'verdicts', f);
   // 裁判所と同じく、司法の出力を解釈できなかった記録（judge_parse_ok／parse_ok が false）は判定ではない → null（Codex の再監査 #6）
-  let v = null; try { const o = JSON.parse(fs.readFileSync(full, 'utf8')); if (o.judge_parse_ok !== false && o.parse_ok !== false) v = o.final_verdict; } catch { /* 壊れた記録 */ }
+  let v = null; try { const o = JSON.parse(fs.readFileSync(full, 'utf8')); if ((kind === 'judge' ? o.judge_parse_ok : o.parse_ok) === true) v = o.final_verdict; } catch { /* 壊れた記録 */ }
   const mtime = fs.statSync(full).mtimeMs;
   const t = (by_task[m[1]] ??= { judge: null, codex: null, security: null, at: null, _m: {} });
   if ((t._m[kind] ?? -1) < mtime) { t._m[kind] = mtime; t[kind] = v === 'APPROVED' || v === 'CHANGES_REQUIRED' ? v : null; }
