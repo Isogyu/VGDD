@@ -1,0 +1,66 @@
+{
+  "schema": "vgdd.governance-summary.v1",
+  "generated_at": "2026-11-06T06:49:17.201+09:00",
+  "source_file": "tool_calls.jsonl",
+  "period": {
+    "first": "2026-11-03T11:23:53.146+09:00",
+    "last": "2026-11-06T06:31:25.593+09:00"
+  },
+  "chain_ok": true,
+  "records": 5031,
+  "sessions": 12,
+  "tool_calls": {
+    "allow": 2698,
+    "deny": 56
+  },
+  "deny_kinds": {
+    "protected_path": 26,
+    "z3": 2,
+    "readonly_outside": 2,
+    "git_scope": 17,
+    "other": 8,
+    "hook_internal": 1
+  },
+  "by_tool": {
+    "Bash": 1413,
+    "Write": 284,
+    "ToolSearch": 6,
+    "Read": 178,
+    "Edit": 715,
+    "AskUserQuestion": 8,
+    "WebFetch": 10,
+    "Agent": 65,
+    "SubagentHandback": 69,
+    "SendMessage": 5,
+    "ListAgents": 1
+  },
+  "by_agent": {
+    "(main)": {
+      "calls": 1593,
+      "deny": 30,
+      "outcomes": 1159
+    },
+    "general-purpose": {
+      "calls": 253,
+      "deny": 5,
+      "outcomes": 243
+    },
+    "worker": {
+      "calls": 902,
+      "deny": 21,
+      "outcomes": 869
+    },
+    "constitutional-review": {
+      "calls": 6,
+      "deny": 0,
+      "outcomes": 6
+    }
+  },
+  "agents": 4,
+  "outcomes": {
+    "success": 2240,
+    "failure": 35,
+    "denied_by_classifier": 2
+  },
+  "allow_without_outcome": 26
+}
