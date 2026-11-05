@@ -1,7 +1,7 @@
 ---
 id: T-022
 title: 統治のライブ画面に「Kernel」の区画を足す（法律の版・稼働／停止・成立条件①〜⑤の強制と試験・承認済みの仕様・held・裁定・判定と不一致・ハッシュチェーン）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6, A7, A8, A9]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-55①, D-59③, ADR-017, ADR-028]   # 記録用。司法には渡さない
@@ -161,3 +161,5 @@ release.sh は統合の後に `_board.json` を作り直さない（次の gate-
 5. Kernel の区画が `/api/governance` の成功に従属する点（A6）を受け入れるか、早期 return の前に置く構造の変更をするか
 
 - 2026-11-06T06:36:35+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-06T06:47:55+0900 release: status → merged（main=f0e342b94be7。夜間の判定に合格した候補 ad7c2f4f83f8 を、オーナーが朝に承認して統合）
