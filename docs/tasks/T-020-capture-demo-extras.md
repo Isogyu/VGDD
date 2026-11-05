@@ -1,7 +1,7 @@
 ---
 id: T-020
 title: デモ用の保存済みの AI 出力（手順書の原案・AI の検出）を実 API で採取する仕組み（M4-4・M8-2 の拡張）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M4-4, M8-2, M5-1, M6-2, D-62]   # 記録用。司法には渡さない
@@ -77,3 +77,5 @@ API キーのない審査員の環境（デモモード）でも、W1 の手順�
 
 （統合後に追記）
 - 01:17 行政の長が W14 を起動（worktree `agent-a1db65563f70a6a0c`）。仕様はオーナーが 01:11 に approve-spec で承認済み（立法補佐の伝達）。T-021 と並行（触るファイルは重ならない）
+- 01:22 W14 の報告：コミット d303121（4ファイル、+571。所要約5分）。A1〜A7 達成。試験は①〜⑪をそれぞれ1件以上、やり直しの回し方と ok の規則も試験（追加16件、test 261）・typecheck・lint 合格。票の解釈：既定の Claude provider は呼ぶ直前に作る（材料不足や片方の種別だけのときに使わない側がキーを求めて例外を出さないため）、⑪は `globalThis.__tsubuyakiDb` を試験の中だけメモリの DB に差し替え（後で戻す）、`Content-Type` は小文字にして比較。ルート（A4 の HTTP の判定）は試験なし（A7 のとおり関数で試験）。`procedureFixturePath` には作業名をそのまま渡す（票のとおり。`normalizeTaskName` で形が変わる作業名では名前が合わないが `DEMO_TASK_W1` は同じ形で往復の試験も合格）。拒否なし
+- 01:22 行政の長が差分を確認し、503 の応答に票にない `message` が付いていたので取り除くよう W14 に依頼（A4 は `{ error: "no_api_key" }` だけ）。01:23 W14 が同じ1コミットに amend（HEAD 29cc506、4ファイル +569。test 261・typecheck・lint 合格）。行政の長が再確認（`files_allowed` の4ファイルのみ、A4 の判定の順 404→403 Origin→415→400→400 strict→503、ルートと lib に `console` なし、材料は `captureDemoExtras` のメモリ DB、例外は `capture_failed` のみ）。`status: review` で main にコミットし申請（security_review: true）
