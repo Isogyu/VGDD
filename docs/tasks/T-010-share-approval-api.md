@@ -1,7 +1,7 @@
 ---
 id: T-010
 title: 共有前の本人確認の裏側（共有候補の作成・承認・編集して承認・却下・取り下げ・記録。M9 の裏側）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M9-1, M9-2, M9-3, M9-5, M6-1, D-56]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1.2
 time_limit_min: 75
 security_review: true          # 新しい API ルート3本と新しい表
 unattended: false              # 2026-11-05 22:5x：昼の作業員で仕上げる（夜間の --allowedTools が [id] のパスに効かない。OBS-049）
-branch: null
-worker: null
+branch: worktree-agent-ad2ebcea670275c51   # 昼の作業員のブランチ（4fbc2ad。夜の 6525714 を cherry-pick して仕上げ）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W1
 files_allowed:
   - src/lib/db/schema.sql                    # 表 share_candidates を足す（既存の表は変えない）
   - src/lib/db.test.ts                       # 表の一覧の試験の期待値に1つ足すだけ（A8）
@@ -101,3 +101,6 @@ depends_on: []
 - 2026-11-05T22:50:56+0900 night-runner: 作業員の実装を前検査で確認（HEAD 6525714）。status → review で再申請（試行 1）
 
 - 2026-11-05T22:53:27+0900 gate-runner: status → in_progress（judge=CHANGES_REQUIRED, codex=CHANGES_REQUIRED（両方が差し戻し））
+- 23:00 行政の長：昼の作業員 W1 を新しい worktree（main 836733a）で起こし、夜の 6525714 を cherry-pick して仕上げを指示（夜は `[id]` のパスへの書き込みが拒否され A7 のルート2本と A11 が未着手。OBS-049）。worktree `night-T-010` は触らない
+- 23:08 W1 の報告：コミット 4fbc2ad（1つに amend。9ファイル、+793/−3）。足したのは A7 のルート2本（`sessions/[id]/share`・`shares/[shareId]`）、A11（seed.ts・seed.test.ts、reset の試験）。夜の実装（A1〜A6・A8・既存の GET）は A 条件と照合して変更なし。test 167（既存 135＋32）・typecheck・lint 合格（警告1件は既存の `vgdd/conformance/run.mjs`）。票にない確認1つ：`withdrawShare` で `shared_knowledge` の UPDATE が1行でなければ ROLLBACK して `not_approved`（夜の実装のまま）。逸脱：件数の確認に `npx --no-install vitest run` を1回使った（ask の例外の範囲だが、約束は `npm test`）。拒否なし
+- 23:09 行政の長が差分を確認（`files_allowed` の9ファイルのみ、`notes`・`console` の使用なし、禁止語なし、schema・seed・db.test の差分が A1・A8・A11 どおり）。`status: review` で main にコミットし再申請（差し戻し1回目。gate-runner `--hold`、合格は held、統合は朝に release.sh）
