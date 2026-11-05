@@ -5,6 +5,7 @@
 // 入れるもの：
 //   - 新人A の終了済みの作業 W1「社内向け集計スクリプトの改修」（メモ4件、所要 240 分）
 //       ＋ その AI 整理の結果 1件（M4 の形。model は 'demo'）＋ 新人A が承認したチームの知識 1件（M9 の先取り）
+//       ＋ 先輩C の W1 の終了済みの作業（メモ3件）と、先輩C が承認した共有 1件（M5 の原案用。W1 を初めて入れるときだけ）
 //   - 新人A の終了済みの作業 W2「開発環境の構築」（メモ4件）、W3「API 開発」（メモ4件）。整理結果はなし
 //     （M4 の実 API 呼び出しと、デモ用 fixture の採取 npm run demo:capture に使う）
 
@@ -135,6 +136,35 @@ function insertW1Extras(sid: number, db: DatabaseSync): void {
     "依頼を受けたら、成果物の形と既存コードの場所を30分以内に依頼者に確認する。AI で調べられることと、人にしか分からないことを分けてから聞く",
     "2026-10-27T14:10:00+09:00",
   );
+
+  // 先輩C の W1 の記録と、先輩C が承認した共有（M5 の手順書の原案に必要な2件目。T-018）
+  insertW1SeniorC(db);
+}
+
+/** 先輩C の W1 の終了済みの作業（メモ3件）と、先輩C が承認した共有 1件。整理結果は入れない */
+export const DEMO_W1_SENIOR_C = {
+  startedAt: "2026-10-20T09:00:00+09:00",
+  endedAt: "2026-10-20T10:00:00+09:00",
+  memos: [
+    ["2026-10-20T09:05:00+09:00", "出力形式の変更を頼まれたら、まず今の CSV の見本と、それを読む人と仕組みを依頼者に聞く"],
+    ["2026-10-20T09:30:00+09:00", "経理の集計の表計算が列の番号で読んでいるので、列の順を変えるだけで壊れる。変える前に読む側の担当に知らせる"],
+    ["2026-10-20T09:50:00+09:00", "既存のスクリプトは共有ドライブの tools フォルダにある。探す前に場所を聞くほうが早い"],
+  ] as [string, string][],
+  approvedAt: "2026-10-20T10:10:00+09:00",
+  sharedBody:
+    "出力形式の変更を頼まれたら、まず今の CSV の見本と、それを読む人・仕組みを確認する。列の番号で読む表計算があると列の順を変えるだけで壊れるので、変える前に読む側に知らせる。既存のスクリプトは共有ドライブの tools フォルダにある。",
+};
+
+function insertW1SeniorC(db: DatabaseSync): void {
+  const c = DEMO_W1_SENIOR_C;
+  const r = startSession({ userId: "senior_c", taskName: DEMO_TASK_W1 }, db, c.startedAt);
+  if (!r.ok) throw new Error("先輩C に進行中の作業があるため、デモ用の過去の記録を入れられません。先に終了するか、npm run seed -- --reset を使ってください");
+  const sid = r.session.id;
+  for (const [at, body] of c.memos) addNote({ sessionId: sid, userId: "senior_c", body }, db, at);
+  endSession(sid, db, c.endedAt);
+  db.prepare(
+    "INSERT INTO shared_knowledge (task_name, user_id, session_id, body, approved_at) VALUES (?, 'senior_c', ?, ?, ?)",
+  ).run(DEMO_TASK_W1, sid, c.sharedBody, c.approvedAt);
 }
 
 export function seedDemo(db: DatabaseSync = getDb(), opts: { reset?: boolean } = {}): SeedResult {
