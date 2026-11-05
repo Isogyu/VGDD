@@ -1,7 +1,7 @@
 ---
 id: T-018
 title: デモの合成データに先輩C の W1 の記録と承認済みの共有を足す（M5 のデモ用）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M7-1, M5-1, M5-2, D-62]   # 記録用。司法には渡さない
@@ -76,3 +76,5 @@ depends_on: []
 - 00:44 行政の長が差分を確認（`files_allowed` の3ファイルのみ。メモ3件と共有の本文が A1・A2 の文と一致、既存の期待値の変更は A3 の9行、`session_summaries` に先輩C の分なし）。`status: review` で main にコミットし申請
 
 - 2026-11-06T00:48:49+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-06T00:51:26+0900 release: status → merged（main=1329cf794792。夜間の判定に合格した候補 5c1b5aaf3b0e を、オーナーが朝に承認して統合）
