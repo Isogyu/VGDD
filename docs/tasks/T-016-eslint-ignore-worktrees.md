@@ -1,7 +1,7 @@
 ---
 id: T-016
 title: lint の対象から作業員の worktree（.claude/worktrees/）を外す
-status: review
+status: blocked
 requirements: [A1, A2, A3]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: []
@@ -56,3 +56,5 @@ depends_on: []
 - 23:41 行政の長が W7 を起動（worktree `agent-a956de1c175478ed1`、main 11c86a8 から）。夜間キューの案（`docs/tasks/night-queue.proposed.json`）はないため昼の作業員で実施
 - 23:43 W7 の報告：コミット 8edbe97（1ファイル、+1）。test 198・typecheck・lint 合格（警告1件は既存の `vgdd/conformance/run.mjs`）。逸脱・拒否なし
 - 23:45 行政の長が差分を確認（`eslint.config.mjs` の `globalIgnores` に `".claude/**"` の1行だけ。A1・A3 どおり）。`status: review` で main にコミットし申請（gate-runner `--hold` なら合格は held、統合は release.sh）
+
+- 2026-11-05T23:44:00+0900 gate-runner: status → blocked（仕様（main の票の統治の項目と受け入れ条件）がオーナーに承認されていない、または承認の後に変わった。approve-spec.sh で承認する）
