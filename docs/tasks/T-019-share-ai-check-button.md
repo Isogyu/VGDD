@@ -1,7 +1,7 @@
 ---
 id: T-019
 title: S-3 に「AI でも確かめる」を置き、AI の候補を決定論的な検出と分けて見せる（M6-2 の画面）
-status: review
+status: merged
 requirements: [A1, A1b, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M6-2, M6-4, M9-1]   # 記録用。司法には渡さない
@@ -70,3 +70,5 @@ S-3（T-014 の `ShareReview`）で、本人が押したときだけ、共有候
 - 2026-11-06T01:41:55+0900 gate-runner: judge と Codex が分かれたが、オーナーの裁定（統合）により進める：AI の区画は描画の最後の return の中にあり、その前の早い戻り（status が pending でない・stale）で決定済み・古い候補は別の画面を返す（T-014 で統合済みの行のため差分に入らず、judge から見えなかった）。結果の反映も pending かつ stale でないときだけ。Codex の judge は APPROVED
 
 - 2026-11-06T01:44:03+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-06T01:47:40+0900 release: status → merged（main=dfb8e5556203。夜間の判定に合格した候補 be6f067ede9c を、オーナーが朝に承認して統合）
