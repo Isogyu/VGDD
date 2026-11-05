@@ -6,7 +6,7 @@
 #   ネットワーク：既定で禁止。--net のとき（npm ci）だけ許可。
 set -euo pipefail
 DIR=""; NET=0
-while [ $# -gt 0 ]; do case "$1" in --dir) DIR="$2"; shift 2;; --net) NET=1; shift;; --) shift; break;; *) echo "不明な引数: $1" >&2; exit 64;; esac; done
+while [ $# -gt 0 ]; do case "$1" in --preflight) if command -v sandbox-exec >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then exit 0; else exit 69; fi;; --dir) DIR="$2"; shift 2;; --net) NET=1; shift;; --) shift; break;; *) echo "不明な引数: $1" >&2; exit 64;; esac; done
 [ -n "$DIR" ] && [ -d "$DIR" ] || { echo "--dir が必要" >&2; exit 64; }
 command -v sandbox-exec >/dev/null || { echo "sandbox-exec がない（fail-closed）" >&2; exit 69; }
 real() { python3 -c 'import os,sys;print(os.path.realpath(sys.argv[1]))' "$1"; }

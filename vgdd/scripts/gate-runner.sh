@@ -62,7 +62,6 @@ PROTECTED_RE='^(\.claude/|CLAUDE\.md$|\.github/|vgdd/|docs/requirements\.md$|doc
 MAX_RETURNS=3                       # 差し戻しの上限（D-05）
 
 mkdir -p "$VERDICTS" "$DONE_DIR"
-command -v jq >/dev/null || { echo "jq が必要" >&2; exit 69; }
 
 ts() { date +%Y-%m-%dT%H:%M:%S%z; }
 log_event() { # type, task, json-extra
@@ -114,20 +113,31 @@ ticket_edit() { # task, status（空なら変えない）, 行（§6 に足す1�
 set_ticket_status() { # task, status, note
   ticket_edit "$1" "$2" "$(ts) gate-runner: status → $2${3:+（$3）}"
 }
-verdict_of() { # file → APPROVED | CHANGES_REQUIRED | UNAVAILABLE（p0.4.3：ファイルがない・読めない・結論がこの2つでない＝司法が使えない）
-  local v=""; [ -s "$1" ] && v="$(jq -r '.final_verdict // empty' "$1" 2>/dev/null || true)"
+verdict_of() { # file → APPROVED | CHANGES_REQUIRED | UNAVAILABLE
+  # p0.4.3：次はどれも「司法が使えない」（判定ではない）：ファイルがない・空・ファイル全体が1つの JSON オブジェクトでない（jq が失敗すれば
+  #   途中まで出た値も捨てる。Codex の指摘 #2）・結論が2つのどちらでもない・司法の出力を解釈できなかった（judge.sh の judge_parse_ok、
+  #   judge-codex.sh の parse_ok が false。CLI の空の応答・認証切れ・利用の上限。p0.4.2 では CHANGES_REQUIRED・指摘0件として数え、
+  #   もう一方が APPROVED なら minor の不一致として統合された。Codex の指摘 #1 critical）
+  local v=""
+  [ -s "$1" ] && v="$(jq -s -r 'if length == 1 and (.[0] | type) == "object" and (.[0].judge_parse_ok != false) and (.[0].parse_ok != false) then (.[0].final_verdict // "") else "" end' "$1" 2>/dev/null)" || v=""
   case "$v" in APPROVED|CHANGES_REQUIRED) echo "$v";; *) echo "UNAVAILABLE";; esac
 }
 JUDICIARY_MAX_FAILS=3               # p0.4.3：同じ申請の SHA で司法が使えなかった回数の上限。超えたらオーナーの判断へ（blocked）
 judiciary_unavailable() { # task, 申請の完全な SHA, どの司法か, 申請のファイル
   # p0.4.3（OBS-053）：司法が使えないことは判定ではない。票を書き換えず（差し戻しの回数を使わず）、申請を残して次の周回でやり直す。
   #   行政が司法を壊す入力で裁判所を待たせ続けないよう、同じ申請の SHA で通算 JUDICIARY_MAX_FAILS 回に達したら blocked にする
-  local n; n="$(jq -c --arg t "$1" --arg s "${2:0:12}" 'select(.type=="judiciary_unavailable" and .task==$t and .request==$s)' "$EVENTS" 2>/dev/null | wc -l | tr -d ' ')"
+  #   回数は同じ申請の完全な SHA での通算（間に判定が成り立った周回があっても戻さない。Codex の指摘 #5 を受け SPEC も「通算」に）
+  local ft rel; ft="$(ticket_path "$1")"; rel="docs/tasks/$(basename "$ft")"
+  if [ -n "$ft" ] && ticket_dirty "$rel"; then dirty_wait "$1" "$rel"; return 0; fi
+  local n; n="$(jq -c --arg t "$1" --arg s "$2" 'select(.type=="judiciary_unavailable" and .task==$t and .request_full==$s)' "$EVENTS" 2>/dev/null | wc -l | tr -d ' ')"
   n=$((n + 1))
-  log_event "judiciary_unavailable" "$1" "\"request\":\"${2:0:12}\",\"which\":\"$3\",\"count\":$n"
-  echo "  ⚠ ${1}: 司法（$3）が使えなかった（判定のファイルがない・読めない。この申請で ${n} 回目）。差し戻しに数えず、申請を残す" >&2
+  log_event "judiciary_unavailable" "$1" "\"request\":\"${2:0:12}\",\"request_full\":\"$2\",\"which\":\"$3\",\"count\":$n"
+  echo "  ⚠ ${1}: 司法（$3）が使えなかった（判定の記録がない・読めない・出力を解釈できない。この申請で通算 ${n} 回目）。差し戻しに数えず、申請を残す" >&2
   if [ "$n" -ge "$JUDICIARY_MAX_FAILS" ]; then
-    fail "$1" "司法（$3）が同じ申請で ${n} 回使えなかった。オーナーが司法の環境を確かめる" "blocked" && mv "$4" "$DONE_DIR/"
+    # 差し戻し（rejected）として記録しない（盤の returns と上限に数えない。Codex の指摘 #6）。票の記録に成功したときだけ申請を移す
+    set_ticket_status "$1" "blocked" "司法（$3）が同じ申請で通算 ${n} 回使えなかった。差し戻しではない。オーナーが司法の環境を確かめてから再申請する" || return 0
+    log_event "judiciary_blocked" "$1" "\"request\":\"${2:0:12}\",\"which\":\"$3\",\"count\":$n"
+    mv "$4" "$DONE_DIR/"
   fi
   return 0
 }
@@ -339,8 +349,9 @@ process_request() {
     git -C "$REPO" update-ref "refs/vgdd/held/$task" "$candidate"   # 候補のコミットを残しておくための参照（中身の照合は Z3 の記録で行う）
     # p0.4.2：票の記録に成功したときだけ held を確定し、申請を移す（書きかけが生じていれば申請を残す。Codex の指摘 p0.4.2c #2）
     set_ticket_status "$task" "review" "判定に合格（judge=$jv codex=${cv}）。夜間のため統合せず、朝のオーナーの承認を待つ" || return
-    jq -nc --arg ts "$(ts)" --arg t "$task" --arg r "$actual" --arg c "$candidate" --arg m "$main_sha" --arg j "$jv" --arg x "$cv" \
-      '{ts:$ts,task:$t,request:$r,candidate:$c,main_at_check:$m,judge:$j,codex:$x}' >> "$Z3/evidence/held.jsonl"
+    # p0.4.3：held の記録に、判定の版と Codex を省いたか（--no-codex）と security の結論を残す。release はこれを確かめる（Codex の指摘 #3）
+    jq -nc --arg ts "$(ts)" --arg t "$task" --arg r "$actual" --arg c "$candidate" --arg m "$main_sha" --arg j "$jv" --arg x "$cv" --arg sv "$sv" --argjson nc "$([ "$NO_CODEX" -eq 1 ] && echo true || echo false)" \
+      '{ts:$ts,task:$t,request:$r,candidate:$c,main_at_check:$m,judge:$j,codex:$x,security:$sv,no_codex:$nc,law:"p0.4.3"}' >> "$Z3/evidence/held.jsonl"
     log_event "held" "$task" "\"request\":\"${actual:0:12}\",\"candidate\":\"${candidate:0:12}\",\"judge\":\"$jv\",\"codex\":\"$cv\""
     mv "$req" "$DONE_DIR/"
     echo "  ⏸ $task は合格。朝のオーナーの承認を待つ（候補 ${candidate:0:12}）"
@@ -381,6 +392,7 @@ preflight() {
   local missing="" c
   for c in jq node git npm; do command -v "$c" >/dev/null 2>&1 || missing="$missing $c"; done
   for c in judge.sh sandboxed-run.sh; do [ -x "$BIN/$c" ] || missing="$missing bin/$c"; done
+  [ -z "$missing" ] && ! "$BIN/sandboxed-run.sh" --preflight >/dev/null 2>&1 && missing="$missing sandbox"   # 監査の実依存（sandbox-exec・python3）
   [ -f "$BIN/spec-digest.mjs" ] || missing="$missing bin/spec-digest.mjs"
   [ "$NO_CODEX" -eq 1 ] || [ -x "$BIN/judge-codex.sh" ] || missing="$missing bin/judge-codex.sh"
   if [ -z "$missing" ]; then
@@ -388,7 +400,7 @@ preflight() {
     [ "$NO_CODEX" -eq 1 ] || "$BIN/judge-codex.sh" --preflight >/dev/null 2>&1 || missing="$missing codex"
   fi
   if [ -n "$missing" ]; then
-    log_event "preflight_failed" "-" "\"missing\":$(jq -Rn --arg m "${missing# }" '$m' 2>/dev/null || echo '"?"')"
+    log_event "preflight_failed" "-" "\"missing\":\"$(printf '%s' "${missing# }" | tr -cd 'a-z0-9./ -')\""   # jq がなくても記録できるよう、文字を限って埋め込む
     echo "起動時の点検に失敗：${missing# } がない・動かない。裁判所は起動しない（申請と票は触らない）" >&2
     exit 69
   fi

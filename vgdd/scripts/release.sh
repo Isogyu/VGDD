@@ -37,6 +37,13 @@ for task in "$@"; do
   rec="$(jq -c --arg t "$task" 'select(.task==$t)' "$Z3/evidence/held.jsonl" | tail -n 1)"
   [ -n "$rec" ] || { echo "✗ ${task}：夜間の合格の記録がない" >&2; exit 1; }
   req="$(printf '%s' "$rec" | jq -r .request)"; cand="$(printf '%s' "$rec" | jq -r .candidate)"
+  # p0.4.3（Codex の指摘 #3）：p0.4.2 までの held は、Codex の判定の欠落を SKIPPED として合格にしえた。版の印（law）のない held と、
+  #   --no-codex で起動していないのに Codex が APPROVED／CHANGES_REQUIRED でない held は統合しない（昼に申請し直す）
+  if [ -z "$(printf '%s' "$rec" | jq -r '.law // empty')" ]; then echo "✗ ${task}：前の版（p0.4.2 以前）の夜間の合格の記録。司法の成立を確かめられないので統合しない。昼に申請し直す" >&2; exit 1; fi
+  case "$(printf '%s' "$rec" | jq -r '"\(.codex)/\(.no_codex)"')" in
+    APPROVED/*|CHANGES_REQUIRED/*|SKIPPED/true) ;;
+    *) echo "✗ ${task}：夜間の合格の記録に Codex の判定がない（--no-codex でもない）。統合しない" >&2; exit 1;;
+  esac
   git -C "$REPO" cat-file -e "$cand^{commit}" || { echo "✗ ${task}：候補のコミットがない" >&2; exit 1; }
   if git -C "$REPO" merge-base --is-ancestor "$req" main; then
     echo "・${task}：申請 ${req:0:12} はすでに main に入っている（統合済み）。何もしない"; continue

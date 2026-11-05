@@ -36,7 +36,7 @@ while [ $# -gt 0 ]; do
     --out) OUT_DIR="$2"; shift 2;;
     --dry-run) DRY=1; shift;;
     # p0.4.3（OBS-053）：gate-runner の起動時の点検。claude が動けば 0、なければ 69（判定はしない）
-    --preflight) command -v claude >/dev/null 2>&1 && claude --version >/dev/null 2>&1; exit $(( $? == 0 ? 0 : 69 ));;
+    --preflight) if command -v claude >/dev/null 2>&1 && claude --version >/dev/null 2>&1; then exit 0; else exit 69; fi;;   # set -e の下でも 69 で終わる（Codex の指摘 #4）
     # --emit-input：judge を呼ばず、組み立てた入力だけを標準出力に出す（judge-codex.sh・gate-runner が同じ入力を使うため）
     --emit-input) EMIT=1; shift;;
     # --audit-state-file：--emit-input のとき、TASK/BRANCH/HEAD_SHA/BASE/STAMP/REQ/AUDIT_STATE を shell 変数の形で書き出す先
@@ -63,7 +63,7 @@ if [ -z "$BASE" ]; then
   fi
 fi
 BRANCH="$(git branch --show-current || echo '(detached)')"
-HEAD_SHA="$(git rev-parse --short=12 HEAD)"
+HEAD_SHA="$(git rev-parse HEAD | cut -c1-12)"   # p0.4.3：先頭12桁に固定（--short は曖昧なとき13桁以上になり、裁判所が判定のファイルを見つけられない）
 
 # 作業ツリーの未コミット分も含めて見る（夜間はコミット単位、手動は作業中も判定できるように）
 DIFF_STAT="$(git diff --stat "$BASE" -- . ':(exclude)package-lock.json' || true)"

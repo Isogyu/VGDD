@@ -28,7 +28,12 @@ const jst = (ms) => new Date(ms + 9 * 3600e3).toISOString().replace(/\.\d+Z$/, '
 const lines = (f) => { try { return fs.readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean); } catch { return []; } };
 const git = (...a) => spawnSync('git', ['-C', REPO, '-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', ...a], { encoding: 'utf8' });
 const TASK_RE = /^T-\d{3,4}$/;
-const str = (v) => (typeof v === 'string' && v.length <= 40 && !/[\n/]/.test(v) ? v : null); // 時刻・版などの短い値だけ通す
+// 値は項目ごとの形だけを通す（Codex の指摘 #8。長さの上限だけでは SHA・セッション ID・短い理由の本文が通る）
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?([+-]\d{2}:?\d{2}|Z)$/;
+const VER_RE = /^p\d+\.\d+\.\d+[a-z]?$/;
+const str = (v) => (typeof v === 'string' && ISO_RE.test(v) ? v : null);   // 時刻
+const ver = (v) => (typeof v === 'string' && VER_RE.test(v) ? v : null);   // 法律・フックの版
+const IMPLS = new Set(['repo', 'z3']);
 const uniq = (a) => [...new Set(a)].sort();
 
 const events = lines(path.join(EV, 'gate_events.jsonl'));
@@ -36,9 +41,9 @@ const lastTs = (pred) => { const e = events.filter(pred).pop(); return e ? str(e
 
 // 法律の版
 const capsSrc = git('show', 'main:vgdd/kernel/capabilities.json');
-let kernel_version = null; try { kernel_version = str(JSON.parse(capsSrc.stdout).kernel_version); } catch { /* なし */ }
+let kernel_version = null; try { kernel_version = ver(JSON.parse(capsSrc.stdout).kernel_version); } catch { /* なし */ }
 const lastCall = lines(path.join(EV, 'tool_calls.jsonl')).pop();
-const policy_version = lastCall ? str(lastCall.policy_version) : null;
+const policy_version = lastCall ? ver(lastCall.policy_version) : null;
 
 // 停止（理由の本文と stop_id は出さない。時刻は gate_events の kernel_stop から）
 const stopActive = fs.existsSync(path.join(Z3, 'STOP'));
@@ -107,14 +112,25 @@ evidence.checkpoint_at = str(lines(path.join(EV, 'checkpoints.jsonl')).pop()?.ts
 
 // 最後の適合性テスト（run.mjs --record がオーナーの権限で Z3 に残したもの）
 const conf = lines(path.join(EV, 'conformance.jsonl')).pop();
-const conformance = conf ? { passed: Number(conf.passed) || 0, total: Number(conf.total) || 0, impl: str(conf.impl), kernel_version: str(conf.kernel_version), at: str(conf.at) } : null;
+const conformance = conf ? { passed: Number(conf.passed) || 0, total: Number(conf.total) || 0, impl: IMPLS.has(conf.impl) ? conf.impl : null, kernel_version: ver(conf.kernel_version), at: str(conf.at) } : null;
 
 const state = { schema: 'vgdd.kernel-state.v1', generated_at: null, kernel_version, policy_version, stopped, judiciary, approvals, held, rulings, annulments, verdicts: { count: vcount, by_task }, disagreements, evidence, conformance };
 
+// 書き出し（Codex の指摘 #7）：出力先の親と祖先（--repo の中）がシンボリックリンクでない実のディレクトリであることを確かめ、
+//   同じディレクトリに推測できない名前の一時ディレクトリを排他的に作って（mkdtemp）、その中に排他的に書き（wx）、rename する。
+//   公開先がシンボリックリンクなら書かない（rename はリンクを置き換えるが、リンクの先には書かない）
 try {
-  fs.mkdirSync(path.dirname(OUT), { recursive: true });
+  const dir = path.dirname(OUT);
+  fs.mkdirSync(dir, { recursive: true });
+  for (let d = dir; d.startsWith(path.resolve(REPO)) && d !== path.resolve(REPO); d = path.dirname(d)) {
+    if (!fs.lstatSync(d).isDirectory()) throw Object.assign(new Error('出力先の親がディレクトリでない（リンクを含む）'), { code: 'ENOTDIR_LINK' });
+  }
+  if (!fs.lstatSync(dir).isDirectory()) throw Object.assign(new Error('出力先の親がディレクトリでない'), { code: 'ENOTDIR_LINK' });
   state.generated_at = jst(Date.now());
-  const tmp = `${OUT}.tmp-${process.pid}`;
-  fs.writeFileSync(tmp, JSON.stringify(state, null, 2) + '\n');
-  fs.renameSync(tmp, OUT);
+  const tdir = fs.mkdtempSync(path.join(dir, '.kernel-state.json.tmp-'));
+  const tmp = path.join(tdir, 'kernel-state.json');
+  try {
+    fs.writeFileSync(tmp, JSON.stringify(state, null, 2) + '\n', { flag: 'wx', mode: 0o644 });
+    fs.renameSync(tmp, OUT);
+  } finally { fs.rmSync(tdir, { recursive: true, force: true }); }
 } catch (e) { console.error(`書き出しに失敗：${e.code || e.message}`); process.exit(1); }

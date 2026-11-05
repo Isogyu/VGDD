@@ -32,7 +32,7 @@ while [ $# -gt 0 ]; do
     --out) OUT_DIR="$2"; shift 2;;
     --dry-run) DRY=1; shift;;
     # p0.4.3（OBS-053）：gate-runner の起動時の点検。codex が動けば 0、なければ 69（判定はしない）
-    --preflight) command -v codex >/dev/null 2>&1 && codex --version >/dev/null 2>&1; exit $(( $? == 0 ? 0 : 69 ));;
+    --preflight) if command -v codex >/dev/null 2>&1 && codex --version >/dev/null 2>&1; then exit 0; else exit 69; fi;;   # set -e の下でも 69 で終わる（Codex の指摘 #4）
     *) PASSTHRU+=("$1"); shift;;
   esac
 done

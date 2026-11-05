@@ -59,12 +59,12 @@ const write = (p, s) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs
 const sha256hex = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const touch = (p) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.appendFileSync(p, ''); };
 
-const TICKET = (id, { section2 = '- A1. `src/lib/a.ts` の `v` が 2 になる', files = ['src/lib/a.ts'], status = 'review', source = 'ticket', reqs = '[A1]', log = '' } = {}) => `---
+const TICKET = (id, { section2 = '- A1. `src/lib/a.ts` の `v` が 2 になる', files = ['src/lib/a.ts'], status = 'review', source = 'ticket', reqs = '[A1]', log = '', security = null } = {}) => `---
 id: ${id}
 title: 適合性テストの票
 status: ${status}
 requirements: ${reqs}
-requirements_source: ${source}
+requirements_source: ${source}${security === null ? '' : `\nsecurity_review: ${security}`}
 unattended: true
 branch: task/${id}
 worker: null
@@ -285,18 +285,19 @@ case " $* " in *" --preflight "*) [ -z "\${STUB_JUDGE_PREFLIGHT_FAIL:-}" ] || ex
 out=""; task=""; while [ $# -gt 0 ]; do case "$1" in --out) out="$2"; shift 2;; --task) task="$2"; shift 2;; *) shift;; esac; done
 echo called >> "$out/../judge-called.log"
 [ -z "\${STUB_JUDGE_NOFILE:-}" ] || exit 1
-printf '{"final_verdict":"%s","judge":{"findings":[]}}\\n' "\${STUB_VERDICT:-CHANGES_REQUIRED}" > "$out/$task-$(git rev-parse --short=12 HEAD).json"
+[ -z "\${STUB_JUDGE_RAW:-}" ] || { printf '%s' "$STUB_JUDGE_RAW" > "$out/$task-$(git rev-parse HEAD | cut -c1-12).json"; exit 0; }
+printf '{"final_verdict":"%s","judge":{"findings":[]}}\\n' "\${STUB_VERDICT:-CHANGES_REQUIRED}" > "$out/$task-$(git rev-parse HEAD | cut -c1-12).json"
 `;
 const STUB_CODEX = `#!/bin/bash
 case " $* " in *" --preflight "*) [ -z "\${STUB_CODEX_PREFLIGHT_FAIL:-}" ] || exit 69; exit 0;; esac
-out=""; task=""; while [ $# -gt 0 ]; do case "$1" in --out) out="$2"; shift 2;; --task) task="$2"; shift 2;; *) shift;; esac; done
-[ -z "\${STUB_CODEX_NOFILE:-}" ] || exit 69
-printf '{"final_verdict":"%s","codex":{"findings":[]}}\\n' "\${STUB_CODEX_VERDICT:-\${STUB_VERDICT:-CHANGES_REQUIRED}}" > "$out/$task-$(git rev-parse --short=12 HEAD)-codex-judge.json"
+out=""; task=""; mode=judge; while [ $# -gt 0 ]; do case "$1" in --out) out="$2"; shift 2;; --task) task="$2"; shift 2;; --security) mode=security; shift;; *) shift;; esac; done
+if [ "$mode" = security ]; then [ -z "\${STUB_SECURITY_NOFILE:-}" ] || exit 69; else [ -z "\${STUB_CODEX_NOFILE:-}" ] || exit 69; fi
+printf '{"final_verdict":"%s","parse_ok":true,"codex":{"findings":[]}}\\n' "\${STUB_CODEX_VERDICT:-\${STUB_VERDICT:-CHANGES_REQUIRED}}" > "$out/$task-$(git rev-parse HEAD | cut -c1-12)-codex-$mode.json"
 `;
-function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export const v = 2;\n' }, stop = false, afterApprove = null } = {}) {
+function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export const v = 2;\n' }, stop = false, afterApprove = null, ticket = {} } = {}) {
   const fx = fixture(name);
   const id = 'T-930';
-  commitTicket(fx, id, {});
+  commitTicket(fx, id, ticket);
   const wt = path.join(fx.base, 'wt-930');
   git(fx.main, 'worktree', 'add', '-q', '-b', `task/${id}`, wt, 'main');
   for (const [f, s] of Object.entries(change)) write(path.join(wt, f), s);
@@ -413,7 +414,8 @@ function groupG() {
   runGate(g15, 'APPROVED', [], { STUB_CODEX_NOFILE: '1' });
   g = runGate(g15, 'APPROVED', [], { STUB_CODEX_NOFILE: '1' });
   record('G', 'G16', '同じ申請で司法が3回使えなければ blocked にしてオーナーの判断へ（行政が司法を壊す入力で裁判所を待たせ続けない）',
-    !g.inMain && !g.pending && g.status === 'blocked' && g.events.filter((e) => e.type === 'judiciary_unavailable').length === 3, `status=${g.status} n=${g.events.filter((e) => e.type === 'judiciary_unavailable').length}`);
+    !g.inMain && !g.pending && g.status === 'blocked' && g.events.filter((e) => e.type === 'judiciary_unavailable').length === 3
+      && g.events.some((e) => e.type === 'judiciary_blocked') && !g.events.some((e) => e.type === 'rejected'), `status=${g.status} n=${g.events.filter((e) => e.type === 'judiciary_unavailable').length}`);
   const g17 = gateFixture('g17');
   // 前の申請の judge の APPROVED の記録が残っている（別の SHA）。今回の judge はファイルを書かずに終わる
   write(path.join(g17.z3, `evidence/verdicts/${g17.id}-0123456789ab.json`), JSON.stringify({ final_verdict: 'APPROVED', judge: { findings: [] } }) + '\n');
@@ -423,6 +425,17 @@ function groupG() {
   // 司法が戻れば、同じ申請が次の周回で普通に判定されて統合される（陽性の対照）
   g = runGate(g17, 'APPROVED');
   record('G', 'G18', '司法が戻った周回では、残っていた申請が普通に判定されて統合される（陽性の対照）', g.inMain && g.status === 'merged', `inMain=${g.inMain} status=${g.status}`);
+  // Codex の監査 p0.4.3 #1・#2・#9：司法の出力を解釈できない記録、壊れた記録、セキュリティ審査の欠落
+  g = runGate(gateFixture('g19'), 'APPROVED', [], { STUB_JUDGE_RAW: '{"final_verdict":"CHANGES_REQUIRED","judge_parse_ok":false,"judge":null}' });
+  record('G', 'G19', 'judge の出力を解釈できなかった記録（CLI の空の応答・認証切れ。judge_parse_ok: false）は判定ではない。Codex が APPROVED でも minor の不一致として統合しない',
+    !g.inMain && g.pending && g.status === 'review' && g.events.some((e) => e.type === 'judiciary_unavailable' && e.which === 'judge'), `inMain=${g.inMain} status=${g.status}`);
+  g = runGate(gateFixture('g20'), 'APPROVED', [], { STUB_JUDGE_RAW: '{"final_verdict":"APPROVED"}broken' });
+  record('G', 'G20', 'ファイル全体が1つの JSON でない判定の記録は、途中に APPROVED があっても使わない', !g.inMain && g.pending && g.events.some((e) => e.type === 'judiciary_unavailable'), `inMain=${g.inMain} status=${g.status}`);
+  g = runGate(gateFixture('g21', { ticket: { security: true } }), 'APPROVED', [], { STUB_SECURITY_NOFILE: '1' });
+  record('G', 'G21', 'security_review の票でセキュリティ審査の記録がなければ統合しない（差し戻しにも数えない）',
+    !g.inMain && g.pending && g.status === 'review' && g.events.some((e) => e.type === 'judiciary_unavailable' && e.which === 'security') && !g.events.some((e) => e.type === 'rejected'), `inMain=${g.inMain} status=${g.status}`);
+  g = runGate(gateFixture('g22', { ticket: { security: true } }), 'APPROVED');
+  record('G', 'G22', 'security_review の票で3つの司法が APPROVED なら統合される（陽性の対照）', g.inMain && g.status === 'merged', `inMain=${g.inMain} status=${g.status} ${g.code ? g.out : ''}`);
   g = runGate(gateFixture('g8'), 'APPROVED', ['--hold']);
   record('G', 'G8', '夜間（--hold）は合格しても統合せず、held として朝の承認を待つ', !g.inMain && g.events.some((e) => e.type === 'held'), `inMain=${g.inMain}`);
 }
@@ -473,6 +486,16 @@ function groupST() {
   }).flat();
   record('ST', 'ST9', '裁判所・夜間の代行・release・再開は状態の写しを読まない（表示用で、判断の根拠にしない）',
     fs.existsSync(path.join(IMPL.bin, 'kernel-state.mjs')) && readers.length === 0, readers.join(' / ').slice(0, 200));
+  // Codex の監査 p0.4.3 #8：入力の記録に紛れ込んだ SHA・セッション ID・パス・理由の本文の形は、時刻・版の欄を通っても出ない
+  const f8 = gateFixture('st8');
+  write(path.join(f8.z3, 'evidence/conformance.jsonl'), JSON.stringify({ at: 'session-abcdef0123456789', impl: '/Users/x/理由の本文', kernel_version: 'e'.repeat(40), passed: 1, total: 1 }) + '\n');
+  write(path.join(f8.z3, 'evidence/tool_calls.jsonl'), JSON.stringify({ policy_version: 'toolu_0123456789abcdef' }) + '\n');
+  fs.appendFileSync(path.join(f8.z3, 'evidence/spec_approvals.jsonl'), JSON.stringify({ task: 'T-931', ts: 'c'.repeat(40), digest: 'sha256:x', approved_by: 'owner' }) + '\n');
+  g = runGate(f8, 'APPROVED');
+  let st8 = null; try { st8 = JSON.parse(g.kstate); } catch { /* なし */ }
+  record('ST', 'ST8', '入力の記録に紛れ込んだ SHA・セッション ID・パス・理由の本文の形は、時刻・版・実装の欄を通っても書き出されない（欄ごとの形で検査）',
+    !!st8 && st8.conformance?.at === null && st8.conformance?.impl === null && st8.conformance?.kernel_version === null && st8.policy_version === null
+      && st8.approvals?.some((a) => a.task === 'T-931' && a.approved_at === null) && !/session-|toolu_|\/Users\/|理由の本文|eeeeeeee|cccccccc/.test(g.kstate), g.kstate ? '' : g.out);
   // 作業員が差分に状態の写しを入れて申請すれば、保護パスとして司法の前に blocked
   g = runGate(gateFixture('st7', { change: { 'src/lib/a.ts': 'export const v = 2;\n', 'docs/governance/kernel-state.json': '{"approvals":[]}\n' } }), 'APPROVED');
   record('ST', 'ST7', '作業員の差分に状態の写しが含まれれば、司法の前に保護パスとして blocked',
@@ -623,7 +646,7 @@ function groupN() {
 }
 
 // ---- L 朝の統合（release.sh） ------------------------------------------------------------------
-function releaseFixture(name, { audit = 0, otherCandidate = false } = {}) {
+function releaseFixture(name, { audit = 0, otherCandidate = false, heldExtra = {} } = {}) {
   const fx = fixture(name);
   const id = 'T-950';
   commitTicket(fx, id, {});
@@ -636,7 +659,7 @@ function releaseFixture(name, { audit = 0, otherCandidate = false } = {}) {
   };
   const req = mk(`task/${id}`, 'src/lib/a.ts', 'export const v = 2;\n');
   const cand = otherCandidate ? mk('task/other', 'src/lib/a.ts', 'export const v = 99;\n') : req;
-  write(path.join(fx.z3, 'evidence/held.jsonl'), JSON.stringify({ task: id, request: req, candidate: cand, main_at_check: mainAt, judge: 'APPROVED', codex: 'APPROVED' }) + '\n');
+  write(path.join(fx.z3, 'evidence/held.jsonl'), JSON.stringify({ task: id, request: req, candidate: cand, main_at_check: mainAt, judge: 'APPROVED', codex: 'APPROVED', security: 'SKIPPED', no_codex: false, law: 'p0.4.3', ...heldExtra }) + '\n');
   touch(path.join(fx.z3, 'evidence/gate_events.jsonl'));
   write(path.join(fx.z3, 'bin/sandboxed-run.sh'), `#!/bin/bash\nexit ${audit}\n`); fs.chmodSync(path.join(fx.z3, 'bin/sandboxed-run.sh'), 0o755);
   const env = { ...process.env, ...UTF8, VGDD_Z3_DIR: fx.z3, VGDD_REPO: fx.main };
@@ -662,6 +685,13 @@ function groupL() {
   L = releaseFixture('l5', { audit: 1 });
   r = L.run();
   record('L', 'L5', '組み合わせた木の監査が不合格なら統合を取り消す', r.status === 1 && /監査が不合格/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
+  // p0.4.3（Codex の監査 #3）：前の版の held（版の印がない）と、Codex の判定が欠けた held は統合しない
+  L = releaseFixture('l6', { heldExtra: { law: undefined } });
+  r = L.run();
+  record('L', 'L6', '版の印のない（p0.4.2 以前の）夜間の合格の記録は統合しない（Codex の欠落を SKIPPED として合格にしえた）', r.status === 1 && /前の版/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
+  L = releaseFixture('l7', { heldExtra: { codex: 'SKIPPED', no_codex: false } });
+  r = L.run();
+  record('L', 'L7', '--no-codex でないのに Codex が SKIPPED の夜間の合格の記録は統合しない', r.status === 1 && /Codex の判定がない/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
 }
 
 // ---- 権限の表の自己検査（どの権限にも確かめ方がある） ------------------------------------------
