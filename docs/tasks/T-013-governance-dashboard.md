@@ -1,7 +1,7 @@
 ---
 id: T-013
 title: 統治のライブ画面 /governance（票の盤・票1枚の運命・統治の数字。D-59③）
-status: ready
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-45, D-55, D-56, D-59]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1.0
 time_limit_min: 60
 security_review: true          # 新しい API ルート（リポジトリのファイルを読む）
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-ad0fec44ee0f07850   # 作業員のブランチ（8d58f68）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W3
 files_allowed:
   - src/lib/governance.ts                # 新設：読み込みと解析（純粋関数＋ファイルの読み込み）
   - src/lib/governance.test.ts           # 新設
@@ -77,3 +77,5 @@ VGDD の統治が実際に働いたことを、アプリの中の1画面で見�
 ## 6. 記録
 
 （統合後に追記）
+- 22:59 W3 起動（worktree `agent-ad0fec44ee0f07850`、main 836733a から）。23:0x コミット 8d58f68（5ファイル新設、+790）。報告：test 147（既存 135＋12）・typecheck・lint 合格（警告1件は既存の `vgdd/conformance/run.mjs`）。票にない守り：開くときに `O_NOFOLLOW`、1MB 超は読まない、`docs` がディレクトリでなければ「ない」。ルートで `await connection()`（cacheComponents で GET をビルド時に固めないため）。front matter は空の値を「ない」、同じキーは最初の行。運命の時刻は記録の文字列から `MM/DD HH:MM`。拒否なし
+- 23:07 行政の長が差分を確認（`files_allowed` の5ファイルのみ、読む場所は3か所、禁止語なし、A1〜A7。A6 の①〜⑨に `it(` が対応）。`status: review` で main にコミットし申請（gate-runner `--hold`。合格は held、統合は朝に release.sh）。画面はユーザー役が `/governance` で確認

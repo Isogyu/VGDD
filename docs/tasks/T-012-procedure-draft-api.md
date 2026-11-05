@@ -1,7 +1,7 @@
 ---
 id: T-012
 title: 手順書の原案と判断のポイントの生成（承認済みの共有から。M5 の裏側）
-status: ready
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7, A8]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M5-1, M5-2, M5-3, M5-4, M9-3, M4-4, D-62]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1.0
 time_limit_min: 60
 security_review: true          # 新しい API ルートと外部 API の呼び出し
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a74be100381bc1cb4   # 作業員のブランチ（53337f3）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W2
 files_allowed:
   - src/lib/procedure.ts                 # 新設：材料の取得・プロンプト・検証・生成
   - src/lib/procedure.test.ts            # 新設
@@ -83,3 +83,5 @@ depends_on: []
 ## 6. 記録
 
 （統合後に追記）
+- 22:59 W2 起動（worktree `agent-a74be100381bc1cb4`、main 836733a から）。23:0x コミット 53337f3（4ファイル新設、+805）。報告：test 154（既存 135＋19）・typecheck・lint 合格（警告1件は既存の `vgdd/conformance/run.mjs`）。補った仕様：プロンプトでは本文の改行を空白にして1行に、`too_large` の message は「共有が多すぎます（20件まで、本文の合計20000文字まで。いまは N 件）」、fixture の `raw` が文字列でなければ「ない」扱い。ルートに try/catch はなく、DB の例外は Next の 500。拒否なし
+- 23:07 行政の長が差分を確認（`files_allowed` の4ファイルのみ、`notes`・`console` の使用なし、禁止語なし、A1〜A8。A7 の①〜⑭に `it(` が対応）。`status: review` で main にコミットし申請（gate-runner `--hold`。合格は held、統合は朝に release.sh）
