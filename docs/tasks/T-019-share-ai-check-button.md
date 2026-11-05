@@ -1,7 +1,7 @@
 ---
 id: T-019
 title: S-3 に「AI でも確かめる」を置き、AI の候補を決定論的な検出と分けて見せる（M6-2 の画面）
-status: review
+status: blocked
 requirements: [A1, A1b, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M6-2, M6-4, M9-1]   # 記録用。司法には渡さない
@@ -63,3 +63,5 @@ S-3（T-014 の `ShareReview`）で、本人が押したときだけ、共有候
 - 01:26 行政の長が W16 を起動（worktree `agent-a55eb031f995ad30b`）。仕様はオーナーが 01:11 に approve-spec で承認済み（立法補佐の伝達）。依存の T-014（01:25、65d7173）・T-017（01:04）は release で統合済みで、`ShareReview.tsx` と `ai-check` のルートが main にあることを確認
 - 01:29 W16 の報告：コミット a921350（1ファイル、+166。所要約3分）。A1・A1b・A2〜A5 達成。「AI でも確かめる」は決定の欄の上の新しい欄（sky の枠）、応答は送ったときの `candidateId`・`userId` と `candidateRef` を照らして pending かつ stale でないときだけ表示、承認・却下の成功後と 409 `stale_candidate` で結果を消す。種類の日本語と失敗の対応表は Map。純粋関数 `aiCheckFailureMessage`・`parseAiCheckSuccess` を export 追加、既存の export は不変。test 245・typecheck・lint 合格。票の解釈：承認・却下の送信中もボタンを押せなくする。拒否1件：`cd <worktree>; cat …` がフックで「.claude に対して読み取り専用と判定できない」として拒否（回避せず Read ツールと絶対パスで続行）。画面は未確認
 - 01:30 行政の長が差分を確認（`files_allowed` の1ファイルのみ。`@/lib/ai-sensitive` は `import type { AiFlag }` だけ、`dangerouslySetInnerHTML`・`console` なし、A1 の2行と A2・A3 の文が票どおり、`stale` の早期 return には変更なし）。`status: review` で main にコミットし申請
+
+- 2026-11-06T01:33:49+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=CHANGES_REQUIRED/1 件, codex=APPROVED/0 件）。オーナーの裁定へ）
