@@ -1,7 +1,7 @@
 ---
 id: T-014
 title: S-3 共有候補の確認の画面（承認・編集して承認・却下、抽象化の案、記録と取り下げ。M9・M6-3 の画面）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M9-1, M9-2, M9-4, M9-5, M6-3, M6-4, D-56]   # 記録用。司法には渡さない
@@ -88,3 +88,5 @@ depends_on: [T-010, T-011]
 - 2026-11-06T01:07:36+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
 - 01:10 オーナーの裁定（立法補佐の伝達）：修正。Codex の指摘は major 1件（A3 の 3）。`ShareReview.tsx` で抽象化の案と「選んだ案で置き換える」が `c.stale` の分岐より前に描画され、古い候補でも置き換えの操作が残る。直し方：stale のときは抽象化の案・置き換え・承認・却下の操作をどれも出さない。§2 は変えない
 - 01:11 行政の長が W13 を起動（worktree `agent-a39f593f96687a427`）。d0143bc を cherry-pick し、stale のときは案・プレビュー・置き換え・3つのボタン・`flagged_body` の確認ボタンを出さず、注意書き2つと本文と A3 の 3 の文だけにして1コミットに amend する指示。W12 の worktree `agent-a0d1d1ef…` は触らない
+- 01:13 W13 の報告：コミット d4429dd（1つに amend。main との差は5ファイル +677。d0143bc との差は `ShareReview.tsx` +35/−8 のみ）。`c.stale` のときを通常の描画より前の早期 return に分け、注意書き2つ・本文の textarea（`readOnly`）・「原文のメモは共有されません」・古くなった旨だけを出す。案・プレビュー・置き換え・3つのボタン・理由欄・`flagged_body` の確認・文字数は出さない。開いた時点の stale と 409 `stale_candidate` の両方が同じ分岐。stale でないときの振る舞いは不変（元の三項分岐を外しただけ）。test 245・typecheck・lint 合格。拒否なし（`npm ci` は単独で実行）。字下げが2文字深い箇所が残る（動きに影響なし）。画面は未確認
+- 01:14 行政の長が差分を確認（`files_allowed` の5ファイルのみ。早期 return が `proposals.length > 0` のブロックより前にあること、A6 の制約が保たれていることを読んだ）。`status: review` で main にコミットし再申請（差し戻し1回目）
