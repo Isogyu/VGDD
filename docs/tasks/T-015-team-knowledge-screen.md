@@ -1,7 +1,7 @@
 ---
 id: T-015
 title: S-4 チームの知恵の画面（承認済みの共有の一覧と、手順書の原案・判断のポイント。M5・C2 の画面）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A5b, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M5-1, M5-2, M5-3, M5-4, M9-3, C2, D-62]   # 記録用。司法には渡さない
@@ -85,3 +85,4 @@ depends_on: [T-012]
 - 00:16 行政の長が差分を確認（`files_allowed` の5ファイルのみ。`Record<string`・`[g.task_name]`・`hasOwnProperty`・`in` が残っていないことを grep で確認。266083a との差は `TeamKnowledge.tsx` +40/−27 と試験 +17）。`status: review` で main にコミットし再申請（差し戻し1回目。security_review: true）
 
 - 2026-11-06T00:20:12+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
+- 00:36 オーナーの裁定：00:20 の差し戻しは裁判所の環境の不具合（コードの指摘ではない）。同じ d07cc6a をそのまま再申請してよい。行政の長が `status: review` で main にコミットし再申請（コードの変更なし）
