@@ -22,6 +22,7 @@
 | 03:0x | F-5：要件の未着手から票の下書き2枚（S1 共通つまずきの簡易集計＝承認済みの共有から `【つまずき】` の行を拾う、M15 匿名ブレスト＝設計の論点と推奨。C2 は T-015 で実装済み）。3票の点検役（読み取り専用）を起動 | `docs/tasks/drafts/T-draft-s1-common-struggles.md`・`T-draft-m15-anonymous-brainstorm.md`（3ddb9ba） |
 | 03:0x | dev-routes の票の点検（8件）を反映（c886484）。F-1：p0.4.3 案の2回目の点検（既存の試験との衝突・実現性、12件：major 6・medium 3・minor 3）を反映：群の記号を ST に、起動時の点検は代わりの司法でも通る形に、**codex が判定のファイルを書かずに終わると SKIPPED で統合に至る既存の穴**、書き出しの時点、promise の自己検査、`.gitignore`、出どころの訂正 5 件、night-runner の対応。§9 に申し送りの表 | `docs/drafts/kernel-p0.4.3-proposal.md`（6b6af53） |
 | 03:1x | 票4枚の点検（計 24 件）を反映（4f5b898）：答えの門は route の試験の形（`stubEnv`＋`setProviderOverride`）と SessionView の `pendingAnswers`、「該当メモを除いて送る」が無限に出る穴、stale の却下は既存の試験⑦⑫の期待値、失敗の扱いは `setMessage` 16 箇所の規則と対象 10 箇所、S1 は seed の新人A の本文に `【つまずき】` の行がない（前提が偽）→ seed を 4 行の形に。F-1：B（Kernel の UI）の2回目の点検（p0.4.3 §1 との一致・既存コード）を起動 | 票の下書き4枚 |
+| 03:1x | F-5：UI の票2枚（見た目の1本化、アクセシビリティの小修正。review-ui の票 B・C）。B の2回目の点検（8件）を反映：`approved_at` の null、`tickets` を持たない、読み込みの手順（ディレクトリのリンク・fstat・1MB は新規）、`formatJst`、abort、Route Segment Config。p0.4.3 案 §1 に申し送り（tickets は出さない、null の扱い、SKIPPED→null）。M12 の2回目と UI 2票の点検役を起動中 | `T-draft-ui-consistency.md`・`T-draft-a11y-fixes.md`（b28060e）、`T-draft-kernel-ui.md`・`kernel-p0.4.3-proposal.md`（a79f7bd） |
 
 ## 4:00 の報告（立法補佐へ。下書き、4:00 に確定）
 
