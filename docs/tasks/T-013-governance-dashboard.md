@@ -1,7 +1,7 @@
 ---
 id: T-013
 title: 統治のライブ画面 /governance（票の盤・票1枚の運命・統治の数字。D-59③）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-45, D-55, D-56, D-59]   # 記録用。司法には渡さない
@@ -10,7 +10,7 @@ estimate_h: 1.0
 time_limit_min: 60
 security_review: true          # 新しい API ルート（リポジトリのファイルを読む）
 unattended: false
-branch: worktree-agent-ad0fec44ee0f07850   # 作業員のブランチ（8d58f68）。統合キュー（p0.3.1）により main から分岐したまま申請
+branch: worktree-agent-a897ccfab702af5d3   # W5 のブランチ（5fe29b5。8d58f68 に修正を重ねて1コミット）。元は W3 の worktree-agent-ad0fec44ee0f07850（8d58f68）
 worker: W3
 files_allowed:
   - src/lib/governance.ts                # 新設：読み込みと解析（純粋関数＋ファイルの読み込み）
@@ -81,3 +81,6 @@ VGDD の統治が実際に働いたことを、アプリの中の1画面で見�
 - 23:07 行政の長が差分を確認（`files_allowed` の5ファイルのみ、読む場所は3か所、禁止語なし、A1〜A7。A6 の①〜⑨に `it(` が対応）。`status: review` で main にコミットし申請（gate-runner `--hold`。合格は held、統合は朝に release.sh）。画面はユーザー役が `/governance` で確認
 
 - 2026-11-05T23:10:24+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
+- 23:15 立法補佐：Codex の judge とセキュリティ審査の指摘は1件（major、A3）。作業員が足した 1MB の上限（`MAX_FILE_BYTES` と `readRegularFile` のサイズ判定）が票にない読み飛ばし。上限だけを取り除く（lstat・O_NOFOLLOW・非ディレクトリの扱いは残す）
+- 23:16 行政の長：W5 を新しい worktree（main 84db97f）で起こし、8d58f68 を cherry-pick して修正を指示。23:18 W5 のコミット 5fe29b5（1つに amend）。取り除いたのは定数1行と判定2か所だけ（8d58f68 との差は3行）。上限を前提にした試験はなかったので試験は変更なし。test 147・typecheck・lint 合格。拒否なし
+- 23:19 行政の長が差分を確認（8d58f68 との差が上限の除去だけ、`files_allowed` の5ファイル）。`status: review` で main にコミットし再申請（差し戻し1回目）
