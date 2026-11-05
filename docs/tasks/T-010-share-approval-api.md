@@ -1,7 +1,7 @@
 ---
 id: T-010
 title: 共有前の本人確認の裏側（共有候補の作成・承認・編集して承認・却下・取り下げ・記録。M9 の裏側）
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M9-1, M9-2, M9-3, M9-5, M6-1, D-56]   # 記録用。司法には渡さない
@@ -106,3 +106,5 @@ depends_on: []
 - 23:09 行政の長が差分を確認（`files_allowed` の9ファイルのみ、`notes`・`console` の使用なし、禁止語なし、schema・seed・db.test の差分が A1・A8・A11 どおり）。`status: review` で main にコミットし再申請（差し戻し1回目。gate-runner `--hold`、合格は held、統合は朝に release.sh）
 
 - 2026-11-05T23:12:53+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-05T23:25:22+0900 release: status → merged（main=7af01910e925。夜間の判定に合格した候補 ac1a961e8527 を、オーナーが朝に承認して統合）
