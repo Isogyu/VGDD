@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 // 型だけを読む（governance.ts は node:fs を使うので、値は読み込まない）
 import type { GovernanceData, GovernanceTicket, TimelineEvent } from "@/lib/governance";
 import { formatMdHm } from "@/lib/time";
+import KernelPanel from "@/components/KernelPanel";
 
 // 盤の列（この順に左から並べる）。5つ以外の status は「その他」へ
 const COLUMNS: { status: string; label: string }[] = [
@@ -144,6 +145,8 @@ export default function GovernanceView() {
           AI の作業員・裁判所・司法が、憲法と法律のもとで動いた記録（件数とリポジトリの記録だけ。生のログは公開していない）
         </p>
       </header>
+
+      <KernelPanel />
 
       {/* 2. 数字のタイル */}
       <section aria-label="統治の数字" className="flex flex-col gap-2">
