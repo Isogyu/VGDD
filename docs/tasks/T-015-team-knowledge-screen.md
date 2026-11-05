@@ -10,8 +10,8 @@ estimate_h: 1.0
 time_limit_min: 60
 security_review: true          # 新しい API ルート1本
 unattended: false
-branch: worktree-agent-a9b7f50fdcfb584fa   # 作業員のブランチ（main 11c86a8 から）。統合キュー（p0.3.1）により main から分岐したまま申請
-worker: W6
+branch: worktree-agent-a456af914ff963843   # 差し戻し対応の作業員のブランチ（main 49eb404 から、266083a を cherry-pick）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W8
 files_allowed:
   - src/lib/team-knowledge.ts              # 新設：承認済みの共有の一覧（読むだけ）
   - src/lib/team-knowledge.test.ts         # 新設
@@ -79,3 +79,5 @@ depends_on: [T-012]
 - 23:45 行政の長が差分を確認（`files_allowed` の5ファイルのみ、すべて新設。`listTeamKnowledge` は `shared_knowledge` と `users` だけを読み `withdrawn_at IS NULL`、並びは task_name・approved_at・id の昇順。route は例外で `knowledge_unavailable` だけを返す。部品は `@/lib/procedure`・`@/lib/team-knowledge` を `import type` だけ、`dangerouslySetInnerHTML`・`console`・`localStorage` なし。試験は①〜④に `it(` 6件）。`status: review` で main にコミットし申請（security_review: true。gate-runner `--hold` なら合格は held、統合は release.sh）
 
 - 2026-11-05T23:48:58+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
+- 00:1x 立法補佐からの伝達（オーナー経由）：Codex security の指摘は major 1件（A4）。`TeamKnowledge.tsx` が作業名を普通のオブジェクトのキーにしており（`drafts`・`busy`・`errors`）、作業名が `constructor`・`toString` 等だと継承のプロパティを拾って画面が壊れる。直し方：Map か `Object.create(null)` の辞書で所有のプロパティだけを読む。§2 は変えない
+- 00:13 行政の長が W8 を起動（worktree `agent-a456af914ff963843`、main 49eb404 から）。266083a を cherry-pick し、3つの辞書を Map に直して1コミットに amend、`team-knowledge.test.ts` に作業名が `constructor`・`__proto__` でもまとまる試験を足せるなら足す指示。W6 の worktree `agent-a9b7f50f…` は触らない
