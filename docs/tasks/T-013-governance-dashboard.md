@@ -84,3 +84,5 @@ VGDD の統治が実際に働いたことを、アプリの中の1画面で見�
 - 23:15 立法補佐：Codex の judge とセキュリティ審査の指摘は1件（major、A3）。作業員が足した 1MB の上限（`MAX_FILE_BYTES` と `readRegularFile` のサイズ判定）が票にない読み飛ばし。上限だけを取り除く（lstat・O_NOFOLLOW・非ディレクトリの扱いは残す）
 - 23:16 行政の長：W5 を新しい worktree（main 84db97f）で起こし、8d58f68 を cherry-pick して修正を指示。23:18 W5 のコミット 5fe29b5（1つに amend）。取り除いたのは定数1行と判定2か所だけ（8d58f68 との差は3行）。上限を前提にした試験はなかったので試験は変更なし。test 147・typecheck・lint 合格。拒否なし
 - 23:19 行政の長が差分を確認（8d58f68 との差が上限の除去だけ、`files_allowed` の5ファイル）。`status: review` で main にコミットし再申請（差し戻し1回目）
+
+- 2026-11-05T23:21:49+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
