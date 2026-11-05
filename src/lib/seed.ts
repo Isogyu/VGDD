@@ -78,7 +78,7 @@ export interface SeedResult {
 export function resetDemoData(db: DatabaseSync = getDb()): Record<string, number> {
   const counts: Record<string, number> = {};
   // 外部キーの順（子 → 親）
-  for (const table of ["shared_knowledge", "session_summaries", "notes", "work_sessions"]) {
+  for (const table of ["share_candidates", "shared_knowledge", "session_summaries", "notes", "work_sessions"]) {
     const r = db.prepare(`DELETE FROM ${table}`).run();
     counts[table] = Number(r.changes);
   }
