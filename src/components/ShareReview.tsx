@@ -12,6 +12,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ShareCandidate } from "@/lib/sharing";
 import { describeFlags, detectSensitive, type Flag } from "@/lib/sensitive";
 import { applyAbstractions, previewAbstraction, proposeAbstractions } from "@/lib/abstraction";
+// 型だけを読む（ai-sensitive.ts は AI の呼び出しと DB を含むので、値は読み込まない。T-019 の A4）
+import type { AiFlag } from "@/lib/ai-sensitive";
 
 const USER_KEY = "tsubuyaki.userId";
 /** 本文と理由の長さの上限（サーバー側の上限と同じ。送る前に画面で確かめる） */
@@ -127,6 +129,95 @@ export function decideFailureMessage(status: number, error: string | null, extra
   return known && known.status === status ? known.message : SEND_FAILURE;
 }
 
+// ---- AI でも確かめる（T-019、M6-2 の画面） ----
+
+const AI_CHECK_FAILURE = "AI で確かめられませんでした";
+
+/** AI の候補の種類の日本語（A2） */
+const AI_TYPE_LABELS: ReadonlyMap<string, string> = new Map([
+  ["ai_customer", "顧客名・会社名"],
+  ["ai_amount", "金額"],
+  ["ai_plan", "未公開の計画"],
+  ["ai_other", "その他"],
+]);
+
+/** 応答の message をそのまま出す失敗（A3。status と error の組が表のとおりのときだけ） */
+const AI_CHECK_MESSAGE_ERRORS: ReadonlyMap<string, number> = new Map([
+  ["provider_unavailable", 503],
+  ["schema_violation", 422],
+  ["empty_text", 422],
+  ["too_long", 422],
+]);
+
+/** 固定の文を出す失敗（A3） */
+const AI_CHECK_FIXED_ERRORS: ReadonlyMap<string, { status: number; message: string }> = new Map([
+  ["not_your_share", { status: 403, message: "本人の候補だけを確かめられます" }],
+  ["already_decided", { status: 409, message: "この候補はすでに決定済みです" }],
+  ["share_not_found", { status: 404, message: "候補が見つかりません" }],
+]);
+
+/** AI で確かめた結果（成功）。画面に出す分だけ */
+type AiCheckSuccess = { ai: Pick<AiFlag, "type" | "match" | "reason">[]; notice: string; model: string };
+
+/** AI の確認の状態。送ったときの候補の id と userId に結び付ける（A1b） */
+type AiCheckState =
+  | { candidateId: number; userId: string; status: "loading" }
+  | { candidateId: number; userId: string; status: "ok"; result: AiCheckSuccess }
+  | { candidateId: number; userId: string; status: "error"; message: string };
+
+/** 失敗の応答の文（A3） */
+export function aiCheckFailureMessage(status: number, body: unknown): string {
+  const error = errorName(body);
+  if (error === null) return AI_CHECK_FAILURE;
+  const messageStatus = AI_CHECK_MESSAGE_ERRORS.get(error);
+  if (messageStatus !== undefined && messageStatus === status) {
+    const m = (body as { message?: unknown }).message;
+    return typeof m === "string" && m.length > 0 ? m : AI_CHECK_FAILURE;
+  }
+  const fixed = AI_CHECK_FIXED_ERRORS.get(error);
+  return fixed && fixed.status === status ? fixed.message : AI_CHECK_FAILURE;
+}
+
+/** 成功の応答の形を確かめる（崩れていれば null） */
+export function parseAiCheckSuccess(body: unknown): AiCheckSuccess | null {
+  if (!body || typeof body !== "object") return null;
+  const { ai, notice, model } = body as { ai?: unknown; notice?: unknown; model?: unknown };
+  if (!Array.isArray(ai) || typeof notice !== "string" || typeof model !== "string") return null;
+  const items: AiCheckSuccess["ai"] = [];
+  for (const raw of ai) {
+    if (!raw || typeof raw !== "object") return null;
+    const { type, match, reason } = raw as { type?: unknown; match?: unknown; reason?: unknown };
+    if (typeof type !== "string" || !AI_TYPE_LABELS.has(type) || typeof match !== "string" || typeof reason !== "string") return null;
+    items.push({ type: type as AiFlag["type"], match, reason });
+  }
+  return { ai: items, notice, model };
+}
+
+/** AI の結果の表示（A2）。決定論的な検出（amber）と区別するため sky の色で出す */
+function AiCheckResult({ result }: { result: AiCheckSuccess }) {
+  return (
+    <div className="flex flex-col gap-2 rounded border border-sky-300 bg-sky-50 p-3 text-sm text-sky-900 dark:border-sky-700 dark:bg-sky-950 dark:text-sky-100">
+      <h3 className="font-medium">AI の候補</h3>
+      {result.ai.length === 0 ? (
+        <p>AI が足した候補はありません</p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {result.ai.map((f, i) => (
+            <li key={i} className="flex flex-wrap gap-x-2 break-words">
+              <span className="font-mono">{f.match}</span>
+              <span className="rounded bg-sky-100 px-1 text-xs dark:bg-sky-900">{AI_TYPE_LABELS.get(f.type) ?? "その他"}</span>
+              <span>{f.reason}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <p role="note">{result.notice}</p>
+      <p>AI が確かめたのは、編集する前の本文です</p>
+      <p className="text-xs text-sky-700 dark:text-sky-300">モデル：{result.model}</p>
+    </div>
+  );
+}
+
 function Notices() {
   return (
     <div className="flex flex-col gap-2">
@@ -177,6 +268,12 @@ export default function ShareReview({ sessionId }: { sessionId: number }) {
   const [submitting, setSubmitting] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [pendingConfirm, setPendingConfirm] = useState<PendingConfirm | null>(null);
+  const [aiCheck, setAiCheck] = useState<AiCheckState | null>(null);
+  // 応答が届いたときに表示中の候補と照らし合わせるため、最新の候補を ref にも持つ（A1b）
+  const candidateRef = useRef<ShareCandidate | null>(null);
+  useEffect(() => {
+    candidateRef.current = candidate;
+  }, [candidate]);
 
   useEffect(() => {
     // ユーザーは描画の後に読む（既存の画面と同じ。新しい保存先は作らない）
@@ -269,6 +366,8 @@ export default function ShareReview({ sessionId }: { sessionId: number }) {
         const c = parseCandidate(d);
         if (c) {
           setCandidate(c);
+          // 承認・却下の後は AI の結果を消す（A1b）
+          setAiCheck(null);
         } else {
           setSendError(SEND_FAILURE);
         }
@@ -283,6 +382,7 @@ export default function ShareReview({ sessionId }: { sessionId: number }) {
       }
       if (r.status === 409 && error === "stale_candidate") {
         setCandidate((c) => (c && c.id === candidateId ? { ...c, stale: true } : c));
+        setAiCheck(null);
         setSendError(STALE_MESSAGE);
         return;
       }
@@ -291,6 +391,50 @@ export default function ShareReview({ sessionId }: { sessionId: number }) {
       setSendError(SEND_FAILURE);
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  /**
+   * AI でも確かめる（A1・A1b）。押したときだけ呼ぶ。前回の結果とエラーを消してから送り、
+   * 応答は送ったときの候補の id と userId に結び付ける。届いたときに表示中の候補が同じ id で
+   * pending かつ stale でないときだけ表示し、そうでなければ捨てる
+   */
+  async function checkWithAi(candidateId: number) {
+    const userId = userIdRef.current;
+    setAiCheck({ candidateId, userId, status: "loading" });
+    const stillShown = () => {
+      const cur = candidateRef.current;
+      return cur !== null && cur.id === candidateId && cur.status === "pending" && !cur.stale && userIdRef.current === userId;
+    };
+    // 同じ送信に結び付いた状態だけを置き換える（別の送信や消された後の応答は捨てる）
+    const settle = (next: AiCheckState | null) => {
+      setAiCheck((prev) =>
+        prev && prev.status === "loading" && prev.candidateId === candidateId && prev.userId === userId ? next : prev,
+      );
+    };
+    try {
+      const r = await fetch(`/api/shares/${candidateId}/ai-check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const d: unknown = await r.json().catch(() => null);
+      if (!stillShown()) {
+        settle(null);
+        return;
+      }
+      if (r.ok) {
+        const result = parseAiCheckSuccess(d);
+        settle(
+          result
+            ? { candidateId, userId, status: "ok", result }
+            : { candidateId, userId, status: "error", message: AI_CHECK_FAILURE },
+        );
+        return;
+      }
+      settle({ candidateId, userId, status: "error", message: aiCheckFailureMessage(r.status, d) });
+    } catch {
+      settle(stillShown() ? { candidateId, userId, status: "error", message: AI_CHECK_FAILURE } : null);
     }
   }
 
@@ -351,6 +495,9 @@ export default function ShareReview({ sessionId }: { sessionId: number }) {
   const canReject = !submitting && !reasonTooLong;
   // 確認ボタンは、flagged_body を受けた送信と同じ候補・同じ本文のときだけ出す
   const confirm = pendingConfirm && pendingConfirm.candidateId === c.id && pendingConfirm.textAtSend === body ? pendingConfirm : null;
+  // AI の確認は、送ったときの候補と表示中の候補が同じときだけ出す（A1b）
+  const ai = aiCheck && aiCheck.candidateId === c.id ? aiCheck : null;
+  const aiLoading = ai?.status === "loading";
 
   return (
     <Shell sessionId={sessionId}>
@@ -417,6 +564,25 @@ export default function ShareReview({ sessionId }: { sessionId: number }) {
           </div>
         </section>
       )}
+
+      <section aria-label="AI でも確かめる" className="flex flex-col gap-2 rounded border border-sky-300 p-3 dark:border-sky-700">
+        <div>
+          <button
+            type="button"
+            onClick={() => void checkWithAi(c.id)}
+            disabled={aiLoading || submitting}
+            className="rounded border border-sky-400 px-3 py-1 text-sm text-sky-900 hover:bg-sky-50 disabled:opacity-50 dark:border-sky-600 dark:text-sky-100 dark:hover:bg-sky-900"
+          >
+            {aiLoading ? "確かめています…" : "AI でも確かめる"}
+          </button>
+        </div>
+        <p className="text-xs text-zinc-600 dark:text-zinc-300">API キーのある環境では、本文を Claude（Anthropic の API）に送って確かめます</p>
+        <p className="text-xs text-zinc-600 dark:text-zinc-300">確かめるのは、この候補を作った時点の本文です（上の欄で編集した内容は反映されません）</p>
+        {ai?.status === "ok" && <AiCheckResult result={ai.result} />}
+        {ai?.status === "error" && (
+          <p role="alert" className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-900">{ai.message}</p>
+        )}
+      </section>
 
       <section aria-label="決定" className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-2">
