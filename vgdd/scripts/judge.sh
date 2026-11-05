@@ -207,8 +207,15 @@ OUT_FILE="${OUT_DIR}/${TASK}-${HEAD_SHA}.json"
 export RAW AUDIT_FAIL AUDIT_RAN TASK BRANCH HEAD_SHA BASE STAMP REQ REQ_SOURCE CLI_RC
 node - > "$OUT_FILE" <<'NODE'
 const raw = process.env.RAW || '';
-let text = raw; let cliError = process.env.CLI_RC !== '0';
-try { const o = JSON.parse(raw); if (o && typeof o.result === 'string') text = o.result; if (o && o.is_error === true) cliError = true; } catch {}
+// p0.4.3（Codex の4回目の監査 #1 critical）：外側の応答は、成功の形（type: "result"・subtype: "success"・is_error: false の真偽・result が文字列）の
+//   ときだけ受け取る。それ以外（エラーの形・is_error が文字列・max_turns など）は、result の本文が正しくても判定として成り立たない。
+//   形は 2026-11-06 04:4x に claude -p --output-format json で確かめた
+let text = ''; let cliError = process.env.CLI_RC !== '0';
+try {
+  const o = JSON.parse(raw);
+  if (o && typeof o === 'object' && o.type === 'result' && o.subtype === 'success' && o.is_error === false && typeof o.result === 'string') text = o.result;
+  else cliError = true;
+} catch { cliError = true; }
 // p0.4.3（Codex の3回目の監査 #1 critical）：判定のスキーマ（vgdd.verdict.v1）の完全な検証。余分なキー・欠けたキー・型・列挙値のどれかが違えば false
 const VERDICT_KEYS = ['schema', 'verdict', 'deterministic_audits_passed', 'requirements', 'findings', 'summary'];
 const REQ_KEYS = ['id', 'status', 'evidence'];

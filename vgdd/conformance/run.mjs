@@ -296,7 +296,7 @@ function groupC3() {
     const f = fs.readdirSync(outDir).find((x) => x.endsWith('.json'));
     try { return JSON.parse(fs.readFileSync(path.join(outDir, f), 'utf8')); } catch { return null; }
   };
-  const wrap = (t) => JSON.stringify({ type: 'result', result: t });
+  const wrap = (t) => JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: t }); // 本物の claude -p --output-format json の成功の形
   const cases = [
     ['J1', '空の JSON {}', wrap('{}'), 0],
     ['J2', 'エラーの JSON（{"error":"unauthorized"}）', wrap('{"error":"unauthorized"}'), 0],
@@ -308,6 +308,10 @@ function groupC3() {
     ['J8', '必須の項目が欠けた判定（{"verdict":"APPROVED","findings":[]}）', wrap('{"verdict":"APPROVED","findings":[]}'), 0],
     ['J9', '正しい判定を1件含む配列', wrap(`[${okVerdict}]`), 0],
     ['J10', '正しい判定の末尾に壊れた文字', wrap(`${okVerdict} broken`), 0],
+    // Codex の4回目の監査 #1：外側の応答がエラーの形なら、本文が正しくても成り立たない
+    ['J13', '外側がエラーの形（type: error）で本文は正しい判定', JSON.stringify({ type: 'error', error: 'unauthorized', result: okVerdict }), 0],
+    ['J14', '外側の is_error が文字列の "true"', JSON.stringify({ type: 'result', subtype: 'success', is_error: 'true', result: okVerdict }), 0],
+    ['J15', '外側の subtype が error_max_turns', JSON.stringify({ type: 'result', subtype: 'error_max_turns', is_error: false, result: okVerdict }), 0],
     ['J11', 'スキーマにない重さ（info）と理由の欠けた指摘', wrap(JSON.stringify({ ...JSON.parse(okVerdict), findings: [{ severity: 'info', category: 'test', file: null, line: null, requirement_id: null }] })), 0],
   ];
   for (const [id, label, out, rc] of cases) {
@@ -696,7 +700,7 @@ function groupN() {
 }
 
 // ---- L 朝の統合（release.sh） ------------------------------------------------------------------
-function releaseFixture(name, { audit = 0, otherCandidate = false, heldExtra = {} } = {}) {
+function releaseFixture(name, { audit = 0, otherCandidate = false, heldExtra = {}, verdictFindings = [] } = {}) {
   const fx = fixture(name);
   const id = 'T-950';
   commitTicket(fx, id, {});
@@ -709,7 +713,12 @@ function releaseFixture(name, { audit = 0, otherCandidate = false, heldExtra = {
   };
   const req = mk(`task/${id}`, 'src/lib/a.ts', 'export const v = 2;\n');
   const cand = otherCandidate ? mk('task/other', 'src/lib/a.ts', 'export const v = 99;\n') : req;
-  write(path.join(fx.z3, 'evidence/held.jsonl'), JSON.stringify({ task: id, request: req, candidate: cand, main_at_check: mainAt, judge: 'APPROVED', codex: 'APPROVED', security: 'SKIPPED', no_codex: false, route: 'agreed', security_required: false, law: 'p0.4.3', ...heldExtra }) + '\n');
+  const held = { task: id, request: req, candidate: cand, main_at_check: mainAt, judge: 'APPROVED', codex: 'APPROVED', security: 'SKIPPED', no_codex: false, route: 'agreed', majors: '0/0', security_required: false, law: 'p0.4.3', ...heldExtra };
+  write(path.join(fx.z3, 'evidence/held.jsonl'), JSON.stringify(held) + '\n');
+  // p0.4.3：release は Z3 の判定の記録に照合し直すので、held と同じ結論の記録を置く（verdictFindings で重大な指摘を入れられる）
+  const c12 = cand.slice(0, 12);
+  write(path.join(fx.z3, `evidence/verdicts/${id}-${c12}.json`), JSON.stringify({ final_verdict: held.judge, judge_parse_ok: true, judge: { findings: verdictFindings } }) + '\n');
+  write(path.join(fx.z3, `evidence/verdicts/${id}-${c12}-codex-judge.json`), JSON.stringify({ final_verdict: held.codex, parse_ok: true, codex: { findings: [] } }) + '\n');
   touch(path.join(fx.z3, 'evidence/gate_events.jsonl'));
   write(path.join(fx.z3, 'bin/sandboxed-run.sh'), `#!/bin/bash\nexit ${audit}\n`); fs.chmodSync(path.join(fx.z3, 'bin/sandboxed-run.sh'), 0o755);
   const env = { ...process.env, ...UTF8, VGDD_Z3_DIR: fx.z3, VGDD_REPO: fx.main };
@@ -763,6 +772,13 @@ function groupL() {
   fs.writeFileSync(hp, fs.readFileSync(hp, 'utf8').replace('"security":"APPROVED"', '"security":"SKIPPED"'));
   const rl2 = sh('bash', [path.join(IMPL.bin, 'release.sh'), gl2.id], { env: { ...process.env, ...UTF8, VGDD_Z3_DIR: gl2.z3, VGDD_REPO: gl2.main }, cwd: gl2.main, timeout: 120000 });
   record('L', 'L13', '一続きの陰性：裁判所の held から security の合格を消すと、release は統合しない', rl2.status === 1 && sh('git', ['-C', gl2.main, 'merge-base', '--is-ancestor', gl2.head, 'main']).status !== 0, `exit ${rl2.status}`);
+  L = releaseFixture('l14', { heldExtra: { judge: 'CHANGES_REQUIRED', codex: 'APPROVED', route: 'minor_disagreement' }, verdictFindings: [{ severity: 'major', category: 'correctness', file: null, line: null, requirement_id: null, reason: 'x' }] });
+  r = L.run();
+  record('L', 'L14', 'minor の不一致として held になった記録でも、判定の記録に重大な指摘があれば統合しない（held の自己申告を信用しない）', r.status === 1 && /重大な指摘/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status} ${r.stderr.trim().slice(0, 80)}`);
+  L = releaseFixture('l15', { heldExtra: { judge: 'APPROVED' } });
+  fs.writeFileSync(path.join(L.fx.z3, `evidence/verdicts/${L.id}-${L.req.slice(0, 12)}.json`), JSON.stringify({ final_verdict: 'CHANGES_REQUIRED', judge_parse_ok: true, judge: { findings: [] } }) + '\n');
+  r = L.run();
+  record('L', 'L15', 'held の結論が Z3 の判定の記録と違えば統合しない', r.status === 1 && /判定の記録が held と合わない/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
   L = releaseFixture('l8', { heldExtra: { law: 'unknown' } });
   r = L.run();
   record('L', 'L8', '未知の版の印の夜間の合格の記録は統合しない', r.status === 1 && /未知の版/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);

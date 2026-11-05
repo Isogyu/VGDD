@@ -313,7 +313,7 @@ process_request() {
   if [ "$sv" != "SKIPPED" ] && [ "$sv" != "APPROVED" ]; then
     fail "$task" "セキュリティ審査が差し戻し" && mv "$req" "$DONE_DIR/"; return
   fi
-  local route="agreed"   # p0.4.3：held の記録に通り方を残す（agreed・minor_disagreement・ruling。release が確かめる。Codex の3回目の監査 #2）
+  HELD_MAJORS="0/0"; local route="agreed"   # p0.4.3：held の記録に通り方を残す（agreed・minor_disagreement・ruling。release が確かめる。Codex の3回目の監査 #2）
   if [ "$NO_CODEX" -eq 0 ] && [ "$jv" != "$cv" ]; then
     # p0.4.2：不一致・裁定の記録の前に書きかけを確かめる（待つなら何も記録しない。Codex の指摘 p0.4.2c #3）
     if ticket_dirty "docs/tasks/$(basename "$t")"; then dirty_wait "$task" "docs/tasks/$(basename "$t")"; return; fi
@@ -334,7 +334,7 @@ process_request() {
         fail "$task" "judge と Codex の判定が重大な指摘で分かれた（judge=$jv/$jsev 件, codex=$cv/$csev 件）。オーナーの裁定へ" "blocked" && mv "$req" "$DONE_DIR/"; return
       fi
     else
-      route="minor_disagreement"
+      route="minor_disagreement"; HELD_MAJORS="$jsev/$csev"
       ticket_edit "$task" "" "$(ts) gate-runner: judge と Codex が minor の指摘で分かれた。厳しい側の指摘を残して統合（judge=${jv}, codex=${cv}）" || return
     fi
   fi
@@ -355,8 +355,8 @@ process_request() {
     set_ticket_status "$task" "review" "判定に合格（judge=$jv codex=${cv}）。夜間のため統合せず、朝のオーナーの承認を待つ" || return
     # p0.4.3：held の記録に、判定の版と Codex を省いたか（--no-codex）と security の結論を残す。release はこれを確かめる（Codex の指摘 #3）
     jq -nc --arg ts "$(ts)" --arg t "$task" --arg r "$actual" --arg c "$candidate" --arg m "$main_sha" --arg j "$jv" --arg x "$cv" --arg sv "$sv" --argjson nc "$([ "$NO_CODEX" -eq 1 ] && echo true || echo false)" \
-      --arg route "$route" --argjson sr "$([ "$(front "$tmain" security_review)" = "true" ] && echo true || echo false)" \
-      '{ts:$ts,task:$t,request:$r,candidate:$c,main_at_check:$m,judge:$j,codex:$x,security:$sv,no_codex:$nc,route:$route,security_required:$sr,law:"p0.4.3"}' >> "$Z3/evidence/held.jsonl"
+      --arg route "$route" --arg mj "$HELD_MAJORS" --argjson sr "$([ "$(front "$tmain" security_review)" = "true" ] && echo true || echo false)" \
+      '{ts:$ts,task:$t,request:$r,candidate:$c,main_at_check:$m,judge:$j,codex:$x,security:$sv,no_codex:$nc,route:$route,majors:$mj,security_required:$sr,law:"p0.4.3"}' >> "$Z3/evidence/held.jsonl"
     log_event "held" "$task" "\"request\":\"${actual:0:12}\",\"candidate\":\"${candidate:0:12}\",\"judge\":\"$jv\",\"codex\":\"$cv\""
     mv "$req" "$DONE_DIR/"
     echo "  ⏸ $task は合格。朝のオーナーの承認を待つ（候補 ${candidate:0:12}）"
