@@ -71,4 +71,4 @@ try { const o = JSON.parse(raw); if (o && typeof o.result === 'string') text = o
 let v = null; const m = text.match(/\{[\s\S]*\}/); if (m) { try { v = JSON.parse(m[0]); } catch {} }
 process.stdout.write(JSON.stringify({ type: 'constitutional_review', reason: process.env.REASON, review: v, parse_ok: !!v, verdict: v?.verdict ?? 'VIOLATES', note: v ? null : '出力を JSON として解釈できない（fail-closed）' }, null, 2) + '\n');
 NODE
-echo "憲法審査: $(node -e "console.log(require('$OUT_FILE').verdict)")  （保存: $OUT_FILE）"
+echo "憲法審査: $(node -e "console.log(require('$OUT_FILE').verdict)")  （保存: ${OUT_FILE}）"

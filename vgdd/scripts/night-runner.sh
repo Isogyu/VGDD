@@ -33,7 +33,7 @@ run_with_timeout() { local secs="$1"; shift; perl -e 'alarm shift; exec @ARGV or
 check_git_config() {
   local base="$Z3/evidence/git-config.baseline" cur
   cur="$(shasum -a 256 "$REPO/.git/config" | cut -c1-64)"
-  if [ ! -f "$base" ]; then echo "git の設定の基準値がない（$base）。オーナーが vgdd/scripts/git-baseline.sh で作る（fail-closed）" >&2; exit 70; fi
+  if [ ! -f "$base" ]; then echo "git の設定の基準値がない（${base}）。オーナーが vgdd/scripts/git-baseline.sh で作る（fail-closed）" >&2; exit 70; fi
   [ "$cur" = "$(cat "$base")" ] || { echo "共有の .git/config が基準値から変わっている。オーナーが確かめるまで止める（fail-closed。OBS-033）" >&2; exit 70; }
 }
 QUEUE="$Z3/night/queue.json"; DRY=0; PARALLEL=""; UNTIL=""

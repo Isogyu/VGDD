@@ -36,7 +36,7 @@ git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.
 check_git_config() {
   local base="$Z3/evidence/git-config.baseline" cur
   cur="$(shasum -a 256 "$REPO/.git/config" | cut -c1-64)"
-  if [ ! -f "$base" ]; then echo "git の設定の基準値がない（$base）。オーナーが vgdd/scripts/git-baseline.sh で作る（fail-closed）" >&2; exit 70; fi
+  if [ ! -f "$base" ]; then echo "git の設定の基準値がない（${base}）。オーナーが vgdd/scripts/git-baseline.sh で作る（fail-closed）" >&2; exit 70; fi
   [ "$cur" = "$(cat "$base")" ] || { echo "共有の .git/config が基準値から変わっている。オーナーが確かめるまで止める（fail-closed。OBS-033）" >&2; exit 70; }
 }
 while [ $# -gt 0 ]; do
@@ -117,7 +117,7 @@ process_request() {
   local req="$1"
   local task branch sha reqs trel src_main
   task="$(jq -r '.task' "$req")"; branch="$(jq -r '.branch' "$req")"; sha="$(jq -r '.head' "$req")"
-  echo "▶ $task（$branch @ $sha）"
+  echo "▶ ${task}（$branch @ ${sha}）"
   local t; t="$(ticket_path "$task")"
   [ -n "$t" ] || { fail "$task" "票が見つからない" "blocked"; mv "$req" "$DONE_DIR/"; return; }
 
@@ -131,8 +131,8 @@ process_request() {
   fi
   git -C "$REPO" rev-parse --verify -q "$branch" >/dev/null || { fail "$task" "ブランチ $branch がない" "blocked"; mv "$req" "$DONE_DIR/"; return; }
   local actual; actual="$(git -C "$REPO" rev-parse "$branch")"
-  # p0.3.0：以後の検査・判定・統合は、この完全な SHA（$actual）に固定する。ブランチ名は使わない（OBS-023②）
-  [[ "$actual" == "$sha"* ]] || { fail "$task" "申請の HEAD（$sha）とブランチの HEAD（${actual:0:12}）が違う"; mv "$req" "$DONE_DIR/"; return; }
+  # p0.3.0：以後の検査・判定・統合は、この完全な SHA（${actual}）に固定する。ブランチ名は使わない（OBS-023②）
+  [[ "$actual" == "$sha"* ]] || { fail "$task" "申請の HEAD（${sha}）とブランチの HEAD（${actual:0:12}）が違う"; mv "$req" "$DONE_DIR/"; return; }
   local returns; returns="$(grep -c 'gate-runner: status → in_progress' "$t" || true)"
   # p0.2.4：オーナーが取り消した差し戻し（法律の不具合・鎖の連鎖によるもの）は数えない。取り消しの記録は Z3 にあり、行政は書けない（OBS-020）
   local annulled; annulled="$(grep -c "\"task\":\"$task\"" "$Z3/evidence/annulments.jsonl" 2>/dev/null || true)"; annulled="${annulled:-0}"
@@ -159,7 +159,7 @@ process_request() {
     candidate="$(git -C "$wt" rev-parse HEAD)"
     log_event "candidate" "$task" "\"request\":\"${actual:0:12}\",\"main\":\"${main_sha:0:12}\",\"candidate\":\"${candidate:0:12}\""
   fi
-  # 以後、差分の範囲（3・4）は申請の SHA の変更分（main...$actual）で見る。監査・判定・統合は候補の木（$wt、$candidate）で行う
+  # 以後、差分の範囲（3・4）は申請の SHA の変更分（main...${actual}）で見る。監査・判定・統合は候補の木（${wt}、${candidate}）で行う
 
   # 3 差分の範囲
   local changed; changed="$(git -C "$REPO" diff --name-only "main...$actual")"
@@ -237,7 +237,7 @@ process_request() {
   git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true
 
   if [ "$jv" != "APPROVED" ] && [ "$cv" != "APPROVED" ]; then
-    fail "$task" "judge=$jv, codex=$cv（両方が差し戻し）"; mv "$req" "$DONE_DIR/"; return
+    fail "$task" "judge=$jv, codex=${cv}（両方が差し戻し）"; mv "$req" "$DONE_DIR/"; return
   fi
   # p0.3.1：セキュリティ審査の不合格は、不一致の扱い・オーナーの裁定より先に止める（裁定はセキュリティ審査に効かない。憲法審査の指摘①）
   if [ "$sv" != "SKIPPED" ] && [ "$sv" != "APPROVED" ]; then
@@ -270,7 +270,7 @@ process_request() {
     jq -nc --arg ts "$(ts)" --arg t "$task" --arg r "$actual" --arg c "$candidate" --arg m "$main_sha" --arg j "$jv" --arg x "$cv" \
       '{ts:$ts,task:$t,request:$r,candidate:$c,main_at_check:$m,judge:$j,codex:$x}' >> "$Z3/evidence/held.jsonl"
     log_event "held" "$task" "\"request\":\"${actual:0:12}\",\"candidate\":\"${candidate:0:12}\",\"judge\":\"$jv\",\"codex\":\"$cv\""
-    set_ticket_status "$task" "review" "判定に合格（judge=$jv codex=$cv）。夜間のため統合せず、朝のオーナーの承認を待つ"
+    set_ticket_status "$task" "review" "判定に合格（judge=$jv codex=${cv}）。夜間のため統合せず、朝のオーナーの承認を待つ"
     mv "$req" "$DONE_DIR/"
     echo "  ⏸ $task は合格。朝のオーナーの承認を待つ（候補 ${candidate:0:12}）"
     return
@@ -281,7 +281,7 @@ process_request() {
   if [ -n "$(git -C "$REPO" status --porcelain --untracked-files=no -- . ':(exclude)docs/tasks')" ]; then
     fail "$task" "main の checkout に未コミットの変更がある。オーナーが片付けてから再申請" "review"; return
   fi
-  # p0.3.1 案：統合するのは検査した候補のコミット（$candidate）。候補は段階 2 の時点の main を親に持つので fast-forward になる。
+  # p0.3.1 案：統合するのは検査した候補のコミット（${candidate}）。候補は段階 2 の時点の main を親に持つので fast-forward になる。
   #   段階 2 以降に main が進んでいれば（同じ周回で別の票が統合された等）ここで止まり、次の周回で最新の main と組み合わせて検査し直す。
   if [ "$(git -C "$REPO" rev-parse main)" != "$main_sha" ]; then
     echo "  ↻ $task: 検査中に main が進んだ。次の周回で最新の main と組み合わせて検査し直す" >&2

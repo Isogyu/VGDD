@@ -14,19 +14,19 @@ git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.
 [ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ] || { echo "main に未コミットの変更がある" >&2; exit 64; }
 for task in "$@"; do
   rec="$(jq -c --arg t "$task" 'select(.task==$t)' "$Z3/evidence/held.jsonl" | tail -n 1)"
-  [ -n "$rec" ] || { echo "✗ $task：夜間の合格の記録がない" >&2; exit 1; }
+  [ -n "$rec" ] || { echo "✗ ${task}：夜間の合格の記録がない" >&2; exit 1; }
   req="$(printf '%s' "$rec" | jq -r .request)"; cand="$(printf '%s' "$rec" | jq -r .candidate)"
-  git -C "$REPO" cat-file -e "$cand^{commit}" || { echo "✗ $task：候補のコミットがない" >&2; exit 1; }
+  git -C "$REPO" cat-file -e "$cand^{commit}" || { echo "✗ ${task}：候補のコミットがない" >&2; exit 1; }
   before="$(git -C "$REPO" rev-parse HEAD)"
   git -C "$REPO" -c user.name=gate-runner -c user.email=gate-runner@local merge --no-ff -q -m "gate-runner: $task を統合（夜間の判定に合格、オーナーが朝に承認）" "$req" \
-    || { git -C "$REPO" merge --abort || true; echo "✗ $task：今の main と衝突。昼に申請し直す" >&2; exit 1; }
+    || { git -C "$REPO" merge --abort || true; echo "✗ ${task}：今の main と衝突。昼に申請し直す" >&2; exit 1; }
   # 入った変更（記録の docs/tasks/ を除く）が、夜に判定した変更と一字一句同じか。複数の票を続けて承認しても、各票の変更そのものは変わらないことを確かめる
   mac="$(printf '%s' "$rec" | jq -r .main_at_check)"
   got="$(git -C "$REPO" diff --binary "$before" HEAD -- . ':(exclude)docs/tasks' | shasum -a 256 | cut -c1-64)"
   want="$(git -C "$REPO" diff --binary "$mac" "$cand" -- . ':(exclude)docs/tasks' | shasum -a 256 | cut -c1-64)"
   if [ "$got" != "$want" ]; then
     git -C "$REPO" reset -q --hard "$before"
-    echo "✗ $task：入る変更が、夜に判定した変更と違う。統合を取り消した。昼に申請し直す" >&2; exit 1
+    echo "✗ ${task}：入る変更が、夜に判定した変更と違う。統合を取り消した。昼に申請し直す" >&2; exit 1
   fi
   # 組み合わせた木で決定論的な監査を sandbox の中でもう一度（夜は別々に判定したため、組み合わせの不具合をここで止める）
   wt="$(mktemp -d "${TMPDIR:-/tmp}/release-$task-XXXX")"; git -C "$REPO" worktree add --detach -q "$wt" HEAD
@@ -34,7 +34,7 @@ for task in "$@"; do
   if ! ( cd "$wt" && "$SBX" --dir "$wt" --net -- npm ci --no-fund --no-audit >/dev/null 2>&1 && "$SBX" --dir "$wt" -- npm run -s test >/dev/null 2>&1 \
         && "$SBX" --dir "$wt" -- npm run -s typecheck >/dev/null 2>&1 && "$SBX" --dir "$wt" -- npm run -s lint >/dev/null 2>&1 ); then
     git -C "$REPO" worktree remove --force "$wt" || true; git -C "$REPO" reset -q --hard "$before"
-    echo "✗ $task：組み合わせた木で監査が不合格。統合を取り消した" >&2; exit 1
+    echo "✗ ${task}：組み合わせた木で監査が不合格。統合を取り消した" >&2; exit 1
   fi
   git -C "$REPO" worktree remove --force "$wt" || true
   printf '{"ts":"%s","type":"merged","task":"%s","main":"%s","via":"release","candidate":"%s"}\n' "$(date +%Y-%m-%dT%H:%M:%S%z)" "$task" "$(git -C "$REPO" rev-parse --short=12 HEAD)" "${cand:0:12}" >> "$Z3/evidence/gate_events.jsonl"

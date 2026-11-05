@@ -119,5 +119,5 @@ else { record.final_verdict = 'CHANGES_REQUIRED'; record.note = `verdict の値�
 process.stdout.write(JSON.stringify(record, null, 2) + '\n');
 NODE
 FINAL="$(node -e "console.log(require('$OUT_FILE').final_verdict)")"
-echo "Codex 判定（$MODE）: ${FINAL}  （保存: ${OUT_FILE}）"
+echo "Codex 判定（${MODE}）: ${FINAL}  （保存: ${OUT_FILE}）"
 [ "$FINAL" = "APPROVED" ] && exit 0 || exit 1
