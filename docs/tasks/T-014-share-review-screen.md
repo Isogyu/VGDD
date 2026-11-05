@@ -90,3 +90,5 @@ depends_on: [T-010, T-011]
 - 01:11 行政の長が W13 を起動（worktree `agent-a39f593f96687a427`）。d0143bc を cherry-pick し、stale のときは案・プレビュー・置き換え・3つのボタン・`flagged_body` の確認ボタンを出さず、注意書き2つと本文と A3 の 3 の文だけにして1コミットに amend する指示。W12 の worktree `agent-a0d1d1ef…` は触らない
 - 01:13 W13 の報告：コミット d4429dd（1つに amend。main との差は5ファイル +677。d0143bc との差は `ShareReview.tsx` +35/−8 のみ）。`c.stale` のときを通常の描画より前の早期 return に分け、注意書き2つ・本文の textarea（`readOnly`）・「原文のメモは共有されません」・古くなった旨だけを出す。案・プレビュー・置き換え・3つのボタン・理由欄・`flagged_body` の確認・文字数は出さない。開いた時点の stale と 409 `stale_candidate` の両方が同じ分岐。stale でないときの振る舞いは不変（元の三項分岐を外しただけ）。test 245・typecheck・lint 合格。拒否なし（`npm ci` は単独で実行）。字下げが2文字深い箇所が残る（動きに影響なし）。画面は未確認
 - 01:14 行政の長が差分を確認（`files_allowed` の5ファイルのみ。早期 return が `proposals.length > 0` のブロックより前にあること、A6 の制約が保たれていることを読んだ）。`status: review` で main にコミットし再申請（差し戻し1回目）
+
+- 2026-11-06T01:16:51+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
