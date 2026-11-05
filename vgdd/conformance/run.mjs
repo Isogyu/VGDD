@@ -344,7 +344,9 @@ function groupG() {
   const t9 = path.join(g9.main, `docs/tasks/${g9.id}-probe.md`);
   fs.writeFileSync(t9, fs.readFileSync(t9, 'utf8').replace('  - src/lib/a.ts', '  - src/lib/a.ts\n  - src/lib/b.ts')); // コミットしない
   g = runGate(g9, 'APPROVED');
-  record('G', 'G9', 'main の checkout の作業ツリーで、コミットせずに files_allowed を広げても効かない（統治の項目は main の票から読む）', !g.inMain && g.events.some((e) => e.type === 'rejected' && /files_allowed の外/.test(e.reason || '')), `status=${g.status} inMain=${g.inMain}`);
+  // p0.4.2：書きかけのある票の申請は処理されない（ticket_dirty_wait）。p0.4.1 までは main の票の files_allowed で差し戻された。どちらでも main に入らない
+  record('G', 'G9', 'main の checkout の作業ツリーで、コミットせずに files_allowed を広げても効かない（main に入らない。p0.4.1 までは main の票の files_allowed で差し戻し、p0.4.2 からは書きかけのある票として処理されない）',
+    !g.inMain && g.events.some((e) => (e.type === 'rejected' && /files_allowed の外/.test(e.reason || '')) || e.type === 'ticket_dirty_wait'), `status=${g.status} inMain=${g.inMain}`);
   // OBS-044：裁判所の記録のコミットに、ほかの誰かのコミットしていない変更が混ざらない
   const g10 = gateFixture('g10');
   write(path.join(g10.main, 'docs/tasks/README.md'), '誰かの書きかけ\n');
@@ -354,6 +356,28 @@ function groupG() {
   const byGate = sh('git', ['-C', g10.main, 'log', '--author=gate-runner', '--name-only', '--format=']).stdout;
   record('G', 'G10', '裁判所の記録のコミットには、自分が書き換えた票だけが入る（ほかの書きかけは gate-runner の名前で main に入らない）',
     g.status === 'merged' && /README\.md/.test(dirty) && /T-900-probe\.md/.test(dirty) && !/README\.md|T-900-probe\.md/.test(byGate), `dirty=${dirty.trim().replace(/\n/g, ',')}`);
+  // OBS-050（p0.4.2）：申請中の票そのものに、ほかの誰かのコミットしていない変更がある。裁判所はその申請を処理しない（判定も記録も統合もしない）
+  const g11 = gateFixture('g11');
+  const t11 = path.join(g11.main, `docs/tasks/${g11.id}-probe.md`);
+  fs.writeFileSync(t11, fs.readFileSync(t11, 'utf8') + '\n立法補佐の書きかけ G11\n'); // コミットしない
+  const before11 = fs.readFileSync(t11);
+  g = runGate(g11, 'APPROVED');
+  const byGate11 = sh('git', ['-C', g11.main, 'log', '--author=gate-runner', '-p', '--format=']).stdout;
+  const wait11 = g.events.find((e) => e.type === 'ticket_dirty_wait');
+  record('G', 'G11', '申請中の票にほかの書きかけがあれば、裁判所はその申請を処理しない（司法を呼ばず、main に入れず、票を1バイトも変えず、申請を残す。書きかけは gate-runner の名前で main に入らない）',
+    !g.inMain && !g.judged && g.pending && Buffer.compare(before11, fs.readFileSync(t11)) === 0 && !/書きかけ G11/.test(byGate11)
+      && !!wait11 && wait11.task === '-' && !g.events.some((e) => e.type === 'rejected'),
+    `inMain=${g.inMain} judged=${g.judged} pending=${g.pending} wait=${JSON.stringify(wait11 || null)}`);
+  // 書きかけの持ち主がコミットした後の周回では、普通に処理されて統合され、裁判所の記録は1回だけ入る（陽性の対照）
+  git(g11.main, 'add', '-A'); git(g11.main, 'commit', '-q', '-m', '立法補佐の書きかけをコミット');
+  g = runGate(g11, 'APPROVED');
+  const main11 = sh('git', ['-C', g11.main, 'show', `main:docs/tasks/${g11.id}-probe.md`]).stdout;
+  const byGate11b = sh('git', ['-C', g11.main, 'log', '--author=gate-runner', '-p', '--format=']).stdout;
+  record('G', 'G12', '書きかけがコミットされた後の周回では、申請が普通に処理されて統合され、裁判所の記録（status → merged）は main の票に1回だけ入る（陽性の対照）',
+    g.inMain && g.judged && !g.pending && /^status: merged$/m.test(main11) && (main11.match(/gate-runner: status → merged/g) || []).length === 1
+      && /書きかけ G11/.test(main11) && !/^\+立法補佐の書きかけ G11/m.test(byGate11b)
+      && sh('git', ['-C', g11.main, 'status', '--porcelain', '--', `docs/tasks/${g11.id}-probe.md`]).stdout.trim() === '',
+    `inMain=${g.inMain} status=${g.status} pending=${g.pending}`);
   g = runGate(gateFixture('g8'), 'APPROVED', ['--hold']);
   record('G', 'G8', '夜間（--hold）は合格しても統合せず、held として朝の承認を待つ', !g.inMain && g.events.some((e) => e.type === 'held'), `inMain=${g.inMain}`);
 }
