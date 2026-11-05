@@ -1,7 +1,7 @@
 ---
 id: T-021
 title: 作業画面の見出しに、チームの知恵・共有の記録・統治のライブ画面への導線を置く
-status: review
+status: merged
 requirements: [A1, A2, A3]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M7-2, M8-2]   # 記録用。司法には渡さない
@@ -63,3 +63,5 @@ depends_on: []
 - 01:19 行政の長が差分を確認（`WorkScreen.tsx` のみ、追加 12 行、削除なし。順と文と href が A1 のとおり）。`status: review` で main にコミットし申請
 
 - 2026-11-06T01:22:04+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-06T01:27:51+0900 release: status → merged（main=ce2b78794cce。夜間の判定に合格した候補 473a09f4c8ac を、オーナーが朝に承認して統合）
