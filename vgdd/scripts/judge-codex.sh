@@ -82,17 +82,22 @@ LAST="$(mktemp "$TMP_BASE/judge-codex-last.XXXXXX")"
 # shellcheck disable=SC2086
 printf '%s' "$INPUT" | codex exec - \
   --output-schema "$HERE/../schemas/verdict.schema.json" \
-  -o "$LAST" --ephemeral --skip-git-repo-check ${CODEX_EXTRA_ARGS:-} >/dev/null 2>"$OUT_DIR/.codex-stderr.log" || true
+  -o "$LAST" --ephemeral --skip-git-repo-check ${CODEX_EXTRA_ARGS:-} >/dev/null 2>"$OUT_DIR/.codex-stderr.log" && CLI_RC=0 || CLI_RC=$?   # p0.4.3：終了状態を残す
 RAW="$(cat "$LAST" 2>/dev/null || true)"
 rm -f "$LAST"
 
 OUT_FILE="${OUT_DIR}/${TASK}-${HEAD_SHA}-codex-${MODE}.json"
-export RAW AUDIT_STATE TASK BRANCH HEAD_SHA BASE STAMP REQ MODE REQ_SOURCE
+export RAW AUDIT_STATE TASK BRANCH HEAD_SHA BASE STAMP REQ MODE REQ_SOURCE CLI_RC
 node - > "$OUT_FILE" <<'NODE'
 const raw = process.env.RAW || '';
 let verdict = null;
 const m = raw.match(/\{[\s\S]*\}/);
 if (m) { try { verdict = JSON.parse(m[0]); } catch {} }
+// p0.4.3（Codex の再監査 #1 critical）：judge.sh と同じ「判定として成り立つ」条件
+const SEV = new Set(['critical', 'major', 'minor', 'info']);
+const wellFormed = (v) => !!v && typeof v === 'object' && !Array.isArray(v) && (v.verdict === 'APPROVED' || v.verdict === 'CHANGES_REQUIRED')
+  && Array.isArray(v.findings) && v.findings.every((f) => f && typeof f === 'object' && SEV.has(f.severity));
+const malformed = process.env.CLI_RC !== '0' || !wellFormed(verdict);
 const auditState = process.env.AUDIT_STATE || 'not_run';
 const record = {
   type: 'verdict',
@@ -106,13 +111,13 @@ const record = {
   requirements_source: process.env.REQ_SOURCE || 'docs/requirements.md',
   collected_at: process.env.STAMP,
   codex: verdict,
-  parse_ok: !!verdict,
+  parse_ok: !!verdict && !malformed,   // p0.4.3：false は「司法が使えない」
   deterministic_audits: auditState,
   final_verdict: null,
   overridden_by_deterministic_audit: false,
   note: null,
 };
-if (!verdict) { record.final_verdict = 'CHANGES_REQUIRED'; record.note = 'Codex の出力を JSON として解釈できない（fail-closed）'; }
+if (!verdict || malformed) { record.final_verdict = 'CHANGES_REQUIRED'; record.note = verdict ? 'Codex の出力が判定の形をしていない・CLI が失敗した（fail-closed。判定ではない）' : 'Codex の出力を JSON として解釈できない（fail-closed）'; }
 else if (auditState !== 'passed' && verdict.verdict === 'APPROVED') {
   record.final_verdict = 'CHANGES_REQUIRED'; record.overridden_by_deterministic_audit = true;
   record.note = auditState === 'failed' ? '決定論的監査が不合格のため、Codex の APPROVED を取り消した' : '決定論的監査が未実行のため、Codex の APPROVED を取り消した';

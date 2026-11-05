@@ -275,6 +275,48 @@ function groupC3() {
   git(wt, 'add', '-A'); git(wt, 'commit', '-q', '-m', '条件のすり替え');
   const r2 = run();
   record('C3', 'I4', '作業ブランチで受け入れ条件を書き換えると、司法の入力を作らない（exit 65）', r2.status === 65, `exit ${r2.status}`);
+
+  // p0.4.3（Codex の再監査 #1・#4）：本物の judge.sh・judge-codex.sh に偽の CLI をつなぎ、判定の形をしていない出力・CLI の失敗が
+  //   「解釈できた判定」（judge_parse_ok／parse_ok が true）にならないこと。裁判所はこれが false の記録を「司法が使えない」として扱う（G19）
+  const fj = fixture('c3j');
+  commitTicket(fj, 'T-921', {});
+  const wj = path.join(fj.base, 'wt-921');
+  git(fj.main, 'worktree', 'add', '-q', '-b', 'task/T-921', wj, 'main');
+  write(path.join(wj, 'src/lib/a.ts'), 'export const v = 2;\n'); git(wj, 'add', '-A'); git(wj, 'commit', '-q', '-m', '実装');
+  const fake = path.join(fj.base, 'fakebin');
+  write(path.join(fake, 'claude'), '#!/bin/bash\nprintf "%s" "$FAKE_OUT"; exit "${FAKE_RC:-0}"\n');
+  write(path.join(fake, 'codex'), '#!/bin/bash\nwhile [ $# -gt 0 ]; do [ "$1" = "-o" ] && { printf "%s" "$FAKE_OUT" > "$2"; shift; }; shift; done; exit "${FAKE_RC:-0}"\n');
+  fs.chmodSync(path.join(fake, 'claude'), 0o755); fs.chmodSync(path.join(fake, 'codex'), 0o755);
+  const outDir = path.join(fj.base, 'verdicts'); fs.mkdirSync(outDir, { recursive: true });
+  const okVerdict = JSON.stringify({ schema: 'vgdd.verdict.v1', verdict: 'APPROVED', deterministic_audits_passed: true, requirements: [], findings: [], summary: 'x' });
+  const realJudge = (script, extra, out, rc = 0) => {
+    for (const f of fs.readdirSync(outDir)) fs.rmSync(path.join(outDir, f), { force: true });
+    sh('bash', [path.join(IMPL.bin, script), ...extra, '--ticket', 'docs/tasks/T-921-probe.md', '--base', 'main', '--task', 'T-921', '--out', outDir],
+      { cwd: wj, env: { ...process.env, ...UTF8, PATH: `${fake}:${process.env.PATH}`, FAKE_OUT: out, FAKE_RC: String(rc), VGDD_AUDIT_WRAP: '' }, timeout: 120000 });
+    const f = fs.readdirSync(outDir).find((x) => x.endsWith('.json'));
+    try { return JSON.parse(fs.readFileSync(path.join(outDir, f), 'utf8')); } catch { return null; }
+  };
+  const wrap = (t) => JSON.stringify({ type: 'result', result: t });
+  const cases = [
+    ['J1', '空の JSON {}', wrap('{}'), 0],
+    ['J2', 'エラーの JSON（{"error":"unauthorized"}）', wrap('{"error":"unauthorized"}'), 0],
+    ['J3', '不正な verdict（INVALID）', wrap('{"verdict":"INVALID","findings":[]}'), 0],
+    ['J4', 'findings が配列でない', wrap('{"verdict":"APPROVED","findings":"なし"}'), 0],
+    ['J5', 'CLI が非0で終わる（中身は正しい判定）', wrap(okVerdict), 1],
+    ['J6', 'CLI の応答が is_error', JSON.stringify({ type: 'result', is_error: true, result: okVerdict }), 0],
+  ];
+  for (const [id, label, out, rc] of cases) {
+    const rec = realJudge('judge.sh', [], out, rc);
+    record('C3', id, `本物の judge.sh：${label} は判定として成り立たない（judge_parse_ok: false）`, !!rec && rec.judge_parse_ok === false, rec ? `parse_ok=${rec.judge_parse_ok} final=${rec.final_verdict}` : '記録がない');
+  }
+  const good = realJudge('judge.sh', [], wrap(okVerdict), 0);
+  record('C3', 'J7', '本物の judge.sh：形の正しい判定は成り立つ（judge_parse_ok: true。陽性の対照）', !!good && good.judge_parse_ok === true, good ? `final=${good.final_verdict}` : '記録がない');
+  for (const [id, label, out, rc] of [['X3', '空の JSON {}', '{}', 0], ['X4', '不正な verdict', '{"verdict":"INVALID","findings":[]}', 0], ['X5', 'CLI が非0で終わる', okVerdict, 1]]) {
+    const rec = realJudge('judge-codex.sh', [], out, rc);
+    record('C3', id, `本物の judge-codex.sh：${label} は判定として成り立たない（parse_ok: false）`, !!rec && rec.parse_ok === false, rec ? `parse_ok=${rec.parse_ok}` : '記録がない');
+  }
+  const goodC = realJudge('judge-codex.sh', [], okVerdict, 0);
+  record('C3', 'X6', '本物の judge-codex.sh：形の正しい判定は成り立つ（陽性の対照）', !!goodC && goodC.parse_ok === true, goodC ? '' : '記録がない');
 }
 
 // ---- G 裁判所の場面 ---------------------------------------------------------------------------
@@ -468,7 +510,7 @@ function groupST() {
   g = runGate(fx, 'APPROVED');
   let st3 = null; try { st3 = JSON.parse(g.kstate); } catch { /* なし */ }
   record('ST', 'ST4', '停止中は「停止中」と時刻を書き出し、停止の理由の本文と stop_id は出さない',
-    !!st3 && st3.stopped?.active === true && st3.stopped?.since === '2026-11-06T04:00:00+0900' && !/理由の本文|stop-12345/.test(g.kstate), JSON.stringify(st3?.stopped || null));
+    !!st3 && st3.stopped?.active === true && st3.stopped?.since === '2026-11-06T04:00:00+09:00' && !/理由の本文|stop-12345/.test(g.kstate), JSON.stringify(st3?.stopped || null));
   fs.rmSync(path.join(fx.z3, 'STOP'));
   g = runGate(fx, 'APPROVED');
   let st5 = null; try { st5 = JSON.parse(g.kstate); } catch { /* なし */ }
@@ -691,7 +733,13 @@ function groupL() {
   record('L', 'L6', '版の印のない（p0.4.2 以前の）夜間の合格の記録は統合しない（Codex の欠落を SKIPPED として合格にしえた）', r.status === 1 && /前の版/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
   L = releaseFixture('l7', { heldExtra: { codex: 'SKIPPED', no_codex: false } });
   r = L.run();
-  record('L', 'L7', '--no-codex でないのに Codex が SKIPPED の夜間の合格の記録は統合しない', r.status === 1 && /Codex の判定がない/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
+  record('L', 'L7', '--no-codex でないのに Codex が SKIPPED の夜間の合格の記録は統合しない', r.status === 1 && /成り立った司法の判定がない/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
+  L = releaseFixture('l8', { heldExtra: { law: 'unknown' } });
+  r = L.run();
+  record('L', 'L8', '未知の版の印の夜間の合格の記録は統合しない', r.status === 1 && /未知の版/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
+  L = releaseFixture('l9', { heldExtra: { security: 'CHANGES_REQUIRED' } });
+  r = L.run();
+  record('L', 'L9', 'セキュリティ審査が合格でない夜間の合格の記録は統合しない', r.status === 1 && /成り立った司法の判定がない/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
 }
 
 // ---- 権限の表の自己検査（どの権限にも確かめ方がある） ------------------------------------------

@@ -31,9 +31,14 @@ const TASK_RE = /^T-\d{3,4}$/;
 // 値は項目ごとの形だけを通す（Codex の指摘 #8。長さの上限だけでは SHA・セッション ID・短い理由の本文が通る）
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?([+-]\d{2}:?\d{2}|Z)$/;
 const VER_RE = /^p\d+\.\d+\.\d+[a-z]?$/;
-const str = (v) => (typeof v === 'string' && ISO_RE.test(v) ? v : null);   // 時刻
+// 時刻。+0900 の形（gate-runner の ts）は +09:00 にそろえる（画面の Date.parse が読める形に）
+const str = (v) => (typeof v === 'string' && ISO_RE.test(v) ? v.replace(/([+-]\d{2})(\d{2})$/, '$1:$2') : null);
 const ver = (v) => (typeof v === 'string' && VER_RE.test(v) ? v : null);   // 法律・フックの版
 const IMPLS = new Set(['repo', 'z3']);
+// 範囲：配列は最大 500 件（新しいものを残す）、件数は 0〜1,000,000 の整数（画面の検証と同じ。範囲外で写し全体が捨てられないように。T-022 の点検 #6）
+const MAX_ITEMS = 500; const MAX_COUNT = 1_000_000;
+const cap = (a) => a.slice(-MAX_ITEMS);
+const cnt = (n) => (Number.isInteger(n) && n >= 0 ? Math.min(n, MAX_COUNT) : 0);
 const uniq = (a) => [...new Set(a)].sort();
 
 const events = lines(path.join(EV, 'gate_events.jsonl'));
@@ -59,16 +64,16 @@ const approvals = uniq(approvalsLog.map((a) => a.task)).map((task) => {
   if (rel && digestBin) current = spawnSync('node', [digestBin, '--repo', REPO, '--ref', 'main', '--ticket', rel, '--check', path.join(EV, 'spec_approvals.jsonl')], { encoding: 'utf8' }).status === 0;
   const last = approvalsLog.filter((a) => a.task === task).pop();
   return { task, current, approved_at: str(last?.ts) };
-});
+}).slice(-MAX_ITEMS);
 
 // held：refs/vgdd/held/<task> が残っているもの（release が消す）。候補の SHA は出さない
 const heldRefs = git('for-each-ref', '--format=%(refname:strip=3)', 'refs/vgdd/held/').stdout.split('\n').filter((t) => TASK_RE.test(t));
-const held = heldRefs.sort().map((task) => ({ task, since: lastTs((e) => e.type === 'held' && e.task === task) }));
+const held = cap(heldRefs.sort()).map((task) => ({ task, since: lastTs((e) => e.type === 'held' && e.task === task) }));
 
 // 裁定・取り消し（理由の本文は出さない）
 const rulingsLog = lines(path.join(EV, 'rulings.jsonl'));
-const rulings = { count: rulingsLog.length, tasks: uniq(rulingsLog.map((r) => r.task).filter((t) => TASK_RE.test(t || ''))) };
-const annulments = { count: lines(path.join(EV, 'annulments.jsonl')).length };
+const rulings = { count: cnt(rulingsLog.length), tasks: cap(uniq(rulingsLog.map((r) => r.task).filter((t) => TASK_RE.test(t || '')))) };
+const annulments = { count: cnt(lines(path.join(EV, 'annulments.jsonl')).length) };
 
 // 判定：ファイル名で分類し、票ごと・司法ごとに最新の結論だけ（findings は出さない。SKIPPED などは null）
 const VF = /^(T-\d{3,4})-[0-9a-f]{7,40}(?:-stub)?(-codex-(judge|security))?\.json$/;
@@ -79,7 +84,8 @@ for (const f of vfiles) {
   vcount += 1;
   const kind = m[3] === 'judge' ? 'codex' : m[3] === 'security' ? 'security' : 'judge';
   const full = path.join(EV, 'verdicts', f);
-  let v = null; try { v = JSON.parse(fs.readFileSync(full, 'utf8')).final_verdict; } catch { /* 壊れた記録 */ }
+  // 裁判所と同じく、司法の出力を解釈できなかった記録（judge_parse_ok／parse_ok が false）は判定ではない → null（Codex の再監査 #6）
+  let v = null; try { const o = JSON.parse(fs.readFileSync(full, 'utf8')); if (o.judge_parse_ok !== false && o.parse_ok !== false) v = o.final_verdict; } catch { /* 壊れた記録 */ }
   const mtime = fs.statSync(full).mtimeMs;
   const t = (by_task[m[1]] ??= { judge: null, codex: null, security: null, at: null, _m: {} });
   if ((t._m[kind] ?? -1) < mtime) { t._m[kind] = mtime; t[kind] = v === 'APPROVED' || v === 'CHANGES_REQUIRED' ? v : null; }
@@ -88,7 +94,7 @@ for (const f of vfiles) {
 for (const t of Object.values(by_task)) delete t._m;
 
 const dis = events.filter((e) => e.type === 'disagreement');
-const disagreements = { count: dis.length, tasks: uniq(dis.map((e) => e.task).filter((t) => TASK_RE.test(t || ''))) };
+const disagreements = { count: cnt(dis.length), tasks: cap(uniq(dis.map((e) => e.task).filter((t) => TASK_RE.test(t || '')))) };
 
 // 司法の状態：最後の「司法が使えない」の後に判定が成り立った出来事がなければ unavailable（分類だけ。道具の名は出さない）
 const JUD_BAD = new Set(['judiciary_unavailable', 'preflight_failed']);
@@ -106,25 +112,28 @@ if (fs.existsSync(vc) && fs.existsSync(calls)) {
   // chain_ok はハッシュチェーン（改ざん・欠落）、checkpoint_mismatches はチェックポイントとの食い違いの件数（末尾の切り詰め・差し替えの疑い）。
   //   2つを分ける：p0.4.2 の裁判所の競合（OBS-055）で生じた食い違いが、チェーンの不整合に見えないように
   const mism = (r.stderr || '').split('\n').filter((l) => /^チェックポイント: /.test(l) && !/^チェックポイント: OK/.test(l)).length;
-  try { const s = JSON.parse(r.stdout); evidence = { records: Number(s.records) || 0, chain_ok: s.chain_ok === true, checkpoint_mismatches: mism, checkpoint_at: null, last_record_at: str(s.period?.last) }; } catch { evidence.chain_ok = false; }
+  try { const s = JSON.parse(r.stdout); evidence = { records: cnt(Number(s.records)), chain_ok: s.chain_ok === true, checkpoint_mismatches: mism, checkpoint_at: null, last_record_at: str(s.period?.last) }; } catch { evidence.chain_ok = false; }
 }
 evidence.checkpoint_at = str(lines(path.join(EV, 'checkpoints.jsonl')).pop()?.ts);
 
 // 最後の適合性テスト（run.mjs --record がオーナーの権限で Z3 に残したもの）
 const conf = lines(path.join(EV, 'conformance.jsonl')).pop();
-const conformance = conf ? { passed: Number(conf.passed) || 0, total: Number(conf.total) || 0, impl: IMPLS.has(conf.impl) ? conf.impl : null, kernel_version: ver(conf.kernel_version), at: str(conf.at) } : null;
+const cpass = cnt(conf?.passed); const ctotal = cnt(conf?.total);
+const conformance = conf && cpass <= ctotal ? { passed: cpass, total: ctotal, impl: IMPLS.has(conf.impl) ? conf.impl : null, kernel_version: ver(conf.kernel_version), at: str(conf.at) } : null;
 
-const state = { schema: 'vgdd.kernel-state.v1', generated_at: null, kernel_version, policy_version, stopped, judiciary, approvals, held, rulings, annulments, verdicts: { count: vcount, by_task }, disagreements, evidence, conformance };
+const state = { schema: 'vgdd.kernel-state.v1', generated_at: null, kernel_version, policy_version, stopped, judiciary, approvals, held, rulings, annulments, verdicts: { count: cnt(vcount), by_task: Object.fromEntries(Object.entries(by_task).sort().slice(-MAX_ITEMS)) }, disagreements, evidence, conformance };
 
 // 書き出し（Codex の指摘 #7）：出力先の親と祖先（--repo の中）がシンボリックリンクでない実のディレクトリであることを確かめ、
 //   同じディレクトリに推測できない名前の一時ディレクトリを排他的に作って（mkdtemp）、その中に排他的に書き（wx）、rename する。
 //   公開先がシンボリックリンクなら書かない（rename はリンクを置き換えるが、リンクの先には書かない）
 try {
   const dir = path.dirname(OUT);
-  fs.mkdirSync(dir, { recursive: true });
+  // 祖先を先に確かめてから作る（既存の祖先のリンクをたどって作らない。Codex の再監査 #3）。docs/governance/ は丸ごと保護パス
   for (let d = dir; d.startsWith(path.resolve(REPO)) && d !== path.resolve(REPO); d = path.dirname(d)) {
-    if (!fs.lstatSync(d).isDirectory()) throw Object.assign(new Error('出力先の親がディレクトリでない（リンクを含む）'), { code: 'ENOTDIR_LINK' });
+    let st = null; try { st = fs.lstatSync(d); } catch { continue; }   // まだない
+    if (!st.isDirectory()) throw Object.assign(new Error('出力先の祖先がディレクトリでない（リンクを含む）'), { code: 'ENOTDIR_LINK' });
   }
+  fs.mkdirSync(dir, { recursive: true });
   if (!fs.lstatSync(dir).isDirectory()) throw Object.assign(new Error('出力先の親がディレクトリでない'), { code: 'ENOTDIR_LINK' });
   state.generated_at = jst(Date.now());
   const tdir = fs.mkdtempSync(path.join(dir, '.kernel-state.json.tmp-'));

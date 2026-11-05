@@ -39,11 +39,16 @@ for task in "$@"; do
   req="$(printf '%s' "$rec" | jq -r .request)"; cand="$(printf '%s' "$rec" | jq -r .candidate)"
   # p0.4.3（Codex の指摘 #3）：p0.4.2 までの held は、Codex の判定の欠落を SKIPPED として合格にしえた。版の印（law）のない held と、
   #   --no-codex で起動していないのに Codex が APPROVED／CHANGES_REQUIRED でない held は統合しない（昼に申請し直す）
-  if [ -z "$(printf '%s' "$rec" | jq -r '.law // empty')" ]; then echo "✗ ${task}：前の版（p0.4.2 以前）の夜間の合格の記録。司法の成立を確かめられないので統合しない。昼に申請し直す" >&2; exit 1; fi
-  case "$(printf '%s' "$rec" | jq -r '"\(.codex)/\(.no_codex)"')" in
-    APPROVED/*|CHANGES_REQUIRED/*|SKIPPED/true) ;;
-    *) echo "✗ ${task}：夜間の合格の記録に Codex の判定がない（--no-codex でもない）。統合しない" >&2; exit 1;;
-  esac
+  if [ "$(printf '%s' "$rec" | jq -r '.law // empty')" != "p0.4.3" ]; then echo "✗ ${task}：前の版（p0.4.2 以前）か未知の版の夜間の合格の記録。司法の成立を確かめられないので統合しない。昼に申請し直す" >&2; exit 1; fi
+  # 記録の形が、裁判所が held にする条件（司法が成り立ち、両方の差し戻しでなく、security は省略か合格）と合うか（Codex の再監査 #2）
+  if ! printf '%s' "$rec" | jq -e '
+      (.no_codex | type == "boolean")
+      and (.judge == "APPROVED" or .judge == "CHANGES_REQUIRED")
+      and (if .no_codex then .codex == "SKIPPED" and .judge == "APPROVED" else (.codex == "APPROVED" or .codex == "CHANGES_REQUIRED") end)
+      and (.judge == "APPROVED" or .codex == "APPROVED")
+      and (.security == "SKIPPED" or .security == "APPROVED")' >/dev/null 2>&1; then
+    echo "✗ ${task}：夜間の合格の記録に、成り立った司法の判定がない（Codex の欠落・両方の差し戻し・security の不合格など）。統合しない" >&2; exit 1
+  fi
   git -C "$REPO" cat-file -e "$cand^{commit}" || { echo "✗ ${task}：候補のコミットがない" >&2; exit 1; }
   if git -C "$REPO" merge-base --is-ancestor "$req" main; then
     echo "・${task}：申請 ${req:0:12} はすでに main に入っている（統合済み）。何もしない"; continue

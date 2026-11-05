@@ -199,19 +199,25 @@ fi
 
 # ---- judge を起動（ヘッドレス。ツールなしの判定だけ） -----------------------------
 command -v claude >/dev/null || { echo "claude CLI が見つからない" >&2; exit 69; }
-RAW="$(printf '%s' "$INPUT" | claude -p --agent judge --output-format json --max-turns 1 2>/dev/null || true)"
+CLI_RC=0; RAW="$(printf '%s' "$INPUT" | claude -p --agent judge --output-format json --max-turns 1 2>/dev/null)" || CLI_RC=$?   # p0.4.3：CLI の終了状態を残す
 
 # ---- 出力の取り出しと、決定論的監査による上書き -------------------------------
 mkdir -p "$OUT_DIR"
 OUT_FILE="${OUT_DIR}/${TASK}-${HEAD_SHA}.json"
-export RAW AUDIT_FAIL AUDIT_RAN TASK BRANCH HEAD_SHA BASE STAMP REQ REQ_SOURCE
+export RAW AUDIT_FAIL AUDIT_RAN TASK BRANCH HEAD_SHA BASE STAMP REQ REQ_SOURCE CLI_RC
 node - > "$OUT_FILE" <<'NODE'
 const raw = process.env.RAW || '';
-let text = raw;
-try { const o = JSON.parse(raw); if (o && typeof o.result === 'string') text = o.result; } catch {}
+let text = raw; let cliError = process.env.CLI_RC !== '0';
+try { const o = JSON.parse(raw); if (o && typeof o.result === 'string') text = o.result; if (o && o.is_error === true) cliError = true; } catch {}
 let verdict = null;
 const m = text.match(/\{[\s\S]*\}/);
 if (m) { try { verdict = JSON.parse(m[0]); } catch {} }
+// p0.4.3（Codex の再監査 #1 critical）：判定として成り立つのは、CLI が正常に終わり、verdict が2つのどちらかで、findings が配列で、
+//   各指摘が severity の文字列を持つときだけ。{}・{"error":…}・不正な verdict を「解釈できた判定（指摘0件の CHANGES_REQUIRED）」にしない
+const SEV = new Set(['critical', 'major', 'minor', 'info']);
+const wellFormed = (v) => !!v && typeof v === 'object' && !Array.isArray(v) && (v.verdict === 'APPROVED' || v.verdict === 'CHANGES_REQUIRED')
+  && Array.isArray(v.findings) && v.findings.every((f) => f && typeof f === 'object' && SEV.has(f.severity));
+if (cliError || !wellFormed(verdict)) verdict = verdict && typeof verdict === 'object' ? { ...verdict, __malformed: true } : null;
 const auditFail = process.env.AUDIT_FAIL === '1';
 const auditRan = process.env.AUDIT_RAN === '1';
 // 未実行は合格ではない（judge の指摘 2026-11-03：未実行と合格を区別する）
@@ -226,16 +232,17 @@ const record = {
   requirements_source: process.env.REQ_SOURCE || 'docs/requirements.md',
   collected_at: process.env.STAMP,
   judge: verdict,
-  judge_parse_ok: !!verdict,
+  judge_parse_ok: !!verdict && !verdict.__malformed,   // p0.4.3：false は「司法が使えない」（gate-runner は判定として使わない）
   deterministic_audits: auditState,
   deterministic_audits_passed: auditState === 'passed',
   final_verdict: null,
   overridden_by_deterministic_audit: false,
   note: null,
 };
-if (!verdict) {
+if (!verdict || verdict.__malformed) {
   record.final_verdict = 'CHANGES_REQUIRED';
-  record.note = 'judge の出力を JSON として解釈できない（fail-closed）';
+  record.note = verdict ? 'judge の出力が判定の形をしていない・CLI が失敗した（fail-closed。判定ではない）' : 'judge の出力を JSON として解釈できない（fail-closed）';
+  if (verdict) delete verdict.__malformed;
 } else if (auditState !== 'passed' && verdict.verdict === 'APPROVED') {
   record.final_verdict = 'CHANGES_REQUIRED';
   record.overridden_by_deterministic_audit = true;

@@ -176,7 +176,8 @@ function isProtectedRel(rel) {
   if (r === 'vgdd' || r.startsWith('vgdd/')) return 'vgdd（法律のスクリプト・原本。変更は差分で提案し、オーナーが反映）';
   if (r === 'docs/tasks/_board.json') return 'docs/tasks/_board.json（gate-runner だけが書く）';
   // p0.4.3：Kernel の状態の写し（裁判所だけが書く。表示用で判断の根拠にしない）。一時ファイル（.tmp-*）も含む
-  if (r === 'docs/governance/kernel-state.json' || r.startsWith('docs/governance/kernel-state.json.')) return 'docs/governance/kernel-state.json（裁判所だけが書く）';
+  //   書き出しの一時ディレクトリと親の差し替えも止めるため、docs/governance/ を丸ごと保護する（summary.json もオーナーが書く。Codex の再監査 #3）
+  if (r === 'docs/governance' || r.startsWith('docs/governance/')) return 'docs/governance（Kernel の状態の写し。裁判所とオーナーだけが書く）';
   if (r.startsWith('merge-requests/done/')) return 'merge-requests/done（gate-runner が処理済みの申請を置く）';
   if (r === '.claude' || r.startsWith('.claude/')) {
     const wt = r.match(/^\.claude\/worktrees\/([^/]+)(?:\/(.*))?$/);
@@ -301,7 +302,7 @@ const BASH_PROTECTED_TOKENS = [
   { re: tok(String.raw`\.github`), noRead: false, label: '.github' },
   { re: tok(String.raw`vgdd`), noRead: false, label: 'vgdd（法律のスクリプト）' },
   { re: /docs\/tasks\/_board\.json/, noRead: false, label: 'docs/tasks/_board.json' },
-  { re: /kernel-state\.json/, noRead: false, label: 'docs/governance/kernel-state.json' },   // p0.4.3
+  { re: /docs\/governance|kernel-state\.json/, noRead: false, label: 'docs/governance（Kernel の状態の写し）' },   // p0.4.3
   { re: new RegExp(String.raw`merge-requests\/done` + END_OF_WORD), noRead: false, label: 'merge-requests/done' },
   { re: tok(String.raw`(\.\.\/)?preparation`), noRead: false, label: '準備資料' },
   { re: tok(String.raw`(\.\.\/)?event_records`), noRead: false, label: '作業記録' },

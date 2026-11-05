@@ -58,7 +58,7 @@ BIN="$Z3/bin"                      # judge.sh / judge-codex.sh の実行用コ�
 REQ_DIR="$REPO/merge-requests"
 DONE_DIR="$REQ_DIR/done"
 BOARD="$REPO/docs/tasks/_board.json"
-PROTECTED_RE='^(\.claude/|CLAUDE\.md$|\.github/|vgdd/|docs/requirements\.md$|docs/tasks/_board\.json$|docs/governance/kernel-state\.json|merge-requests/)'
+PROTECTED_RE='^(\.claude/|CLAUDE\.md$|\.github/|vgdd/|docs/requirements\.md$|docs/tasks/_board\.json$|docs/governance/|merge-requests/)'
 MAX_RETURNS=3                       # 差し戻しの上限（D-05）
 
 mkdir -p "$VERDICTS" "$DONE_DIR"

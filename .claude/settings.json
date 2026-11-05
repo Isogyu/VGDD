@@ -120,7 +120,7 @@
         ".github",
         "vgdd",
         "docs/tasks/_board.json",
-        "docs/governance/kernel-state.json",
+        "docs/governance",
         "~/.claude/settings.json",
         "~/.claude/settings.local.json",
         "~/.claude/hooks",
