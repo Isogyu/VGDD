@@ -1,7 +1,7 @@
 ---
 id: T-015
 title: S-4 チームの知恵の画面（承認済みの共有の一覧と、手順書の原案・判断のポイント。M5・C2 の画面）
-status: in_progress
+status: review
 requirements: [A1, A2, A3, A4, A5, A5b, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M5-1, M5-2, M5-3, M5-4, M9-3, C2, D-62]   # 記録用。司法には渡さない
@@ -81,3 +81,5 @@ depends_on: [T-012]
 - 2026-11-05T23:48:58+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
 - 00:1x 立法補佐からの伝達（オーナー経由）：Codex security の指摘は major 1件（A4）。`TeamKnowledge.tsx` が作業名を普通のオブジェクトのキーにしており（`drafts`・`busy`・`errors`）、作業名が `constructor`・`toString` 等だと継承のプロパティを拾って画面が壊れる。直し方：Map か `Object.create(null)` の辞書で所有のプロパティだけを読む。§2 は変えない
 - 00:13 行政の長が W8 を起動（worktree `agent-a456af914ff963843`、main 49eb404 から）。266083a を cherry-pick し、3つの辞書を Map に直して1コミットに amend、`team-knowledge.test.ts` に作業名が `constructor`・`__proto__` でもまとまる試験を足せるなら足す指示。W6 の worktree `agent-a9b7f50f…` は触らない
+- 00:15 W8 の報告：コミット d07cc6a（1つに amend。main との差は新設5ファイル +472）。`drafts`・`busy`・`errors` を `Map` に変更（`mapWith`・`mapWithout` で `new Map` にコピーして set/delete、読み取りは `get`）。A3 の読み直しで全消し、A5 の `sources_changed` で原案を消す、依頼中の読み直しで結果を捨てる振る舞いは維持。`team-knowledge.test.ts` に作業名 `constructor`・`__proto__`・`toString` の試験1件（計7件）。test 205・typecheck・lint 合格。cherry-pick の衝突・逸脱・拒否なし。画面は未確認
+- 00:16 行政の長が差分を確認（`files_allowed` の5ファイルのみ。`Record<string`・`[g.task_name]`・`hasOwnProperty`・`in` が残っていないことを grep で確認。266083a との差は `TeamKnowledge.tsx` +40/−27 と試験 +17）。`status: review` で main にコミットし再申請（差し戻し1回目。security_review: true）
