@@ -8,4 +8,7 @@
 | 02:07 | A：Kernel 改正案 p0.4.3 の下書き（状態の書き出し kernel-state.json、OBS-051 promise、OBS-053 司法の道具の点検、OBS-054 参考の全文、OBS-049 角かっこ）。点検役を起動 | `docs/drafts/kernel-p0.4.3-proposal.md`（45da41a） |
 | 02:13 | A の点検（Claude、12件：critical 2・major 5・minor 5、憲法に反する点なし）を反映。表示用の写しと明記、指紋を出さない、停止中の扱いと司法の失敗の上限、参考のコメントの2択。オーナーに聞くこと 6件 | 同上（aa4b61c） |
 | 02:17 | B：票 T-draft-kernel-ui の下書き（/governance の先頭に Kernel の区画。置き方の案2つ） | `docs/tasks/drafts/T-draft-kernel-ui.md`（dcc6f01） |
-| 02:2x | B の点検（Claude、10件：major 6・minor 4）を反映。検証を fs なしのファイルに分けて画面でも検証、書き出し日時と「古い写し」、表示用の純粋関数と試験、zod 式の全項目 | 同上 |
+| 02:2x | B の点検（Claude、10件：major 6・minor 4）を反映。検証を fs なしのファイルに分けて画面でも検証、書き出し日時と「古い写し」、表示用の純粋関数と試験、zod 式の全項目 | 同上（0a390a5） |
+| 02:3x | C-1：M12 先輩インタビューの票2枚（裏側・画面）。点検（Claude、12件：critical 2・major 7・minor 3）を反映：所有の確認、UNIQUE と UPDATE の件数で同時実行を防ぐ、`done` の後は `ai_done`、外部 API に送る範囲と上限、エラーの対応表、`normalizeTaskName` は `@/lib/commands` | `docs/tasks/drafts/T-draft-m12-interview-api.md`・`T-draft-m12-interview-screen.md` |
+| 02:4x | C-5：AGENTS.md の票（生成の出どころを確かめて `agentRules: false` か `.gitignore`。Codex の司法が AGENTS.md を読む経路を p0.4.3 の候補に）、C-6：原案の指紋から `knowledge_id` を外す票。点検役を起動 | `docs/tasks/drafts/T-draft-agents-md.md`・`T-draft-fingerprint-no-id.md` |
+| 02:5x | C-2：M11 知らないことマップ、C-3：M14 30分チェックイン（促しの表示だけ。デモ時計は §8 で問う）、C-4：M13 音声でつぶやく（Web Speech API、依存なし、プライバシーを §8 で問う） | `docs/tasks/drafts/T-draft-m11-knowing-map.md`・`T-draft-m14-checkin-prompt.md`・`T-draft-m13-voice-input.md` |
