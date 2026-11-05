@@ -9,8 +9,9 @@
 //   裁判所・夜間の代行・release はこのファイルを読まない（判例 ST9）。
 // 出すのは公開してよい集計だけ。出さない（MUST NOT）：判定・裁定・停止の理由の本文、証拠ストアの各行、パス、セッション ID、
 //   tool_use_id、作業員の報告、コミットの本文、ハッシュ（指紋・SHA・チェーン）の全桁も一部も（判例 ST1）。
-// 内容が前回と同じ（generated_at を除く）なら書かない。書くときは一時ファイルに書いてから rename（読み手が途中を読まない）。
-// 終了コード：0 書いた／同じなので書かなかった、1 失敗（裁判所は kernel_state_unwritten を記録して周回を続ける）
+// 周回ごとに必ず書き直す（generated_at が裁判所の生存の合図。画面は 10 分以上古ければ「古い写し」と出す）。
+//   一時ファイルに書いてから rename（読み手が途中を読まない）。git で追跡しないので、書き直しはコミットの雑音にならない。
+// 終了コード：0 書いた、1 失敗（裁判所は kernel_state_unwritten を記録して周回を続ける）
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -93,11 +94,14 @@ const judiciary = lastJud && JUD_BAD.has(lastJud.type)
   : { status: 'ok', kind: null, since: null };
 
 // 証拠ストア：件数とハッシュチェーンの検証の結果だけ
-let evidence = { records: 0, chain_ok: null, checkpoint_at: null, last_record_at: null };
+let evidence = { records: 0, chain_ok: null, checkpoint_mismatches: null, checkpoint_at: null, last_record_at: null };
 const vc = path.join(Z3, 'hooks/verify-chain.mjs'); const calls = path.join(EV, 'tool_calls.jsonl');
 if (fs.existsSync(vc) && fs.existsSync(calls)) {
   const r = spawnSync('node', [vc, calls, '--summary-json'], { encoding: 'utf8', timeout: 60000 });
-  try { const s = JSON.parse(r.stdout); evidence = { records: Number(s.records) || 0, chain_ok: r.status === 0 && s.chain_ok === true, checkpoint_at: null, last_record_at: str(s.period?.last) }; } catch { evidence.chain_ok = false; }
+  // chain_ok はハッシュチェーン（改ざん・欠落）、checkpoint_mismatches はチェックポイントとの食い違いの件数（末尾の切り詰め・差し替えの疑い）。
+  //   2つを分ける：p0.4.2 の裁判所の競合（OBS-055）で生じた食い違いが、チェーンの不整合に見えないように
+  const mism = (r.stderr || '').split('\n').filter((l) => /^チェックポイント: /.test(l) && !/^チェックポイント: OK/.test(l)).length;
+  try { const s = JSON.parse(r.stdout); evidence = { records: Number(s.records) || 0, chain_ok: s.chain_ok === true, checkpoint_mismatches: mism, checkpoint_at: null, last_record_at: str(s.period?.last) }; } catch { evidence.chain_ok = false; }
 }
 evidence.checkpoint_at = str(lines(path.join(EV, 'checkpoints.jsonl')).pop()?.ts);
 
@@ -107,9 +111,6 @@ const conformance = conf ? { passed: Number(conf.passed) || 0, total: Number(con
 
 const state = { schema: 'vgdd.kernel-state.v1', generated_at: null, kernel_version, policy_version, stopped, judiciary, approvals, held, rulings, annulments, verdicts: { count: vcount, by_task }, disagreements, evidence, conformance };
 
-// 前回と同じなら書かない（generated_at を除いて比べる）
-const body = (o) => JSON.stringify({ ...o, generated_at: null });
-try { if (body(JSON.parse(fs.readFileSync(OUT, 'utf8'))) === body(state)) process.exit(0); } catch { /* 初回・壊れている */ }
 try {
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
   state.generated_at = jst(Date.now());

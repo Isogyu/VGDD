@@ -8,6 +8,7 @@
 // 使い方（オーナーか立法補佐が sandbox の外で実行する。依存なし、Node 22 以上）:
 //   node vgdd/conformance/run.mjs                 … リポジトリの原本（vgdd/）を試す
 //   node vgdd/conformance/run.mjs --impl z3       … 実際に動いている Z3 の写し（~/tsubuyaki-z3/hooks・bin）を試す
+//   node vgdd/conformance/run.mjs --impl z3 --record … 結果の1行を Z3 の evidence/conformance.jsonl に残す（p0.4.3。Kernel の状態の写しに出る。オーナーが実行）
 //   node vgdd/conformance/run.mjs --json out.json … 結果を JSON にも書く
 //   node vgdd/conformance/run.mjs --observe <repo> … 加えて、実際のリポジトリの票の status の変更を作者ごとに数える（観測。合否なし）
 // 終了コード：0 ＝ すべて合格、1 ＝ 不合格あり、2 ＝ 試験の準備に失敗
@@ -444,9 +445,11 @@ function groupST() {
     !!st && sh('git', ['-C', fx.main, 'status', '--porcelain', '--', 'docs/governance']).stdout.trim() === ''
       && !/kernel-state/.test(sh('git', ['-C', fx.main, 'log', '--all', '--name-only', '--format=']).stdout));
   const gen = st?.generated_at;
+  sh('sleep', ['1.2']); // generated_at は秒の単位
   g = runGate(fx, 'APPROVED');
   let st2 = null; try { st2 = JSON.parse(g.kstate); } catch { /* なし */ }
-  record('ST', 'ST3', '内容が同じ周回では書き直さない（generated_at が変わらない）', !!st2 && !!gen && st2.generated_at === gen, `${gen} → ${st2?.generated_at}`);
+  record('ST', 'ST3', '申請のない周回でも書き直し、generated_at が進む（裁判所の生存の合図。画面はこれで古い写しを見分ける）。ほかの項目は変わらない',
+    !!st2 && !!gen && st2.generated_at > gen && JSON.stringify({ ...st2, generated_at: 0, evidence: 0 }) === JSON.stringify({ ...st, generated_at: 0, evidence: 0 }), `${gen} → ${st2?.generated_at}`);
   write(path.join(fx.z3, 'STOP'), '理由の本文 ST（2026-11-06T04:00:00+0900）\n');
   fs.appendFileSync(path.join(fx.z3, 'evidence/gate_events.jsonl'), JSON.stringify({ ts: '2026-11-06T04:00:00+0900', type: 'kernel_stop', task: '-', stop_id: 'stop-12345' }) + '\n');
   g = runGate(fx, 'APPROVED');
@@ -767,5 +770,11 @@ const failed = results.filter((r) => !r.ok);
 const byGroup = {};
 for (const r of results) { byGroup[r.group] ??= { pass: 0, fail: 0 }; byGroup[r.group][r.ok ? 'pass' : 'fail']++; }
 console.log(`\n合計 ${results.length} 件：合格 ${results.length - failed.length}、不合格 ${failed.length}　${Object.entries(byGroup).map(([g, c]) => `${g} ${c.pass}/${c.pass + c.fail}`).join('　')}`);
+// p0.4.3：--record で結果の1行を Z3 の conformance.jsonl に残す（Kernel の状態の写しが「最後の適合性テスト」として出す）。
+//   Z3 に書けるのはオーナーだけなので、実行するのもオーナー（sandbox の外）。件数と合否と実装と日時だけ
+if (args.includes('--record')) {
+  const z3 = process.env.VGDD_Z3_DIR || Z3REAL;
+  fs.appendFileSync(path.join(z3, 'evidence/conformance.jsonl'), JSON.stringify({ schema: 'vgdd.conformance-record.v1', at: new Date(Date.now() + 9 * 3600e3).toISOString().replace(/\.\d+Z$/, '+09:00'), impl, kernel_version: CAPS.kernel_version, passed: results.length - failed.length, total: results.length }) + '\n');
+}
 if (opt('--json')) fs.writeFileSync(opt('--json'), JSON.stringify({ schema: 'vgdd.conformance-report.v1', impl, kernel_version: CAPS.kernel_version, at: new Date().toISOString(), totals: byGroup, results, observed }, null, 2) + '\n');
 process.exit(failed.length ? 1 : 0);

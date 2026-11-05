@@ -434,9 +434,13 @@ while :; do
   fi
   RUN_MERGED=""; RUN_TOUCHED=""
   # p0.3.0：証拠ストアのチェックポイント（件数と末尾の行のハッシュ）。末尾の切り詰めを verify-chain で検出する（D-56③）
+  # p0.4.3（OBS-055）：件数と末尾の行は1回の読み取りで取る。p0.4.2 までは wc と tail を別々に読み、その間にフックが1行足すと
+  #   「3552 行・末尾は 3553 行目」のチェックポイントになり、verify-chain が差し替えの疑いと誤って報告した（2026-11-06 01:18:23）
+  local_cp() { awk 'END { print NR; printf "%s", $0 }' "$1"; }
   for lf in "$Z3/evidence/tool_calls.jsonl" "$EVENTS"; do
     [ -s "$lf" ] || continue
-    printf '{"ts":"%s","file":"%s","count":%s,"last_sha256":"%s"}\n' "$(ts)" "$(basename "$lf")" "$(wc -l < "$lf" | tr -d ' ')" "$(tail -n 1 "$lf" | tr -d '\n' | shasum -a 256 | cut -c1-64)" >> "$Z3/evidence/checkpoints.jsonl"
+    snap="$(local_cp "$lf")"
+    printf '{"ts":"%s","file":"%s","count":%s,"last_sha256":"%s"}\n' "$(ts)" "$(basename "$lf")" "${snap%%$'\n'*}" "$(printf '%s' "${snap#*$'\n'}" | shasum -a 256 | cut -c1-64)" >> "$Z3/evidence/checkpoints.jsonl"
   done
   # 事後検知：自分以外のコミットで main が進んでいないか（直接統合の違反の検知）
   LAST_MAIN_FILE="$Z3/evidence/.last_main"
