@@ -58,3 +58,24 @@ CREATE TABLE IF NOT EXISTS shared_knowledge (
   withdrawn_at  TEXT                              -- 取り下げ（M9-5）
 );
 CREATE INDEX IF NOT EXISTS idx_knowledge_task ON shared_knowledge(task_name, approved_at);
+
+-- 共有候補（M9）。本人が承認したものだけが shared_knowledge に入る。原文のメモは含まない
+CREATE TABLE IF NOT EXISTS share_candidates (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id     INTEGER NOT NULL REFERENCES work_sessions(id),
+  user_id        TEXT NOT NULL REFERENCES users(id),
+  task_name      TEXT NOT NULL,
+  summary_id     INTEGER NOT NULL REFERENCES session_summaries(id),  -- 作ったときの整理結果の版
+  draft_body     TEXT NOT NULL,                    -- 整理結果から作った本文
+  status         TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'withdrawn')),
+  action         TEXT CHECK (action IN ('approve', 'edit_approve', 'reject')),  -- 未決定は NULL
+  final_body     TEXT,                             -- 承認後の本文。却下・未決定は NULL
+  reject_reason  TEXT,                             -- 任意。却下のときだけ
+  knowledge_id   INTEGER REFERENCES shared_knowledge(id),  -- 承認で作った行
+  created_at     TEXT NOT NULL,
+  decided_at     TEXT,
+  withdrawn_at   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_share_user ON share_candidates(user_id, id);
+-- 同じ版の未決定の候補は1つだけ
+CREATE UNIQUE INDEX IF NOT EXISTS idx_share_pending ON share_candidates(session_id, summary_id) WHERE status = 'pending';

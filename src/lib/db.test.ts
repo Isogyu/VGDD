@@ -13,7 +13,7 @@ describe("db（node:sqlite）", () => {
     expect(getUser("nobody", db)).toBeUndefined();
   });
 
-  it("5つの表ができている", () => {
+  it("6つの表ができている", () => {
     const db = openDb(":memory:");
     const rows = db
       .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
@@ -21,6 +21,7 @@ describe("db（node:sqlite）", () => {
     expect(rows.map((r) => r.name)).toEqual([
       "notes",
       "session_summaries",
+      "share_candidates",
       "shared_knowledge",
       "users",
       "work_sessions",

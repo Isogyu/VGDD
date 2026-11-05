@@ -51,7 +51,7 @@ describe("seedDemo（M7 の前倒し）", () => {
 
     const r = seedDemo(db, { reset: true });
     expect(r.inserted).toBe(true);
-    expect(r.reset).toEqual({ shared_knowledge: 1, session_summaries: 1, notes: 12, work_sessions: 4 });
+    expect(r.reset).toEqual({ share_candidates: 0, shared_knowledge: 1, session_summaries: 1, notes: 12, work_sessions: 4 });
     expect(db.prepare("SELECT count(*) c FROM work_sessions").get()).toEqual({ c: 3 });
     expect(db.prepare("SELECT count(*) c FROM users").get()).toEqual({ c: 3 });
     expect(getKnowledgeHints("newcomer_a", DEMO_TASK_W1, db).teamKnowledge).toHaveLength(1);
