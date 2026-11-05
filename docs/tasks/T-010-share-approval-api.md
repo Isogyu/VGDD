@@ -1,15 +1,15 @@
 ---
 id: T-010
 title: 共有前の本人確認の裏側（共有候補の作成・承認・編集して承認・却下・取り下げ・記録。M9 の裏側）
-status: review
-requirements: [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10]   # この票の §2（requirements_source: ticket）
+status: in_progress
+requirements: [A1, A2, A3, A4, A5, A6, A7, A8, A9, A10, A11]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [M9-1, M9-2, M9-3, M9-5, M6-1, D-56]   # 記録用。司法には渡さない
 proposal_from: 引き継ぎ §8 の 6（G3 の条件 M1〜M6・M9。D-55 の順「M6・M9」）。2026-11-05 オーナー「票の準備へ」
 estimate_h: 1.2
 time_limit_min: 75
 security_review: true          # 新しい API ルート3本と新しい表
-unattended: true
+unattended: false              # 2026-11-05 22:5x：昼の作業員で仕上げる（夜間の --allowedTools が [id] のパスに効かない。OBS-049）
 branch: null
 worker: null
 files_allowed:
@@ -20,6 +20,8 @@ files_allowed:
   - src/app/api/sessions/[id]/share/route.ts # 新設：共有候補の作成
   - src/app/api/shares/route.ts              # 新設：本人の記録の一覧
   - src/app/api/shares/[shareId]/route.ts    # 新設：承認・編集して承認・却下・取り下げ
+  - src/lib/seed.ts                          # resetDemoData の削除の対象に share_candidates を足すだけ（A11）
+  - src/lib/seed.test.ts                     # reset の戻り値の期待値に share_candidates を足すだけ（A11）
 files_forbidden:
   - src/lib/sessions.ts                      # getKnowledgeHints は取り下げ済みを既に除く。触らない
   - src/lib/summarize.ts
@@ -73,7 +75,8 @@ depends_on: []
   - `POST /api/shares/[shareId]`：`invalid_id` 400 → `invalid_body` 400 → `user_not_found` 404 → 以下。body `{ userId: string(1〜), action: "approve" | "edit_approve" | "reject" | "withdraw", body?: string(最大4000), reason?: string(最大1000), confirmFlagged?: boolean }`。`withdraw` は `withdrawShare`、ほかは `decideShare`。失敗は `share_not_found` 404・`not_your_share` 403・`already_decided`／`not_approved`／`stale_candidate` 409・`flagged_body` 409（`{ error, flags }`）・`empty_body`／`body_too_long`／`reason_too_long` 400。成功は 200 `{ candidate }`
 - A8. `src/lib/db.test.ts` の既存の試験「5つの表ができている」は、**題を「6つの表ができている」に、期待する配列に `"share_candidates"` を名前の順の位置（`"session_summaries"` の後、`"shared_knowledge"` の前）に足す**ことだけを変える（新しい表を足す仕様の変更による。それ以外の既存の `it(` は変えない）
 - A9. `src/lib/sharing.test.ts` に、下の①〜⑭を**それぞれ1件以上の `it(`**で試す（合計14件以上。`openDb(":memory:")` と固定ユーザーを使う。整理結果は `session_summaries` に直接 INSERT してよい）：①`buildShareDraft` が4項目の順・`none` を飛ばす・`inferred` に `（AI の推測）`・全部 `none` で `null` ②`createShareCandidate` の5つの失敗（各1回）③同じ版で2回呼ぶと2回目は `created: false` で同じ `id` ④`approve` で `shared_knowledge` に1行でき、`getKnowledgeHints` の `teamKnowledge` に出る ⑤`edit_approve` の本文が `final_body` と `shared_knowledge.body` になる。空の本文は `empty_body` ⑥`reject` で `shared_knowledge` が増えず、2回目の決定は `already_decided` ⑦整理をもう1行足した後の古い候補は `stale: true` で、`approve` が `stale_candidate`（`shared_knowledge` は増えない） ⑧登録語句（`ホクト製菓`）を含む本文の `edit_approve` は `confirmFlagged` なしで `flagged_body`、ありで承認 ⑨`withdrawShare` の後は `teamKnowledge` に出ず、`approved` でない候補は `not_approved` ⑩他人の `userId` は `not_your_share`、`listShareRecords` に他人の候補が出ない ⑪最新の整理の行の `json` が読めない（`getLatestSummary` が `null`）とき、`pending` の候補は `stale: true` で `approve` が `stale_candidate` ⑫`approve` で `draft_body` が 2000 文字を超える候補は `body_too_long` ⑬`item.text` に改行がある整理から作った `draft_body` で、改行が半角空白になっている ⑭途中失敗の巻き戻し：試験の中で `share_candidates` の UPDATE を `RAISE(ABORT, ...)` で失敗させる TRIGGER を作ると、`decideShare` の `approve` と `withdrawShare` は失敗し（例外を投げるか `ok: false`）、`shared_knowledge` の行数・`withdrawn_at` と候補の行は呼び出しの前と同じ
-- A10. `npm run -s test`（既存の試験と追加分のすべて）・`npm run -s typecheck`・`npm run -s lint` が通る（決定論的な監査の結果で確かめる）。差分のファイルは次の7つだけ：`src/lib/db/schema.sql`、`src/lib/db.test.ts`、`src/lib/sharing.ts`（新設）、`src/lib/sharing.test.ts`（新設）、`src/app/api/sessions/[id]/share/route.ts`（新設）、`src/app/api/shares/route.ts`（新設）、`src/app/api/shares/[shareId]/route.ts`（新設）
+- A10. `npm run -s test`（既存の試験と追加分のすべて）・`npm run -s typecheck`・`npm run -s lint` が通る（決定論的な監査の結果で確かめる）。差分のファイルは次の9つだけ：`src/lib/db/schema.sql`、`src/lib/db.test.ts`、`src/lib/seed.ts`、`src/lib/seed.test.ts`、`src/lib/sharing.ts`（新設）、`src/lib/sharing.test.ts`（新設）、`src/app/api/sessions/[id]/share/route.ts`（新設）、`src/app/api/shares/route.ts`（新設）、`src/app/api/shares/[shareId]/route.ts`（新設）
+- A11. デモのリセット：`src/lib/seed.ts` の `resetDemoData` が消す表の配列を `["share_candidates", "shared_knowledge", "session_summaries", "notes", "work_sessions"]`（子 → 親の順。`share_candidates` は `shared_knowledge`・`session_summaries`・`work_sessions` を参照するので先頭）にする。`resetDemoData` のそれ以外は変えない。`src/lib/seed.test.ts` の既存の試験「reset：進行中の作業があっても…」の `expect(r.reset).toEqual({ … })` の期待値に `share_candidates: 0` を足すことだけを変える（表を足す仕様の変更による。それ以外の既存の `it(` は変えない）。あわせて `sharing.test.ts` に、承認済みの候補がある DB で `resetDemoData` が外部キーの違反にならず、`share_candidates` が 0 行になる試験を1件以上足す
 
 ## 3. 開発用テスト
 
@@ -89,10 +92,12 @@ depends_on: []
 
 ## 5. 統合審査
 
-決定論的な監査（`npm test`・`typecheck`・`lint`）＋ judge ＋ Codex judge ＋ **Codex security**（`security_review: true`。観点：他人の作業・候補に触れないか、原文のメモが応答や共有に出ないか、本文をログに出さないか、入力の検証、2つの書き込みの原子性）。要件は main にコミット済みのこの票の §2（A1〜A10）。T-011 と触るファイルが重ならない。
+決定論的な監査（`npm test`・`typecheck`・`lint`）＋ judge ＋ Codex judge ＋ **Codex security**（`security_review: true`。観点：他人の作業・候補に触れないか、原文のメモが応答や共有に出ないか、本文をログに出さないか、入力の検証、2つの書き込みの原子性）。要件は main にコミット済みのこの票の §2（A1〜A11）。T-011 と触るファイルが重ならない。
 
 ## 6. 記録
 
 （統合後に追記）
 
 - 2026-11-05T22:50:56+0900 night-runner: 作業員の実装を前検査で確認（HEAD 6525714）。status → review で再申請（試行 1）
+
+- 2026-11-05T22:53:27+0900 gate-runner: status → in_progress（judge=CHANGES_REQUIRED, codex=CHANGES_REQUIRED（両方が差し戻し））
