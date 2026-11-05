@@ -501,6 +501,48 @@ function groupN() {
   } finally { try { process.kill(-bg.pid); } catch { /* 終わっている */ } }
 }
 
+// ---- L 朝の統合（release.sh） ------------------------------------------------------------------
+function releaseFixture(name, { audit = 0, otherCandidate = false } = {}) {
+  const fx = fixture(name);
+  const id = 'T-950';
+  commitTicket(fx, id, {});
+  const mainAt = git(fx.main, 'rev-parse', 'main');
+  const mk = (br, file, body) => {
+    const wt = path.join(fx.base, `wt-${br.replace(/\W/g, '')}`);
+    git(fx.main, 'worktree', 'add', '-q', '-b', br, wt, 'main');
+    write(path.join(wt, file), body); git(wt, 'add', '-A'); git(wt, 'commit', '-q', '-m', `${br} の実装`);
+    return git(wt, 'rev-parse', 'HEAD');
+  };
+  const req = mk(`task/${id}`, 'src/lib/a.ts', 'export const v = 2;\n');
+  const cand = otherCandidate ? mk('task/other', 'src/lib/a.ts', 'export const v = 99;\n') : req;
+  write(path.join(fx.z3, 'evidence/held.jsonl'), JSON.stringify({ task: id, request: req, candidate: cand, main_at_check: mainAt, judge: 'APPROVED', codex: 'APPROVED' }) + '\n');
+  touch(path.join(fx.z3, 'evidence/gate_events.jsonl'));
+  write(path.join(fx.z3, 'bin/sandboxed-run.sh'), `#!/bin/bash\nexit ${audit}\n`); fs.chmodSync(path.join(fx.z3, 'bin/sandboxed-run.sh'), 0o755);
+  const env = { ...process.env, ...UTF8, VGDD_Z3_DIR: fx.z3, VGDD_REPO: fx.main };
+  return { fx, id, req, before: git(fx.main, 'rev-parse', 'main'), run: () => sh('bash', [path.join(IMPL.bin, 'release.sh'), id], { env, cwd: fx.main, timeout: 120000 }) };
+}
+function groupL() {
+  let L = releaseFixture('l1');
+  let r = L.run();
+  const inMain = sh('git', ['-C', L.fx.main, 'merge-base', '--is-ancestor', L.req, 'main']).status === 0;
+  const st = (sh('git', ['-C', L.fx.main, 'show', `main:docs/tasks/${L.id}-probe.md`]).stdout.match(/^status: (.*)$/m) || [])[1];
+  const ev = fs.readFileSync(path.join(L.fx.z3, 'evidence/gate_events.jsonl'), 'utf8');
+  record('L', 'L1', '夜に判定した変更と同じなら統合し、票を merged にしてコミットし、merged（via release）を記録する（陽性の対照）',
+    r.status === 0 && inMain && st === 'merged' && /"via":"release"/.test(ev) && !sh('git', ['-C', L.fx.main, 'status', '--porcelain']).stdout.trim(), `exit ${r.status} status=${st} ${r.stderr.trim().slice(0, 80)}`);
+  const head1 = git(L.fx.main, 'rev-parse', 'main');
+  r = L.run();
+  record('L', 'L2', 'すでに統合済みの票をもう一度 release しても何もしない（取り消さない）', r.status === 0 && /統合済み/.test(r.stdout) && git(L.fx.main, 'rev-parse', 'main') === head1, `exit ${r.status}`);
+  L = releaseFixture('l3', { otherCandidate: true });
+  r = L.run();
+  record('L', 'L3', '入る変更が夜に判定した候補と違えば統合せず、main を元に戻す', r.status === 1 && /判定した変更と違う/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
+  L = releaseFixture('l4'); fs.mkdirSync(path.join(L.fx.z3, '.release.lock'));
+  r = L.run();
+  record('L', 'L4', 'release.sh は錠で直列化される（別の release が動いていれば断り、main に触れない）', r.status === 75 && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
+  L = releaseFixture('l5', { audit: 1 });
+  r = L.run();
+  record('L', 'L5', '組み合わせた木の監査が不合格なら統合を取り消す', r.status === 1 && /監査が不合格/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
+}
+
 // ---- 権限の表の自己検査（どの権限にも確かめ方がある） ------------------------------------------
 function groupMeta() {
   const ids = new Set(results.map((r) => r.id));
@@ -595,6 +637,7 @@ try {
   groupK2();
   groupH();
   groupN();
+  groupL();
   groupMeta();
   if (opt('--observe')) observed = observe(opt('--observe'));
 } catch (e) {

@@ -1,6 +1,6 @@
 {
   "schema": "vgdd.capabilities.v1",
-  "kernel_version": "p0.4.0",
+  "kernel_version": "p0.4.1",
   "note": "Governance Kernel の権限の表（ADR-001・ADR-003）。役割ごとに、何ができ、何ができず、それを どの層が強制しているかを書く。expect はフック（Policy Decision Point）の判定。enforced_by はその操作を実際に止める層（複数あれば全部）。'promise' は強制がなく約束だけのもの（弱点として公開する）。probes は適合性テスト（vgdd/conformance/run.mjs）がフックに実際に入力する操作で、{self} はその役割の作業場所のルート、{main} は main の checkout、{wt} は作業員の worktree、{z3} は Z3。 個々の probe に expect があれば、その役割についてはそちらを優先する。",
   "layers": {
     "hook": "PreToolUse フック policy.mjs（Policy Decision Point。拒否と記録）",
@@ -523,10 +523,12 @@
         "ledger"
       ],
       "scenario_tests": [
-        "R9"
-      ],
-      "known_gaps": [
-        "release.sh の統合の陽性の試験（夜に判定した変更と一字一句同じときだけ統合する）は、適合性テストにまだない。V8 の朝の承認で確かめる"
+        "R9",
+        "L1",
+        "L2",
+        "L3",
+        "L4",
+        "L5"
       ]
     },
     {
