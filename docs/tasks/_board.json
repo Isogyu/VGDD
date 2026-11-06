@@ -1,12 +1,12 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-06T22:32:44.059+09:00",
+  "generated_at": "2026-11-07T01:12:58.114+09:00",
   "totals": {
-    "tickets": 25,
-    "merged": 25,
-    "rejected": 33,
+    "tickets": 27,
+    "merged": 26,
+    "rejected": 34,
     "blocked": 0,
-    "disagreements": 13
+    "disagreements": 14
   },
   "tickets": [
     {
@@ -233,6 +233,24 @@
       "returns": 0,
       "merged_at": "2026-11-06T22:32:34+0900",
       "disagreements": 0
+    },
+    {
+      "id": "T-025",
+      "title": "統治のライブ画面に「法律が判例で育った歴史」の区画を足す（可視化 V3）",
+      "status": "merged",
+      "estimate_h": 2,
+      "returns": 0,
+      "merged_at": "2026-11-07T01:12:53+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-026",
+      "title": "統治のライブ画面の先頭に「統治の全体図」と「停止の全面表示」を置く（可視化 V1・V2）",
+      "status": "blocked",
+      "estimate_h": 3,
+      "returns": 1,
+      "merged_at": null,
+      "disagreements": 1
     }
   ]
 }
