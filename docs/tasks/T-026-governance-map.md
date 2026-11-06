@@ -1,7 +1,7 @@
 ---
 id: T-026
 title: 統治のライブ画面の先頭に「統治の全体図」と「停止の全面表示」を置く（可視化 V1・V2）
-status: blocked
+status: review
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64, V1, V2]   # 記録用。司法には渡さない
@@ -81,3 +81,4 @@ depends_on: [T-024]
 - 01:06 行政の長が差分を確認（`files_allowed` の5つだけ、追加 425・削除 7。`GovernanceView.tsx` は import 1行と差し込み1行、`KernelPanel.tsx` は再取得とコメントだけで表示の文と分岐は変更なし。A1 の箱の title・role・figures と A3・A4 の固定の文を §2 と読み合わせた。A5 の試験①〜⑦は `it(` の名前で対応を確かめた。禁止語・秘密情報の形・`dangerouslySetInnerHTML`・`console`・`localStorage` なし。行政の長は試験と画面を自分では動かしていない）。`status: review` で main にコミットし申請。T-025（held）の統合の後は、裁判所が最新の main と組み合わせて検査し直す
 
 - 2026-11-07T01:08:02+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
+- 01:15 オーナーが裁定（merge）した（立法補佐の伝達と、01:15:04 の Kernel の写しの `rulings` に T-026 が入ったことで確かめた）。立法補佐の指示で `status: review` に戻し、同じ HEAD `2a56fd8` で再申請。コードは変えていない。Codex の指摘の本文は Z3 にあり、行政の長は読んでいない
