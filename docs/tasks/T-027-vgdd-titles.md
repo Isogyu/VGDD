@@ -1,7 +1,7 @@
 ---
 id: T-027
 title: ブラウザーのタイトルと /governance の見出しを、VGDD が主役と伝わる形にする
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 0.2
 time_limit_min: 20
 security_review: false
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a3e1738989433bf98
+worker: W23
 files_allowed:
   - src/app/layout.tsx                  # ルートの metadata の2項目だけ
   - src/app/page.tsx                    # / のタブの題（metadata）を足すだけ
@@ -65,7 +65,10 @@ depends_on: []
 
 ## 6. 記録
 
-（統合後に追記）
+- 01:35 行政の長が W23 を起動（worktree `agent-a3e1738989433bf98`、main 7466335 から）。仕様はオーナーが 01:34:30 に approve-spec で承認済み（立法補佐の指示の条件を、01:34:59 の Kernel の写しの `approvals[].current` で確かめた）
+- W23 の報告：HEAD `af877d57db2ab3aba1a315a6333c2ec28f54e3a4`。test 360 件（28 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:723` で差分の外）。**画面は動かしていない**（タブの題と見出しの表示は未確認。§3 で統合の後に確かめる）。新しい試験は足していない（A4）
+- 補った解釈・逸脱：`page.tsx` の新しい行の末尾に周りに合わせて `;` を付けた。import と export の間に空行を1行入れた（A0 の「文字列の行だけ」に対する唯一の例外）。拒否された操作なし
+- 01:38 行政の長が差分を確認（`files_allowed` の3つだけ、+7／−4。A1〜A3 の5つの文字列が §2 と完全に一致することを `grep -F` で確かめた。処理と見た目のクラスの変更なし。行政の長は試験と画面を自分では動かしていない）。`status: review` で main にコミットし申請
 
 ## 7. 点検の記録
 
