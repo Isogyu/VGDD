@@ -52,6 +52,9 @@ while [ $# -gt 0 ]; do
 done
 
 Z3="${VGDD_Z3_DIR:-${HOME}/tsubuyaki-z3}"
+# p0.4.6：監査の sandbox（sandboxed-run.sh）は VGDD_REPO の .env.local を読ませない。--repo の値を渡す（既定と違う場所で使うと、
+#   p0.4.5 までは対象のリポジトリの .env.local が監査中のコードから読めた。行政の長の報告）
+export VGDD_REPO="$REPO"
 VERDICTS="$Z3/evidence/verdicts"
 EVENTS="$Z3/evidence/gate_events.jsonl"
 BIN="$Z3/bin"                      # judge.sh / judge-codex.sh の実行用コピーもここに置く

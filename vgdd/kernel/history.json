@@ -227,6 +227,25 @@
       "obs": [
         "OBS-055"
       ]
+    },
+    {
+      "version": "p0.4.6",
+      "date": "2026-11-07",
+      "title": "既定と違う場所での導入の穴と、設定の原本の保護の抜けを塞ぐ",
+      "fixed": [
+        "裁判所が --repo の値を監査の sandbox に渡しておらず、既定と違う場所では検査するリポジトリの .env.local が監査中のコードから読めた",
+        "設定の原本 vgdd/settings.v2.json に docs/governance の保護がなかった"
+      ],
+      "found_by": [
+        "executive_head"
+      ],
+      "precedents": [
+        "ST14",
+        "ST15"
+      ],
+      "tests_total": 391,
+      "prev_failed": 1,
+      "obs": []
     }
   ]
 }

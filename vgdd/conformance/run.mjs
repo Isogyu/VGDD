@@ -366,7 +366,7 @@ function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export 
   // p0.4.3：状態の書き出し（実装になければ写さない。p0.4.2 では ST が落ちる。それが正しい結果）
   if (fs.existsSync(path.join(IMPL.bin, 'kernel-state.mjs'))) fs.copyFileSync(path.join(IMPL.bin, 'kernel-state.mjs'), path.join(fx.z3, 'bin/kernel-state.mjs'));
   write(path.join(fx.z3, 'bin/judge.sh'), STUB_JUDGE); write(path.join(fx.z3, 'bin/judge-codex.sh'), STUB_CODEX);
-  write(path.join(fx.z3, 'bin/sandboxed-run.sh'), '#!/bin/bash\nexit 0\n');
+  write(path.join(fx.z3, 'bin/sandboxed-run.sh'), '#!/bin/bash\n[ "$1" = "--preflight" ] || printf "%s\\n" "${VGDD_REPO:-}" >> "$(dirname "$0")/../sbx-repo.log"\nexit 0\n');
   for (const f of ['judge.sh', 'judge-codex.sh', 'sandboxed-run.sh']) fs.chmodSync(path.join(fx.z3, 'bin', f), 0o755);
   if (approve) {
     const d = digest(fx, 'main', `docs/tasks/${id}-probe.md`).out || 'sha256:unavailable';
@@ -671,6 +671,14 @@ function groupST() {
   const ngDir = hook(fx, { tool: 'Bash', input: { command: "echo '{}' > docs/governance/kernel-state.json" }, ...hx });
   const ngInv = hook(fx, { tool: 'Bash', input: { command: 'cp /tmp/x docs/governance/kernel-invariants.json' }, ...hx });
   record('ST', 'ST13', '行政の長の Bash：docs/governance.md を扱うコマンドは通り、docs/governance/ の写しへの書き込みは拒否される', okMd.decision === 'allow' && ngDir.decision === 'deny' && ngInv.decision === 'deny', `md=${okMd.decision} dir=${ngDir.decision} inv=${ngInv.decision}`);
+  // p0.4.6：裁判所は --repo の値を監査の sandbox に VGDD_REPO として渡す（.env.local を読ませない対象が、検査するリポジトリになる）
+  const sbxLog = path.join(fx.z3, 'sbx-repo.log');
+  const seen = fs.existsSync(sbxLog) ? fs.readFileSync(sbxLog, 'utf8').split('\n').filter(Boolean) : [];
+  record('ST', 'ST14', '裁判所は --repo の値を、監査の sandbox に VGDD_REPO として渡す（既定と違う場所でも、検査するリポジトリの .env.local を読ませない）',
+    seen.length > 0 && seen.every((r) => fs.realpathSync(r) === fs.realpathSync(fx.main)), seen.slice(0, 2).join(','));
+  const v2 = JSON.parse(fs.readFileSync(path.join(VG, 'settings.v2.json'), 'utf8'));
+  record('ST', 'ST15', '設定の原本 vgdd/settings.v2.json も docs/governance を保護する（Edit・Write の拒否と sandbox の denyWrite）',
+    ['Edit(docs/governance/**)', 'Write(docs/governance/**)'].every((x) => (v2.permissions?.deny || []).includes(x)) && (v2.sandbox?.filesystem?.denyWrite || []).includes('docs/governance'));
   // 作業員が差分に状態の写しを入れて申請すれば、保護パスとして司法の前に blocked
   g = runGate(gateFixture('st7', { change: { 'src/lib/a.ts': 'export const v = 2;\n', 'docs/governance/kernel-state.json': '{"approvals":[]}\n' } }), 'APPROVED');
   record('ST', 'ST7', '作業員の差分に状態の写しが含まれれば、司法の前に保護パスとして blocked',

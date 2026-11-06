@@ -1,4 +1,4 @@
-# VGDD Governance Kernel 規範仕様（Kernel p0.4.5）
+# VGDD Governance Kernel 規範仕様（Kernel p0.4.6）
 
 - 作成：2026-11-05（開催期間中に新規作成）
 - 位置づけ：VGDD の統治を強制する部分（Governance Kernel）の**規範**。言語やモデルに依存しない形で書く。このリポジトリの `vgdd/hooks/`・`vgdd/scripts/` は**参照実装**で、`vgdd/conformance/run.mjs` が規範との一致を試す（ADR-023・ADR-034 の前提）
