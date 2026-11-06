@@ -54,6 +54,7 @@ function denyKind(reason) {
 // p0.3.0：チェックポイントとの照合（末尾の切り詰め・差し替えの検出。D-56③）
 const cpFile = path.join(path.dirname(file), 'checkpoints.jsonl');
 const cpProblems = [];
+const cpRace = [];   // p0.4.5：競合の形の食い違い（失敗に数えない。注記として出す）
 if (fs.existsSync(cpFile)) {
   const base = path.basename(file);
   for (const l of fs.readFileSync(cpFile, 'utf8').split('\n').filter(Boolean)) {
@@ -61,7 +62,15 @@ if (fs.existsSync(cpFile)) {
     if (cp.file !== base) continue;
     if (lines.length < cp.count) { cpProblems.push(`${cp.ts}: 件数 ${lines.length} がチェックポイントの ${cp.count} より少ない（切り詰めの疑い）`); continue; }
     const h = crypto.createHash('sha256').update(lines[cp.count - 1], 'utf8').digest('hex');
-    if (h !== cp.last_sha256) cpProblems.push(`${cp.ts}: ${cp.count} 行目のハッシュがチェックポイントと違う（差し替えの疑い）`);
+    if (h === cp.last_sha256) continue;
+    // p0.4.5（OBS-055）：p0.4.2 までの裁判所は件数（wc）と末尾の行（tail）を別々に読んだため、その間にフックが1行足すと、
+    //   「N 行・末尾は N+1 行目」のチェックポイントになった。この形（N+1 行目のハッシュと一致）は記録の取り方の競合として注記にとどめ、
+    //   失敗に数えない。保証の範囲（Codex の監査 p0.4.5 #1）：チェックポイントが変えられておらず SHA-256 が安全なら、このチェックポイントは
+    //   N+1 行目までを拘束する（N+1 行目までのどこを書き換えても、後ろを計算し直しても、N+1 行目のハッシュが変わって失敗する）。
+    //   N+2 行目以降（どのチェックポイントにも固定されていない末尾）は、通常のチェックポイントと同じく保証しない
+    const next = lines[cp.count] !== undefined ? crypto.createHash('sha256').update(lines[cp.count], 'utf8').digest('hex') : null;
+    if (next === cp.last_sha256) { cpRace.push(`${cp.ts}: ${cp.count} 行目でなく ${cp.count + 1} 行目のハッシュと一致（記録の取り方の競合。OBS-055）`); continue; }
+    cpProblems.push(`${cp.ts}: ${cp.count} 行目のハッシュがチェックポイントと違う（差し替えの疑い）`);
   }
 }
 lines.forEach((line, i) => {
@@ -134,6 +143,7 @@ if (summaryJson) {
   };
   console.log(JSON.stringify(out, null, 2));
   if (cpProblems.length) { ok = false; for (const p of cpProblems) console.error('チェックポイント: ' + p); } else if (fs.existsSync(cpFile)) { console.error('チェックポイント: OK'); }
+  for (const p of cpRace) console.error('チェックポイントの注記: ' + p);
 process.exit(ok ? 0 : 1);
 }
 
@@ -153,4 +163,5 @@ if (denies.length) {
 }
 console.log(ok ? 'ハッシュチェーン: OK（改ざん・欠落なし）' : 'ハッシュチェーン: NG');
 if (cpProblems.length) { ok = false; for (const p of cpProblems) console.error('チェックポイント: ' + p); } else if (fs.existsSync(cpFile)) { console.error('チェックポイント: OK'); }
+for (const p of cpRace) console.error('チェックポイントの注記: ' + p);
 process.exit(ok ? 0 : 1);

@@ -665,6 +665,12 @@ function groupST() {
   runGate(f12, 'APPROVED');
   let iv3 = null; try { iv3 = JSON.parse(fs.readFileSync(path.join(f12.main, 'docs/governance/kernel-invariants.json'), 'utf8')); } catch { /* なし */ }
   record('ST', 'ST12', '未承認の申請を裁判所が blocked にした票は、承認待ちに status: blocked で残る', !!iv3 && iv3.pending_approvals?.some((p) => p.task === 'T-930' && p.status === 'blocked'), JSON.stringify(iv3?.pending_approvals || null));
+  // p0.4.5：フックは docs/governance.md（文書）を docs/governance/（状態の写し）と取り違えない。写しへの書き込みは今までどおり拒否
+  const hx = { agent_type: null, cwd: fx.main };
+  const okMd = hook(fx, { tool: 'Bash', input: { command: 'git add docs/governance.md' }, ...hx });
+  const ngDir = hook(fx, { tool: 'Bash', input: { command: "echo '{}' > docs/governance/kernel-state.json" }, ...hx });
+  const ngInv = hook(fx, { tool: 'Bash', input: { command: 'cp /tmp/x docs/governance/kernel-invariants.json' }, ...hx });
+  record('ST', 'ST13', '行政の長の Bash：docs/governance.md を扱うコマンドは通り、docs/governance/ の写しへの書き込みは拒否される', okMd.decision === 'allow' && ngDir.decision === 'deny' && ngInv.decision === 'deny', `md=${okMd.decision} dir=${ngDir.decision} inv=${ngInv.decision}`);
   // 作業員が差分に状態の写しを入れて申請すれば、保護パスとして司法の前に blocked
   g = runGate(gateFixture('st7', { change: { 'src/lib/a.ts': 'export const v = 2;\n', 'docs/governance/kernel-state.json': '{"approvals":[]}\n' } }), 'APPROVED');
   record('ST', 'ST7', '作業員の差分に状態の写しが含まれれば、司法の前に保護パスとして blocked',
@@ -965,6 +971,41 @@ function groupA(fx, probes) {
   const ok = v(t2);
   fs.writeFileSync(t2, lines.slice(0, -2).join('\n') + '\n');
   record('A', 'A7', '末尾を切り詰めると、チェックポイントとの照合で検証が失敗する', ok === 0 && v(t2) === 1);
+  // p0.4.5（OBS-055）：件数と末尾の行を別々に読んだ競合の形（N 行・ハッシュは N+1 行目）は注記にとどめ、検証は通る。それ以外の食い違いは失敗
+  const t3dir = path.join(fx.base, 'race'); fs.mkdirSync(t3dir);
+  const t3 = path.join(t3dir, 'tool_calls.jsonl'); fs.writeFileSync(t3, lines.join('\n') + '\n');
+  const cp3 = (sha) => fs.writeFileSync(path.join(t3dir, 'checkpoints.jsonl'), JSON.stringify({ ts: 'x', file: 'tool_calls.jsonl', count: lines.length - 1, last_sha256: sha }) + '\n');
+  cp3(sha256hex(lines[lines.length - 1]));
+  const r3 = sh('node', [IMPL.verify, t3]);
+  record('A', 'A8', 'チェックポイントの件数 N に対してハッシュが N+1 行目と一致する（取り方の競合の形）なら、検証は通り、注記を出す', r3.status === 0 && /チェックポイントの注記/.test(r3.stderr), `exit ${r3.status}`);
+  cp3('0'.repeat(64));
+  const r4 = sh('node', [IMPL.verify, t3]);
+  record('A', 'A9', 'ハッシュがどの行とも一致しない食い違いは、今までどおり検証が失敗する（陰性の対照）', r4.status === 1, `exit ${r4.status}`);
+  const t5 = path.join(t3dir, 'tool_calls.jsonl'); const tl5 = [...lines]; tl5[lines.length - 2] = tl5[lines.length - 2].replace(/"decision":"(allow|deny)"/, (m, d) => `"decision":"${d === 'allow' ? 'deny' : 'allow'}"`);
+  fs.writeFileSync(t5, tl5.join('\n') + '\n'); cp3(sha256hex(lines[lines.length - 1]));
+  record('A', 'A10', '競合の形のチェックポイントがあっても、途中の行を書き換えればハッシュチェーンの検証で失敗する', sh('node', [IMPL.verify, t5]).status === 1);
+  // Codex の監査 p0.4.5 #2：境界の判例。N = lines.length - 2（N+1 行目が存在し、N+2 行目も存在する長さで試す）
+  const N = lines.length - 2;
+  const sha = (s) => 'sha256:' + sha256hex(s);
+  const rechain = (arr, from) => { const out = [...arr]; for (let i = from; i < out.length; i++) { const r = JSON.parse(out[i]); r.prev_hash = i === 0 ? 'sha256:genesis' : sha(out[i - 1]); out[i] = JSON.stringify(r); } return out; };
+  const put = (arr, cps) => { fs.writeFileSync(t3, arr.join('\n') + '\n'); fs.writeFileSync(path.join(t3dir, 'checkpoints.jsonl'), cps.map((c) => JSON.stringify({ ts: 'x', file: 'tool_calls.jsonl', ...c })).join('\n') + '\n'); };
+  const v3 = (extra = []) => sh('node', [IMPL.verify, t3, ...extra]);
+  const raceCp = { count: N, last_sha256: sha256hex(lines[N]) };   // 件数 N、ハッシュは N+1 行目
+  // 1 行目を書き換え、後ろのチェーンを計算し直す（チェーンは整合するが、N+1 行目のハッシュが変わる）
+  const re1 = rechain(lines.map((l, i) => (i === 0 ? l.replace(/"decision":"(allow|deny)"/, (m, d) => `"decision":"${d === 'allow' ? 'deny' : 'allow'}"`) : l)), 1);
+  put(re1, [raceCp]);
+  record('A', 'A11', '競合の形のチェックポイントがあっても、前の行を書き換えて後ろのチェーンを計算し直せば検証は失敗する（N+1 行目まで拘束）', v3().status === 1);
+  put(lines.slice(0, N), [raceCp]);
+  record('A', 'A12', '競合の形のチェックポイントのとき、N 行までに切り詰めると検証は失敗する', v3().status === 1);
+  const sub = [...lines]; sub[N] = sub[N].replace(/"decision":"(allow|deny)"/, (m, d) => `"decision":"${d === 'allow' ? 'deny' : 'allow'}"`);
+  put(sub, [raceCp]);
+  record('A', 'A13', '競合の形のチェックポイントのとき、N+1 行目を差し替えると検証は失敗する', v3().status === 1);
+  put(lines, [{ count: N, last_sha256: sha256hex(lines[N + 1]) }]);
+  record('A', 'A14', 'ハッシュが N+2 行目と一致する食い違いは競合とみなさず、検証は失敗する', v3().status === 1);
+  put(lines, [raceCp, { count: N + 1, last_sha256: sha256hex(lines[N]) }, { count: 1, last_sha256: '0'.repeat(64) }]);
+  const mix = v3(); const mixS = v3(['--summary-json']);
+  record('A', 'A15', '正常・競合・不正のチェックポイントが混ざれば失敗（通常の出力と --summary-json の両方。注記は出す）。競合と正常だけなら --summary-json でも通る',
+    mix.status === 1 && mixS.status === 1 && /チェックポイントの注記/.test(mix.stderr) && (put(lines, [raceCp, { count: N + 1, last_sha256: sha256hex(lines[N]) }]), v3(['--summary-json']).status === 0));
 }
 
 // ---- 観測（合否なし）：実際のリポジトリで、票の status を誰が変えたか ------------------------------------

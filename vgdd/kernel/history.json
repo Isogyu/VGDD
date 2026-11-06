@@ -200,6 +200,33 @@
       "tests_total": 377,
       "prev_failed": 13,
       "obs": []
+    },
+    {
+      "version": "p0.4.5",
+      "date": "2026-11-07",
+      "title": "証拠の検証が、過去の記録の取り方の競合で再開を止めないようにする",
+      "fixed": [
+        "p0.4.2 までの裁判所の競合で生じたチェックポイントの食い違いを、改ざんの疑いとして失敗にしていた。そのため、停止すると正規の手順で再開できなかった",
+        "フックが文書 docs/governance.md を、保護した状態の写し docs/governance/ と取り違えて拒否した"
+      ],
+      "found_by": [
+        "executive_head",
+        "operation"
+      ],
+      "precedents": [
+        "A8",
+        "A11",
+        "A12",
+        "A13",
+        "A14",
+        "A15",
+        "ST13"
+      ],
+      "tests_total": 387,
+      "prev_failed": 1,
+      "obs": [
+        "OBS-055"
+      ]
     }
   ]
 }

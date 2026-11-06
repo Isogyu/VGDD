@@ -1,6 +1,6 @@
 {
   "schema": "vgdd.capabilities.v1",
-  "kernel_version": "p0.4.4",
+  "kernel_version": "p0.4.5",
   "note": "Governance Kernel の権限の表（ADR-001・ADR-003）。役割ごとに、何ができ、何ができず、それを どの層が強制しているかを書く。expect はフック（Policy Decision Point）の判定。enforced_by はその操作を実際に止める層（複数あれば全部）。'promise' は強制がなく約束だけのもの（弱点として公開する）。probes は適合性テスト（vgdd/conformance/run.mjs）がフックに実際に入力する操作で、{self} はその役割の作業場所のルート、{main} は main の checkout、{wt} は作業員の worktree、{z3} は Z3。 個々の probe に expect があれば、その役割についてはそちらを優先する。",
   "layers": {
     "hook": "PreToolUse フック policy.mjs（Policy Decision Point。拒否と記録）",
@@ -631,7 +631,8 @@
         "ST10",
         "ST11",
         "ST12",
-        "ST11b"
+        "ST11b",
+        "ST13"
       ],
       "known_gaps": [
         "中身が Z3 と一致することは、Z3 を読めるオーナーの照合に依る（行政は照合できない）",
@@ -854,7 +855,15 @@
         "A:A3",
         "A:A5",
         "K:R1",
-        "ST:ST1"
+        "ST:ST1",
+        "A:A8",
+        "A:A9",
+        "A:A10",
+        "A:A11",
+        "A:A12",
+        "A:A13",
+        "A:A14",
+        "A:A15"
       ],
       "gaps": [
         "モデルの切り替えの監査は対象外（INV-09 と同じ）",

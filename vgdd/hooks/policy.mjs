@@ -59,7 +59,7 @@ import os from 'node:os';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 
-const POLICY_VERSION = 'p0.4.3'; // OBS-013（リンクの実体で判定、作業員の閉じ込め）、OBS-014（誤検知4件の修正）、Kernel の停止（ADR-027）を含む
+const POLICY_VERSION = 'p0.4.5'; // OBS-013（リンクの実体で判定、作業員の閉じ込め）、OBS-014（誤検知4件の修正）、Kernel の停止（ADR-027）を含む
 const HOME = os.homedir();
 const Z3 = process.env.VGDD_Z3_DIR || path.join(HOME, 'tsubuyaki-z3');
 const EVIDENCE = process.env.VGDD_EVIDENCE_PATH || path.join(Z3, 'evidence', 'tool_calls.jsonl');
@@ -302,7 +302,7 @@ const BASH_PROTECTED_TOKENS = [
   { re: tok(String.raw`\.github`), noRead: false, label: '.github' },
   { re: tok(String.raw`vgdd`), noRead: false, label: 'vgdd（法律のスクリプト）' },
   { re: /docs\/tasks\/_board\.json/, noRead: false, label: 'docs/tasks/_board.json' },
-  { re: /docs\/governance|kernel-state\.json/, noRead: false, label: 'docs/governance（Kernel の状態の写し）' },   // p0.4.3
+  { re: /docs\/governance(?![\w.-])|kernel-(state|invariants)\.json/, noRead: false, label: 'docs/governance（Kernel の状態の写し）' },   // p0.4.3。p0.4.5：docs/governance.md（文書）を取り違えない
   { re: new RegExp(String.raw`merge-requests\/done` + END_OF_WORD), noRead: false, label: 'merge-requests/done' },
   { re: tok(String.raw`(\.\.\/)?preparation`), noRead: false, label: '準備資料' },
   { re: tok(String.raw`(\.\.\/)?event_records`), noRead: false, label: '作業記録' },
