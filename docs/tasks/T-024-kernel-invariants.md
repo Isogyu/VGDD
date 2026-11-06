@@ -1,7 +1,7 @@
 ---
 id: T-024
 title: 統治のライブ画面に「不変条件（INV-01〜12）」と「承認待ちの票」の区画を足す
-status: review
+status: merged
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-63, ADR-039, INV-01〜12]   # 記録用。司法には渡さない
@@ -90,3 +90,5 @@ Codex の点検（2026-11-06、立法補佐が sandbox の外で実行）：指�
 - 22:26 行政の長が差分を確認（`files_allowed` の6つだけ、追加 628・削除 0、`GovernanceView.tsx` は import 1行と差し込み1行だけ。禁止語と秘密情報の形なし。A0〜A7 と読み合わせ、12個の文と固定の文は §2 と一致。行政の長は試験と画面を自分では動かしていない）。`status: review` で main にコミットし申請
 
 - 2026-11-06T22:29:31+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-06T22:32:34+0900 release: status → merged（main=7ab54c3af4bd。夜間の判定に合格した候補 9ec1d4b6fe0f を、オーナーが朝に承認して統合）
