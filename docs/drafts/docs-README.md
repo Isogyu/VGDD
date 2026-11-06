@@ -23,7 +23,7 @@
 | [`architecture.md`](architecture.md) | 責務・権限・信頼の境界 | 全体の形を知る |
 | [`adoption.md`](adoption.md) | clone でできること、実稼働の準備、ほかの案件に入れる条件 | 自分で試す |
 | [`kernel.md`](kernel.md) | 設計方針（ADR）と実装の対応、不変条件の状態 | §3 の合計の行と §4b が現在の状態。ほかの部分に古い数字が残っている |
-| [`governance.md`](governance.md) | 統治の設計の詳細 | 11/3 の設計が土台で、冒頭の「設計案」は当時の状態。今の規範は SPEC |
+| [`governance.md`](governance.md) | 統治の設計の詳細 | 11/3 の設計が土台で、今の実装と違う箇所がある。今の規範は SPEC |
 | [`harness.md`](harness.md) | 夜間の運転の設計 | 最初の版は設計案。今の規範は SPEC |
 | [`environment.md`](environment.md) | 開発環境と依存の記録 | |
 
@@ -36,7 +36,7 @@
 | [`governance/summary.json`](governance/summary.json) | 操作の集計（件数だけ） | オーナー |
 | `governance/kernel-state.json`・`kernel-invariants.json` | Kernel の状態の表示用ファイル。Git で追跡しないので clone にはない | 裁判所だけ |
 | [`../vgdd/kernel/history.json`](../vgdd/kernel/history.json) | 法律の版ごとの公開の要約 | 立法補佐が書き、オーナーの承認で入る |
-| [`vgdd-status.md`](vgdd-status.md) | 迂回の検証（V6・V7）の結果。§1 の表には過ぎた予定と古い版の数字が残っている | 行政の長 |
+| [`vgdd-status.md`](vgdd-status.md) | 構成要素の状況と、迂回の検証（V6・V7。2026-11-03 の記録）の結果 | 行政の長 |
 | [`implementation-notes.md`](implementation-notes.md) | 計画からの逸脱と判断 | 行政の長 |
 | [`ideas.md`](ideas.md) | 見送った案 | 行政の長 |
 | [`vgdd-operations.md`](vgdd-operations.md) | 旧・設計案の初版（履歴。内容は governance.md へ） | — |

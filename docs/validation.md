@@ -58,6 +58,6 @@
 
 ## 4. まだ確かめていないこと
 
-- 本番での停止（kill switch）の実演：判例（K 群）では確かめたが、本番ではまだ（予定：T-026 の統合の後）
-- 新しい checkout から公開の手順だけで起動と試験をすること（第三者の再現）
+- 本番での停止（kill switch）の実演：判例（K 群）では確かめたが、本番ではまだ（予定：T-026 の統合の後）。今の法律 p0.4.4 では、過去のチェックポイントの食い違いが1件でも残っていると `kernel-resume.sh` は再開しない（`verify-chain.mjs` の終了コード。本番の写しの `checkpoint_mismatches` は 1）。p0.4.5 で直す予定で、反映まで本番では停止しない
+- 新しい checkout から公開の手順だけで起動と試験をすること（第三者の再現）。確かめた範囲は、一時的な clone（main 6f924ca、2026-11-07 00:58、macOS、Claude Code の sandbox の中）での `npm ci`・`npm test`（324 件）・`npm run typecheck`・`npm run lint`（エラー 0、警告 1）だけ。`npm run build` は sandbox がポートを開けないため失敗し、コードの結果としては判定できない。適合性テスト・`npm run dev`・`npm run seed`・画面は未確認
 - 不変条件のうち「一部」（INV-03・07・08・11）と「対象外」（INV-09）の残る穴：`docs/kernel.md` §4b
