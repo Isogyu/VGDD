@@ -1,0 +1,85 @@
+{
+  "schema": "vgdd.kernel-invariants.v1",
+  "generated_at": "2026-11-07T02:03:10+09:00",
+  "kernel_version": "p0.4.5",
+  "verified_by": {
+    "kernel_version": "p0.4.5",
+    "impl": "z3",
+    "at": "2026-11-07T01:25:30+09:00"
+  },
+  "invariants": [
+    {
+      "id": "INV-01",
+      "status": "enforced",
+      "tests": 4,
+      "verified": true
+    },
+    {
+      "id": "INV-02",
+      "status": "enforced",
+      "tests": 2,
+      "verified": true
+    },
+    {
+      "id": "INV-03",
+      "status": "partial",
+      "tests": 2,
+      "verified": true
+    },
+    {
+      "id": "INV-04",
+      "status": "enforced",
+      "tests": 6,
+      "verified": true
+    },
+    {
+      "id": "INV-05",
+      "status": "enforced",
+      "tests": 6,
+      "verified": true
+    },
+    {
+      "id": "INV-06",
+      "status": "enforced",
+      "tests": 8,
+      "verified": true
+    },
+    {
+      "id": "INV-07",
+      "status": "partial",
+      "tests": 1,
+      "verified": true
+    },
+    {
+      "id": "INV-08",
+      "status": "partial",
+      "tests": 2,
+      "verified": true
+    },
+    {
+      "id": "INV-09",
+      "status": "not_applicable",
+      "tests": 0,
+      "verified": null
+    },
+    {
+      "id": "INV-10",
+      "status": "enforced",
+      "tests": 5,
+      "verified": true
+    },
+    {
+      "id": "INV-11",
+      "status": "partial",
+      "tests": 13,
+      "verified": true
+    },
+    {
+      "id": "INV-12",
+      "status": "enforced",
+      "tests": 2,
+      "verified": true
+    }
+  ],
+  "pending_approvals": []
+}
