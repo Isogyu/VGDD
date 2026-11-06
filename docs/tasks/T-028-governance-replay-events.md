@@ -1,7 +1,7 @@
 ---
 id: T-028
 title: 票の記録を、自由な文を含まない公開用のイベント（列挙値だけ）に変える API を作る（統治シアター U0）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 2
 time_limit_min: 150
 security_review: true          # 新しい API。公開してよい項目だけを返すことが目的なので、セキュリティ審査をかける
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a6c176682dbe54d0f
+worker: W24
 files_allowed:
   - src/lib/governance-replay.ts              # 新設：記録の行を列挙値に変える純粋関数と、応答の組み立て
   - src/lib/governance-replay.test.ts         # 新設
@@ -101,6 +101,13 @@ depends_on: []
 決定論的な監査＋ judge ＋ Codex judge ＋ Codex security。新しいファイルだけで、ほかの票と衝突しない。
 
 ## 6. 記録
+
+- 02:28 行政の長が W24 を起動（worktree `agent-a6c176682dbe54d0f`、main e82c150 から、モデルは Opus）。T-029 と並行。仕様はオーナーが 02:27:09 に approve-spec で承認済み（立法補佐の指示の条件を、02:27:43 の Kernel の写しの `approvals[].current` で確かめた）
+- W24 の報告：HEAD `856188aaf1338a4b45922df64fad0d897f969a45`。test 400 件（29 ファイル。うち新しい試験 40 件）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:723` で差分の外）。**API は動かしていない**（`npm run dev` は実行していない。`route.ts` は型検査と lint だけで、200 と 500 の経路は未確認。§3 で統合の後に確かめる）。`buildReplay` と `loadGovernance` の組み合わせは vitest で実データに対して試した
+- 補った解釈：(1) 判定のトークンは直前が英字・数字・`_` の場合も当てない（`prejudge=APPROVED` は `null`。§2 が書くのは直後だけ）(2) `status → merged_extra` のように続きのある語は `other` にする (3) judiciary は `両方が差し戻し` を含むかで判定し、`judge=` の形は必須にしない (4) 同じ文に同じトークンが複数あれば最初のものを使う。逸脱なし
+- §2 より多い試験：実例の 13 行が実際の票の §6 と一致すること、件数の付く judiciary の形（合成）、§3 の T-014 の順序と T-002・T-003 の `return_limit`。実例の一致の試験は、統合済みの票の §6 を書き換えると落ちる
+- 拒否された操作：`sed` の置換式の `<sha>/g` がリダイレクトと判定された読み取りの1件（フック、誤検知とみられる）。W24 は `sed` を使わない `grep` で §6 の行を表示した。目的が一部重なるので回避にあたるかの判断を求めた。行政の長の読み：読み取りだけで、書き込みの制限を越えていない
+- 02:34 行政の長が差分を確認（`files_allowed` の3つだけ、追加 567・削除 0。`RULES` の 15 行が表の順と kind・reason に一致することを読んだ。route.ts の export は `GET` だけで、例外の本文を応答に入れない。`buildReplay` は3階層とも許可したキーを明示し、スプレッドなし。禁止語・秘密情報の形なし。行政の長は試験と API を自分では動かしていない）。`status: review` で main にコミットし申請。旧い `GET /api/governance` の `detail` は残る（§1 のとおり T-034）
 
 ## オーナーに聞くこと
 

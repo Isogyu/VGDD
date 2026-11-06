@@ -1,7 +1,7 @@
 ---
 id: T-029
 title: 統治シアターの画面の骨格（区画・色・余白）を作り、/governance/theater で見られるようにする（統治シアター U1）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 2
 time_limit_min: 150
 security_review: false         # データを読まない。API もファイルの読み込みも足さない
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a69c40dca9341c11c
+worker: W25
 files_allowed:
   - src/components/theater/tokens.ts            # 新設：役割と状態の色・形・文字の決まり
   - src/components/theater/TheaterShell.tsx     # 新設：画面の骨格（区画だけ。中身は props で受ける）
@@ -82,6 +82,13 @@ depends_on: []
 決定論的な監査＋ judge ＋ Codex judge。新しいファイルだけで、T-028 と同時に進めても衝突しない。
 
 ## 6. 記録
+
+- 02:28 行政の長が W25 を起動（worktree `agent-a69c40dca9341c11c`、main e82c150 から、モデルは Opus）。T-028 と並行。仕様はオーナーが 02:27:19 に approve-spec で承認済み（立法補佐の指示の条件を、02:27:43 の Kernel の写しの `approvals[].current` で確かめた）
+- W25 の報告：HEAD `c92b7672e185dd598a337b81e69d99c8c185aefe`。test 372 件（29 ファイル。うち新しい試験 12 件）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:723` で差分の外）。**画面は動かしていない**（`npm run dev` は実行していない。見た目、1440×900 の収まり、幅 375px、ライト／ダーク、Tailwind のクラスの生成は未確認。§3 で立法補佐が held の候補で確かめる）
+- A1 のコントラスト（WCAG 2。`tailwindcss` 4.3.4 の `theme.css` の oklch を線形 sRGB に変換し、範囲外は 0〜1 に丸めて計算した値。ブラウザの実測ではない）。項目ごとの「文字色／自分の背景」：human pink-200／pink-950 10.89、legislative violet-300／violet-950 8.21、executive blue-300／blue-950 8.13、judiciary yellow-200／yellow-950 12.52、kernel slate-200／slate-800 11.90、merged emerald-300／emerald-950 9.98、waiting amber-300／amber-950 10.37、stopped red-300／red-950 8.40、unknown gray-300／gray-900 12.06。今の画面で実際に使う組：slate-100／slate-950 18.40（h1）、slate-300／slate-950 13.59（header の `p`、side と controls の仮の文）、slate-300／slate-900 12.02（stage の仮の文）。最小は 8.13 で、すべて 4.5:1 以上。役割の色はこの票の画面ではまだ使っていない
+- 補った解釈：(1) ラベルは括弧書きのコロンの前（人・立法・行政・司法・Kernel・統合・判断待ち・停止・確認できない）(2) 形の印は W25 が決めた（◆ ▲ ■ ● ◎ ✓ … × ?）(3) `human` の色は §2 に指定がなく pink にした（オーナーの好みで変えられる）(4) `judiciary` は yellow、`waiting` は amber で分けた (5) 区画に `min-h-0` を付けていない（中身が大きいか画面が低いと、行が 15:65:20 より広がる。区画は重ならない。§2 のとおり長い中身の扱いは後の票）(6) 横にスクロールさせないため全体に `overflow-x-clip`（はみ出した中身は切られる）(7) `min-h-dvh` を足した (8) A3 のページの文言も同じ試験で確かめた (9) §1 の強弱のため、`stage` にだけ `bg-slate-900` と強めの枠。手順の案からの逸脱：試験がページも読むので、`page.tsx` を試験と同時に書いた
+- 拒否された操作：worktree の外の scratchpad への Write（フック）。Tailwind のクラスの生成を確かめるコマンド（フックが正規表現の `>` と `/^` をリダイレクトと判定。先頭に不要な `npx --no-install --version` が入っていたのは W25 の誤りと本人が報告。実行されていない）。どちらも回避も再試行もしていない
+- 02:34 行政の長が差分を確認（`files_allowed` の4つだけ、追加 274・削除 0。`TheaterShell` は `"use client"`・取得・状態なしで、要素・`aria-label`・順・grid の配分が A2 と一致。A1 の役割6つと状態3つ、A3 の h1・p・`metadata.title` の文字列を §2 と読み合わせた。`transition`・`animation`・`dark:` なし。行政の長は試験と画面を自分では動かしていない）。`status: review` で main にコミットし申請
 
 ## オーナーに聞くこと
 
