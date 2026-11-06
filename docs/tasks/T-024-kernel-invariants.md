@@ -1,7 +1,7 @@
 ---
 id: T-024
 title: 統治のライブ画面に「不変条件（INV-01〜12）」と「承認待ちの票」の区画を足す
-status: ready
+status: review
 requirements: [A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-63, ADR-039, INV-01〜12]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 2.5
 time_limit_min: 180
 security_review: true          # 新しい GET の API がファイルを読む
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-aed0ebdc821163d18   # 作業員のブランチ（main 5bb8124 から）。統合キュー（p0.3.1）により main から分岐したまま申請
+worker: W20
 files_allowed:
   - src/lib/kernel-invariants-schema.ts     # 新設：形の検証と表示用の集計（純粋関数だけ。node:fs を使わない）
   - src/lib/kernel-invariants.ts            # 新設：ファイルの読み込み（node:fs）
@@ -80,4 +80,11 @@ Codex の点検（2026-11-06、立法補佐が sandbox の外で実行）：指�
 
 ## 6. 記録
 
-（統合後に追記）
+- 22:2x 行政の長が W20 を起動（worktree `agent-aed0ebdc821163d18`）。仕様はオーナーが approve-spec で承認済み（立法補佐の伝達と、不変条件の写しの `pending_approvals` が空であることで確かめた）
+- A0 の解釈（立法補佐が着手中に出した）：A0 は司法の判定に含まれる（front matter の `requirements` は記録用の一覧で、A0 が抜けているのは書き損じ。指紋が変わるので今は直さない）。A0 と A5 は衝突しない。A0 は表示用であることを画面に書くよう求める、より具体的な条件で、A5 はほかの文を足すことを禁じていない
+- A0 の画面の文の置き場所：(c) の表示で、A5 の 4「承認待ちの票」の見出しの直下に固定の1行「この一覧は表示用で、承認の効力を与えない（承認はオーナーの approve-spec.sh）」。部品の先頭のコメントにも同じ趣旨を書いた。(a)(b) は「1行だけ」と固定なので置かない。0件のときも出す（0件の扱いは行政の長の読みで、立法補佐の解釈にはない）
+- W20 の報告：HEAD `8cb2c14e9e39e455af17a4865dc478b66a3be021`。test 324 件（26 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:717` で差分の外）。**画面と API は動かしていない**（ブラウザーの表示、GET の実呼び出し、`npm run build` は未確認。§3 で統合の後に確かめる）
+- 本番の写しは `pickKernelInvariants` に通していない。W20 が Read で読んで A1 の形と目で照合した。統合の後に `/governance` で表が出るかで確かめる。本番の値から数えた要約の見込みは「強制 7・一部 4・対象外 1。合格 11・不合格 0」（22:20 の写しの行ごとの値から。行政の長も同じ値を読んだ。画面では未確認）
+- 補った解釈・逸脱：React の `key` に添字を混ぜた（同じ ID が重なっても衝突しない。表示には影響しない）。試験は A7 より多い（`verified_by` の strict、`docs` がリンクの場合、場所がディレクトリの場合など）
+- 拒否された操作：W20 の Bash 4件が拒否された。ヒアドキュメント3件は、フックが「worktree の外（/）」と判定した（書き先は worktree の中の相対パス）。`sed -i` の1件は worktree の隔離の検査が「複雑すぎて確かめられない」と止めた。W20 は回避せず Write・Edit でやり直した。W19（T-023）と同じ「worktree の外」の判定で、OBS-056 の文字列照合とは別の規則（立法補佐に渡す）
+- 22:26 行政の長が差分を確認（`files_allowed` の6つだけ、追加 628・削除 0、`GovernanceView.tsx` は import 1行と差し込み1行だけ。禁止語と秘密情報の形なし。A0〜A7 と読み合わせ、12個の文と固定の文は §2 と一致。行政の長は試験と画面を自分では動かしていない）。`status: review` で main にコミットし申請
