@@ -59,5 +59,5 @@
 ## 4. まだ確かめていないこと
 
 - （済み）本番での停止（kill switch）の実演（K2）：2026-11-07 01:29:01 にオーナーが kernel-stop.sh で止め、01:29:13 に行政の長の Bash（`git status`）がフック p0.4.5 に「停止中」で拒否され証拠ストアに記録された。統治のライブ画面の全体図に赤い帯、Kernel の区画に「停止中」が出た。01:31:35 にオーナーが kernel-resume.sh で再開（証拠の検証・git の設定・作業ツリー・main の前進なしを確かめた。01:18:23 の件は競合の注記）。p0.4.4 までは、この再開が証拠の検証の失敗で拒まれていた（p0.4.5 で直した）
-- 新しい checkout から公開の手順だけで起動と試験をすること（第三者の再現）。確かめた範囲は、一時的な clone（main d519ba9、2026-11-07 01:28、macOS、Claude Code の sandbox の中）での `npm ci`・`npm test`（360 件）・`npm run typecheck`・`npm run lint`（エラー 0、警告 1）だけ。`npm run build` は sandbox がポートを開けないため失敗し、コードの結果としては判定できない。適合性テスト・`npm run dev`・`npm run seed`・画面は未確認
+- 新しい clone から公開の手順だけで起動と試験をすること（第三者の再現）：**sandbox の外の一時的な clone（main f786d2f、2026-11-07 01:5x、macOS、Node 25）で確かめた**。`npm ci`、適合性テスト `node vgdd/conformance/run.mjs` 387/387（その時点の法律 p0.4.5）、`npm test` 360 件、`npm run typecheck`、`npm run lint`、`npm run build` がすべて通り、`npm run dev` の後に `POST /api/dev/seed` でデモ用データが入った。`/governance` では、法律の歴史・統治の数字・票の盤・票1枚の運命が出て、Kernel の状態の写しを使う区画（Kernel・不変条件と承認待ち・全体図の一部の数）は「書き出しがありません」「確認できない」と出た（写しは git で追跡しない。裁判所と Z3 を動かす環境でだけ出る）。Windows・Linux と、ほかの人の手元では確かめていない
 - 不変条件のうち「一部」（INV-03・07・08・11）と「対象外」（INV-09）の残る穴：`docs/kernel.md` §4b
