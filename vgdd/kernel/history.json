@@ -218,7 +218,7 @@
         "A10"
       ],
       "tests_total": 380,
-      "prev_failed": null,
+      "prev_failed": 1,
       "obs": [
         "OBS-055"
       ]
