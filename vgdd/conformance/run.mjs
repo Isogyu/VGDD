@@ -43,8 +43,8 @@ const DECISION_SCHEMA = JSON.parse(fs.readFileSync(path.join(VG, 'schemas/kernel
 const UTF8 = { LC_ALL: 'ja_JP.UTF-8', LANG: 'ja_JP.UTF-8' }; // OBS-043：本番と同じロケールで動かす
 
 const results = [];
-function record(group, id, title, ok, detail = '') {
-  results.push({ group, id, title, ok, detail });
+function record(group, id, title, ok, detail = '', key = null) {
+  results.push({ group, id, title, ok, detail, key });   // key：C1 の「役割#probe の番号」（不変条件の自己検査が期待の組み合わせと照合する）
   console.log(`${ok ? '✓' : '✗'} ${group} ${id} ${title}${detail ? `  — ${detail}` : ''}`);
 }
 
@@ -148,14 +148,14 @@ function groupC1(fx) {
       const r0 = CAPS.roles[role];
       if (!r0?.hook_input) continue;
       const self = r0.hook_input.cwd === '{main}' ? fx.main : fx.wt;
-      for (const p of cap.probes) {
+      for (const [pi, p] of cap.probes.entries()) {
         const want = p.expect?.[role] ?? exp;
         const cwd = p.cwd ? expand(p.cwd, fx, self) : self;
         const input = probeInput(p, fx, self);
         const got = hook(fx, { tool: p.tool, input, agent_type: r0.hook_input.agent_type, cwd });
         probes++;
         const label = p.tool === 'Bash' ? input.command : `${p.tool} ${(input.file_path || input.path || '').replace(fx.base, '…')}`;
-        record('C1', cap.id, `${role}: ${label.replace(fx.base, '…')} → ${want}`, got.decision === want, got.decision === want ? '' : `実際は ${got.decision}：${got.reason}`);
+        record('C1', cap.id, `${role}: ${label.replace(fx.base, '…')} → ${want}`, got.decision === want, got.decision === want ? '' : `実際は ${got.decision}：${got.reason}`, `${role}#${pi}`);
       }
     }
   }
@@ -350,7 +350,7 @@ printf '{"final_verdict":"%s","parse_ok":true,"codex":{"findings":[]}}\\n' "\${S
 `;
 // 実装の指紋（kernel-state.mjs の implSha と同じ並び）。run.mjs --record が残し、状態の写しが稼働中の Z3 と照合する
 const IMPL_FILES = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh'];
-const implShaFor = (bin, policy) => sha256hex(IMPL_FILES.map((f) => path.join(bin, f)).concat([policy]).map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return '<なし>'; } }).join('\n--\n'));
+const implShaFor = (bin, policy) => sha256hex(IMPL_FILES.map((f) => path.join(bin, f)).concat([policy, path.join(path.dirname(policy), 'verify-chain.mjs')]).map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return '<なし>'; } }).join('\n--\n'));
 const POLICY_LINE = (/^(p\d+\.\d+)\./.exec(CAPS.kernel_version) || [])[1] || null;
 function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export const v = 2;\n' }, stop = false, afterApprove = null, ticket = {}, approveExtra = { policy_line: POLICY_LINE } } = {}) {
   const fx = fixture(name);
@@ -510,6 +510,9 @@ function groupINV() {
   const badCaps = (fx) => { write(path.join(fx.main, 'vgdd/kernel/capabilities.json'), JSON.stringify({ kernel_version: 'x' }) + '\n'); git(fx.main, 'add', '-A'); git(fx.main, 'commit', '-q', '-m', '壊れた権限の表（試験用）'); };
   g = runGate(gateFixture('inv06d', { afterApprove: badCaps }), 'APPROVED');
   record('INV', 'INV06d', '権限の表はあるが版の形が違う（読めない）main では、どの承認も効かない（fail-closed。照合を飛ばさない）', !g.inMain && !g.judged && g.status === 'blocked', `status=${g.status}`);
+  const jsonBroken = (fx) => { write(path.join(fx.main, 'vgdd/kernel/capabilities.json'), '{ 壊れた JSON\n'); git(fx.main, 'add', '-A'); git(fx.main, 'commit', '-q', '-m', '壊れた権限の表（試験用）'); };
+  g = runGate(gateFixture('inv06e', { afterApprove: jsonBroken }), 'APPROVED');
+  record('INV', 'INV06e', '権限の表が JSON として読めない main では、どの承認も効かない', !g.inMain && !g.judged && g.status === 'blocked', `status=${g.status}`);
   g = runGate(gateFixture('inv06c', { afterApprove: withCaps }), 'APPROVED');
   record('INV', 'INV06c', '今の法律の系統の承認なら統合される（陽性の対照）', g.inMain && g.status === 'merged', `status=${g.status} ${g.code ? g.out : ''}`);
   // INV-12：独立した作業は、ほかの票の承認待ちだけを理由に止まらない（同じ周回で、未承認の票は blocked、承認済みの票は統合）
@@ -531,6 +534,14 @@ function groupINV() {
   const defs = ['worker', 'judge', 'constitutional-review'].map((a) => [a, (frontOf(path.join(IMPL.agents, `${a}.md`)).match(/^model:\s*(\S+)/m) || [])[1]]);
   record('INV', 'INV08', '役割の定義（worker・judge・憲法審査）に model が空でなく書かれている（期待するモデルの照合と起動の観測はしない）', defs.every(([, m]) => !!m), defs.map(([a, m]) => `${a}=${m || 'なし'}`).join(' '));
 }
+// C1 の権限 id の結果 rs が、権限の表から期待される「役割#probe の番号」の集合とちょうど一致するか（欠け・重複・余分を拒否）
+function c1Complete(id, rs) {
+  const cap = CAPS.capabilities.find((c) => c.id === id);
+  const roles = Object.keys(cap?.expect || {}).filter((r) => CAPS.roles[r]?.hook_input);
+  const want = new Set(roles.flatMap((r) => (cap?.probes || []).map((_, i) => `${r}#${i}`)));
+  const keys = rs.map((x) => x.key);
+  return !!cap && want.size > 0 && keys.length === want.size && new Set(keys).size === keys.length && keys.every((k) => want.has(k));
+}
 // 不変条件の自己検査：権限の表の invariants の各項目に、強制なら合格した判例があり、対象外なら理由がある
 function groupInvMeta() {
   for (const inv of CAPS.invariants || []) {
@@ -541,14 +552,19 @@ function groupInvMeta() {
       const [grp, id] = String(t).includes(':') ? String(t).split(':') : [null, t];
       const rs = results.filter((x) => x.group === grp && x.id === id);
       // C1 の権限は、権限の表から期待される役割 × probe の数だけ結果がそろっていること（一部が欠けても合格しない。Codex の再監査 #2）
-      let expected = 1;
-      if (grp === 'C1') { const cap = CAPS.capabilities.find((c) => c.id === id); expected = cap ? (cap.probes || []).length * Object.keys(cap.expect || {}).filter((r) => CAPS.roles[r]?.hook_input).length : Infinity; }
-      if (!grp || !rs.length || rs.length < expected) missing.push(`${t}(${rs.length}/${expected})`); else if (!rs.every((x) => x.ok)) failed.push(t);
+      //   件数でなく「役割#probe の番号」の集合で照合する（重複で数を満たしても合格しない。Codex の3回目の監査 #2）
+      const complete = grp === 'C1' ? c1Complete(id, rs) : rs.length > 0;
+      if (!grp || !complete) missing.push(`${t}(${rs.length})`); else if (!rs.every((x) => x.ok)) failed.push(t);
     }
     record('INV', `${inv.id}:meta`, `${inv.id}（${inv.status}）の判例 ${(inv.tests || []).length} 件がすべて実行され合格している`,
       (inv.tests || []).length > 0 && !missing.length && !failed.length && (inv.status === 'enforced' || (inv.gaps || []).length > 0),
       [missing.length ? `ない：${missing.join(',')}` : '', failed.length ? `不合格：${failed.join(',')}` : '', inv.status !== 'enforced' && !(inv.gaps || []).length ? '一部なのに gaps がない' : ''].filter(Boolean).join(' '));
   }
+  // 自己検査そのものの陰性の対照：C1 の結果が1つ欠ける・1つが重複して数を満たす・余分の key があるときは完全とみなさない
+  const full = results.filter((x) => x.group === 'C1' && x.id === 'CAP-LAW-WRITE');
+  const dup = full.slice(0, -1).concat([full[0]]);
+  record('INV', 'INV-META', '不変条件の自己検査は、C1 の結果の欠け・重複・余分を見逃さない（陽性：そろった結果は完全）',
+    c1Complete('CAP-LAW-WRITE', full) && !c1Complete('CAP-LAW-WRITE', full.slice(1)) && !c1Complete('CAP-LAW-WRITE', dup) && !c1Complete('CAP-LAW-WRITE', full.slice(1).concat([{ ...full[0], key: 'owner#99' }])), `結果 ${full.length} 件`);
   const invs = CAPS.invariants || [];
   record('INV', 'INV-ALL', '不変条件 INV-01〜12 がちょうど1回ずつ権限の表にあり、状態は3つのどれか、判例は文字列の配列',
     invs.length === 12 && ['01','02','03','04','05','06','07','08','09','10','11','12'].every((n) => invs.filter((i) => i.id === `INV-${n}`).length === 1)
