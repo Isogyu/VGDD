@@ -5,8 +5,8 @@ import "./globals.css";
 // （sandbox 内とオフラインの審査環境で失敗する。docs/implementation-notes.md）。
 
 export const metadata: Metadata = {
-  title: "つぶやき業務ログ",
-  description: "新人のつまずきを、組織の知識に変える。作業中のつぶやきから、手順書の原案と判断のポイントを作る。",
+  title: "VGDD Governance Kernel — AI 開発の統治の可視化",
+  description: "AI のチームに開発を任せても、仕様の承認・裁定・停止は人が持つ。役割ごとの権限と承認の条件を実行環境で制御する VGDD Governance Kernel と、その実運用の集計・票の記録・検証結果の可視化。題材はつぶやき業務ログ。",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

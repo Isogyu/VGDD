@@ -143,9 +143,9 @@ export default function GovernanceView() {
       {/* 1. 見出しと説明 */}
       <header>
         <Link href="/" className="text-sm text-zinc-500 underline">← 作業画面へ</Link>
-        <h1 className="mt-1 text-xl font-semibold">統治のライブ画面</h1>
+        <h1 className="mt-1 text-xl font-semibold">VGDD Governance Kernel：統治のライブ画面</h1>
         <p className="text-sm text-zinc-600 dark:text-zinc-300">
-          AI の作業員・裁判所・司法が、憲法と法律のもとで動いた記録（件数とリポジトリの記録だけ。生のログは公開していない）
+          題材のアプリ（つぶやき業務ログ）を AI のチームが開発したときの、実運用の集計・票の記録・検証結果。Kernel の写しは自動で取り直し、ほかの区画は画面を開いた時点のもの（件数とリポジトリの記録だけ。生のログは公開していない）
         </p>
       </header>
 
