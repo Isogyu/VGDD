@@ -82,3 +82,7 @@ depends_on: [T-024]
 
 - 2026-11-07T01:08:02+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
 - 01:15 オーナーが裁定（merge）した（立法補佐の伝達と、01:15:04 の Kernel の写しの `rulings` に T-026 が入ったことで確かめた）。立法補佐の指示で `status: review` に戻し、同じ HEAD `2a56fd8` で再申請。コードは変えていない。Codex の指摘の本文は Z3 にあり、行政の長は読んでいない
+
+- 2026-11-07T01:17:53+0900 gate-runner: judge と Codex が分かれたが、オーナーの裁定（統合）により進める：Codex の指摘（初回の取得中に amber の帯が出ない）は §2 のあいまいさによる。A3(b) の帯の文は取得の後の失敗を指し、取得中に出すと誤りになる。取得中も全体図の Kernel の欄は「確認できない」で、稼働中とは出ないので、§2 の目的は満たす。judge は APPROVED
+
+- 2026-11-07T01:17:53+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=CHANGES_REQUIRED）。夜間のため統合せず、朝のオーナーの承認を待つ）
