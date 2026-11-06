@@ -348,6 +348,9 @@ out=""; task=""; mode=judge; while [ $# -gt 0 ]; do case "$1" in --out) out="$2"
 if [ "$mode" = security ]; then [ -z "\${STUB_SECURITY_NOFILE:-}" ] || exit 69; else [ -z "\${STUB_CODEX_NOFILE:-}" ] || exit 69; fi
 printf '{"final_verdict":"%s","parse_ok":true,"codex":{"findings":[]}}\\n' "\${STUB_CODEX_VERDICT:-\${STUB_VERDICT:-CHANGES_REQUIRED}}" > "$out/$task-$(git rev-parse HEAD | cut -c1-12)-codex-$mode.json"
 `;
+// 実装の指紋（kernel-state.mjs の implSha と同じ並び）。run.mjs --record が残し、状態の写しが稼働中の Z3 と照合する
+const IMPL_FILES = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh'];
+const implShaFor = (bin, policy) => sha256hex(IMPL_FILES.map((f) => path.join(bin, f)).concat([policy]).map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return '<なし>'; } }).join('\n--\n'));
 const POLICY_LINE = (/^(p\d+\.\d+)\./.exec(CAPS.kernel_version) || [])[1] || null;
 function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export const v = 2;\n' }, stop = false, afterApprove = null, ticket = {}, approveExtra = { policy_line: POLICY_LINE } } = {}) {
   const fx = fixture(name);
@@ -526,7 +529,7 @@ function groupINV() {
     g.inMain && g.status === 'merged' && stOf('T-901') === 'blocked' && stOf('T-931') === 'blocked', `T-901=${stOf('T-901')} T-930=${g.status} T-931=${stOf('T-931')}`);
   // INV-08：役割ごとのモデルは定義で固定（行政は定義を書き換えられない＝CAP-LAW-WRITE の .claude/agents の probe）
   const defs = ['worker', 'judge', 'constitutional-review'].map((a) => [a, (frontOf(path.join(IMPL.agents, `${a}.md`)).match(/^model:\s*(\S+)/m) || [])[1]]);
-  record('INV', 'INV08', '役割ごとのモデルが定義で固定されている（worker・judge・憲法審査。実行時の性能で自動的に変わらない）', defs.every(([, m]) => !!m), defs.map(([a, m]) => `${a}=${m || 'なし'}`).join(' '));
+  record('INV', 'INV08', '役割の定義（worker・judge・憲法審査）に model が空でなく書かれている（期待するモデルの照合と起動の観測はしない）', defs.every(([, m]) => !!m), defs.map(([a, m]) => `${a}=${m || 'なし'}`).join(' '));
 }
 // 不変条件の自己検査：権限の表の invariants の各項目に、強制なら合格した判例があり、対象外なら理由がある
 function groupInvMeta() {
@@ -536,8 +539,11 @@ function groupInvMeta() {
     const missing = []; const failed = [];
     for (const t of inv.tests || []) {
       const [grp, id] = String(t).includes(':') ? String(t).split(':') : [null, t];
-      const rs = results.filter((x) => x.id === id && x.group === grp && grp !== 'INV' || (grp === 'INV' && x.group === 'INV' && x.id === id));
-      if (!grp || !rs.length) missing.push(t); else if (!rs.every((x) => x.ok)) failed.push(t);
+      const rs = results.filter((x) => x.group === grp && x.id === id);
+      // C1 の権限は、権限の表から期待される役割 × probe の数だけ結果がそろっていること（一部が欠けても合格しない。Codex の再監査 #2）
+      let expected = 1;
+      if (grp === 'C1') { const cap = CAPS.capabilities.find((c) => c.id === id); expected = cap ? (cap.probes || []).length * Object.keys(cap.expect || {}).filter((r) => CAPS.roles[r]?.hook_input).length : Infinity; }
+      if (!grp || !rs.length || rs.length < expected) missing.push(`${t}(${rs.length}/${expected})`); else if (!rs.every((x) => x.ok)) failed.push(t);
     }
     record('INV', `${inv.id}:meta`, `${inv.id}（${inv.status}）の判例 ${(inv.tests || []).length} 件がすべて実行され合格している`,
       (inv.tests || []).length > 0 && !missing.length && !failed.length && (inv.status === 'enforced' || (inv.gaps || []).length > 0),
@@ -546,7 +552,9 @@ function groupInvMeta() {
   const invs = CAPS.invariants || [];
   record('INV', 'INV-ALL', '不変条件 INV-01〜12 がちょうど1回ずつ権限の表にあり、状態は3つのどれか、判例は文字列の配列',
     invs.length === 12 && ['01','02','03','04','05','06','07','08','09','10','11','12'].every((n) => invs.filter((i) => i.id === `INV-${n}`).length === 1)
-      && invs.every((i) => ['enforced', 'partial', 'not_applicable'].includes(i.status) && (i.tests === undefined || (Array.isArray(i.tests) && i.tests.every((t) => typeof t === 'string')))));
+      && invs.every((i) => ['enforced', 'partial', 'not_applicable'].includes(i.status) && (i.tests === undefined || (Array.isArray(i.tests) && i.tests.every((t) => typeof t === 'string')))
+        && (i.status !== 'not_applicable' || (typeof i.reason === 'string' && i.reason.length > 0))
+        && (i.status !== 'partial' || (Array.isArray(i.gaps) && i.gaps.length > 0 && i.gaps.every((x) => typeof x === 'string' && x.length > 0)))));
 }
 
 // ---- ST Kernel の状態の書き出し（p0.4.3） ------------------------------------------------------------
@@ -625,7 +633,12 @@ function groupST() {
     iv ? JSON.stringify(iv.pending_approvals).slice(0, 120) : 'ない');
   void ivRepo;
   // 稼働中の実装（z3）で今の版を試した記録なら、不変条件ごとの結果と対象（版・実装・日時）が出る
-  write(path.join(f10.z3, 'evidence/conformance.jsonl'), JSON.stringify({ at: '2026-11-06T08:10:00+09:00', impl: 'z3', kernel_version: CAPS.kernel_version, passed: 1, total: 1, invariants: { 'INV-01': 'pass', 'INV-07': 'fail', 'INV-09': 'n/a' } }) + '\n');
+  const zsha = implShaFor(path.join(f10.z3, 'bin'), path.join(f10.z3, 'hooks/policy.mjs'));
+  write(path.join(f10.z3, 'evidence/conformance.jsonl'), JSON.stringify({ at: '2026-11-06T08:05:00+09:00', impl: 'z3', kernel_version: CAPS.kernel_version, impl_sha256: 'f'.repeat(64), passed: 1, total: 1, invariants: { 'INV-01': 'pass' } }) + '\n');
+  runGate(f10, 'APPROVED');
+  let ivx = null; try { ivx = JSON.parse(fs.readFileSync(ivf, 'utf8')); } catch { /* なし */ }
+  record('ST', 'ST11b', '同じ版名でも、稼働中の Z3 の実装と指紋の違う記録は検証済みにしない', !!ivx && ivx.verified_by === null && (ivx.invariants || []).every((i) => i.verified === null));
+  write(path.join(f10.z3, 'evidence/conformance.jsonl'), JSON.stringify({ at: '2026-11-06T08:10:00+09:00', impl: 'z3', kernel_version: CAPS.kernel_version, impl_sha256: zsha, passed: 1, total: 1, invariants: { 'INV-01': 'pass', 'INV-07': 'fail', 'INV-09': 'n/a' } }) + '\n');
   runGate(f10, 'APPROVED');
   let iv2 = null; try { iv2 = JSON.parse(fs.readFileSync(ivf, 'utf8')); } catch { /* なし */ }
   const by2 = Object.fromEntries((iv2?.invariants || []).map((i) => [i.id, i]));
@@ -985,7 +998,10 @@ console.log(`\n合計 ${results.length} 件：合格 ${results.length - failed.l
 //   Z3 に書けるのはオーナーだけなので、実行するのもオーナー（sandbox の外）。件数と合否と実装と日時だけ
 if (args.includes('--record')) {
   const z3 = process.env.VGDD_Z3_DIR || Z3REAL;
+  // p0.4.4（Codex の再監査 #7）：試した実装の指紋（法律のスクリプトとフックの中身の SHA-256）を残す。状態の写しは、稼働中の Z3 の実装と同じ指紋の記録だけを検証済みとする（指紋そのものは写しに出さない）
+  const implSha = implShaFor(IMPL.bin, IMPL.policy);
   fs.appendFileSync(path.join(z3, 'evidence/conformance.jsonl'), JSON.stringify({ schema: 'vgdd.conformance-record.v1', at: new Date(Date.now() + 9 * 3600e3).toISOString().replace(/\.\d+Z$/, '+09:00'), impl, kernel_version: CAPS.kernel_version, passed: results.length - failed.length, total: results.length,
+    impl_sha256: implSha,
     invariants: Object.fromEntries((CAPS.invariants || []).map((i) => [i.id, i.status === 'not_applicable' ? 'n/a' : (results.find((x) => x.id === `${i.id}:meta`)?.ok ? 'pass' : 'fail')])) }) + '\n');
 }
 if (opt('--json')) fs.writeFileSync(opt('--json'), JSON.stringify({ schema: 'vgdd.conformance-report.v1', impl, kernel_version: CAPS.kernel_version, at: new Date().toISOString(), totals: byGroup, results, observed }, null, 2) + '\n');

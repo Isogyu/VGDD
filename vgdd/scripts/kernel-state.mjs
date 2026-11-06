@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -127,7 +128,11 @@ const conformance = conf && cpass <= ctotal ? { passed: cpass, total: ctotal, im
 const INV_STATUS = new Set(['enforced', 'partial', 'not_applicable']);
 let capsInv = []; try { capsInv = JSON.parse(capsSrc.stdout).invariants || []; } catch { /* なし */ }
 // 不変条件ごとの結果は、今の法律の版を稼働中の実装（z3）で試した記録のときだけ使う（別の版・原本の結果を今の検証済みに見せない。#7）
-const confCurrent = !!conf && conf.impl === 'z3' && ver(conf.kernel_version) !== null && conf.kernel_version === kernel_version;
+const implSha = (() => {   // run.mjs --record と同じ並びで、稼働中の Z3 の実装の指紋を作る（照合にだけ使い、出さない）
+  const files = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh'].map((f) => path.join(Z3, 'bin', f)).concat([path.join(Z3, 'hooks/policy.mjs')]);
+  return crypto.createHash('sha256').update(files.map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return '<なし>'; } }).join('\n--\n'), 'utf8').digest('hex');
+})();
+const confCurrent = !!conf && conf.impl === 'z3' && ver(conf.kernel_version) !== null && conf.kernel_version === kernel_version && conf.impl_sha256 === implSha;
 const invariants = capsInv.filter((i) => /^INV-\d{2}$/.test(i.id || '') && INV_STATUS.has(i.status)).slice(0, 50).map((i) => {
   const r = confCurrent ? conf.invariants?.[i.id] : undefined;
   return { id: i.id, status: i.status, tests: Array.isArray(i.tests) ? cnt(i.tests.length) : 0, verified: r === 'pass' ? true : r === 'fail' ? false : null };

@@ -40,7 +40,9 @@ const git = (...a) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c
 const INVALID = Symbol('invalid');
 const policyLine = (() => {
   const CAPS = 'vgdd/kernel/capabilities.json';
-  try { git('cat-file', '-e', `${ref}:${CAPS}`); } catch { return null; }
+  // 「ない」と「取り出せない」を分ける：ls-tree が成功して空なら、ない（法律を持たないリポジトリ）。ls-tree が失敗すれば INVALID（Codex の再監査 #1）
+  let listed; try { listed = git('ls-tree', '--name-only', ref, '--', CAPS).trim(); } catch { return INVALID; }
+  if (listed === '') return null;
   try { const v = JSON.parse(git('show', `${ref}:${CAPS}`)).kernel_version; const m = /^(p\d+\.\d+)\.\d+[a-z]?$/.exec(typeof v === 'string' ? v : ''); return m ? m[1] : INVALID; } catch { return INVALID; }
 })();
 if (wantLine) {
