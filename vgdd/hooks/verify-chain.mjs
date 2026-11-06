@@ -64,8 +64,10 @@ if (fs.existsSync(cpFile)) {
     const h = crypto.createHash('sha256').update(lines[cp.count - 1], 'utf8').digest('hex');
     if (h === cp.last_sha256) continue;
     // p0.4.5（OBS-055）：p0.4.2 までの裁判所は件数（wc）と末尾の行（tail）を別々に読んだため、その間にフックが1行足すと、
-    //   「N 行・末尾は N+1 行目」のチェックポイントになった。この形（N+1 行目のハッシュと一致）は記録の取り方の競合で、改ざんでは生じない
-    //   （N 行目を書き換えれば N+1 行目の prev_hash が合わず、下のハッシュチェーンの検証で必ず失敗する）。注記にとどめ、失敗に数えない
+    //   「N 行・末尾は N+1 行目」のチェックポイントになった。この形（N+1 行目のハッシュと一致）は記録の取り方の競合として注記にとどめ、
+    //   失敗に数えない。保証の範囲（Codex の監査 p0.4.5 #1）：チェックポイントが変えられておらず SHA-256 が安全なら、このチェックポイントは
+    //   N+1 行目までを拘束する（N+1 行目までのどこを書き換えても、後ろを計算し直しても、N+1 行目のハッシュが変わって失敗する）。
+    //   N+2 行目より後（どのチェックポイントにも固定されていない末尾）は、通常のチェックポイントと同じく保証しない
     const next = lines[cp.count] !== undefined ? crypto.createHash('sha256').update(lines[cp.count], 'utf8').digest('hex') : null;
     if (next === cp.last_sha256) { cpRace.push(`${cp.ts}: ${cp.count} 行目でなく ${cp.count + 1} 行目のハッシュと一致（記録の取り方の競合。OBS-055）`); continue; }
     cpProblems.push(`${cp.ts}: ${cp.count} 行目のハッシュがチェックポイントと違う（差し替えの疑い）`);
