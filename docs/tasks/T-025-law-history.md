@@ -1,7 +1,7 @@
 ---
 id: T-025
 title: 統治のライブ画面に「法律が判例で育った歴史」の区画を足す（可視化 V3）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64, V3]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 2
 time_limit_min: 150
 security_review: true          # 新しい GET の API がファイルを読む
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-aceeac6c3dcc8e170
+worker: W21
 files_allowed:
   - src/lib/law-history-schema.ts        # 新設：形の検証と表示用の集計（純粋関数だけ。node:fs を使わない）
   - src/lib/law-history.ts               # 新設：ファイルの読み込み（node:fs）
@@ -71,4 +71,8 @@ depends_on: [T-024]
 
 ## 6. 記録
 
-（統合後に追記）
+- 00:41 行政の長が W21 を起動（worktree `agent-aceeac6c3dcc8e170`）。仕様はオーナーが 00:27:53 に approve-spec で承認済み（立法補佐の指示の条件を、00:40 に書き出された Kernel の写しの `approvals[].current` と `pending_approvals` が空であることで確かめた）。22:42 の写しは票のコミット（00:25）より前で、根拠にしなかった
+- W21 の報告：HEAD `a3fdb73fc929250fb0edb93cfeaa2841a495af2b`。test 352 件（27 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:717` で差分の外）。**画面と API は動かしていない**（dev サーバーは sandbox の `listen EPERM` で起動せず、`route.ts` の実行と `LawHistory` の描画は未確認。§3 で統合の後に確かめる）
+- 補った解釈・逸脱：`fixed`・`found_by` が空の版は空の `ul` を出す（「0件なら出さない」は判例と `obs` だけのため）。`found_by` の重複はバッジではそのまま出す。`latestTests` が null なら「—」で「件」を付けない。`note` は指定がないので画面に出さない。React の `key` に添字を混ぜた。試験は A6 より多い（`vgdd` がない・リンク・ファイル、`history.json` がディレクトリ、JSON でないなど）。実物の 9 版・22 件・377 件は関数の実行では確かめていない
+- 拒否された操作：`git -C <自分の worktree>`、worktree の外の scratchpad への Write 2件、実物の `history.json` を `node -e` で集計（いずれもフック）。検査と `git status` を1つにまとめたコマンド（ハーネス）。W21 は回避せず、素の `git status` に分け、ほかの確かめはやめた
+- 00:46 行政の長が差分を確認（`files_allowed` の6つだけ、追加 583・削除 0、`GovernanceView.tsx` は import 1行と差し込み1行だけ。A1〜A5 と読み合わせ、固定の文は §2 と一致。A6 は `it(` の名前で①〜⑦の対応を確かめた。禁止語・秘密情報の形・`dangerouslySetInnerHTML`・`console`・`localStorage` なし。行政の長は試験と画面を自分では動かしていない）。`status: review` で main にコミットし申請
