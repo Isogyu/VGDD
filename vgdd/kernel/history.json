@@ -65,8 +65,7 @@
         "夜の作業員の権限を票の files_allowed だけにする"
       ],
       "found_by": [
-        "operation",
-        "codex"
+        "operation"
       ],
       "precedents": [],
       "tests_total": null,
