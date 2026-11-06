@@ -1,7 +1,7 @@
 "use client";
 
 // 統治のライブ画面の「Kernel」の区画（T-022）。GET /api/governance/kernel から裁判所が書き出した状態の写しを取って表示する。
-// 取るのはマウントごとに1回だけ（表示は取得した時点の写し）。古い写しかどうか（stale）だけを 60 秒ごとに計算し直す。
+// 取るのはマウントのときと 60 秒ごと（T-026。表示は取得した時点の写し）。古い写しかどうか（stale）も 60 秒ごとに計算し直す。
 // 出すのは件数と結論だけ。生のログは扱わない。受け取った値は pickKernelState で検証し直してから使う。
 
 import { useEffect, useState } from "react";
@@ -37,6 +37,7 @@ const CONDITIONS: { label: string; how: string }[] = [
 ];
 
 const STALE_RECHECK_MS = 60_000;
+const REFETCH_MS = 60_000;
 
 function orDash(v: string | null): string {
   return v === null ? "—" : v;
@@ -56,11 +57,14 @@ export default function KernelPanel() {
   // stale の計算に使う現在時刻。取得の後と 60 秒ごとに進める
   const [now, setNow] = useState<Date>(() => new Date());
 
-  // マウントごとに1回だけ取る。unmount で中断し、中断の後は state を更新しない
+  // マウントのときと 60 秒ごとに取る。前の取得と unmount で中断し、中断の後は state を更新しない
   useEffect(() => {
-    const controller = new AbortController();
-    const { signal } = controller;
-    (async () => {
+    let current: AbortController | null = null;
+    const fetchState = async () => {
+      current?.abort();
+      const controller = new AbortController();
+      current = controller;
+      const { signal } = controller;
       try {
         const r = await fetch("/api/governance/kernel", { cache: "no-store", signal });
         if (signal.aborted) return;
@@ -85,8 +89,13 @@ export default function KernelPanel() {
       } catch {
         if (!signal.aborted) setLoad({ kind: "error" });
       }
-    })();
-    return () => controller.abort();
+    };
+    void fetchState();
+    const id = setInterval(() => void fetchState(), REFETCH_MS);
+    return () => {
+      clearInterval(id);
+      current?.abort();
+    };
   }, []);
 
   // stale だけを 60 秒ごとに計算し直す
