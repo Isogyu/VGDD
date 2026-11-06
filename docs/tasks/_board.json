@@ -1,9 +1,9 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-06T06:49:11.360+09:00",
+  "generated_at": "2026-11-06T22:32:44.059+09:00",
   "totals": {
-    "tickets": 24,
-    "merged": 24,
+    "tickets": 25,
+    "merged": 25,
     "rejected": 33,
     "blocked": 0,
     "disagreements": 13
@@ -223,6 +223,15 @@
       "estimate_h": 0.6,
       "returns": 0,
       "merged_at": "2026-11-06T06:47:21+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-024",
+      "title": "統治のライブ画面に「不変条件（INV-01〜12）」と「承認待ちの票」の区画を足す",
+      "status": "merged",
+      "estimate_h": 2.5,
+      "returns": 0,
+      "merged_at": "2026-11-06T22:32:34+0900",
       "disagreements": 0
     }
   ]
