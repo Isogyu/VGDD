@@ -1,7 +1,7 @@
 ---
 id: T-026
 title: 統治のライブ画面の先頭に「統治の全体図」と「停止の全面表示」を置く（可視化 V1・V2）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64, V1, V2]   # 記録用。司法には渡さない
@@ -86,3 +86,5 @@ depends_on: [T-024]
 - 2026-11-07T01:17:53+0900 gate-runner: judge と Codex が分かれたが、オーナーの裁定（統合）により進める：Codex の指摘（初回の取得中に amber の帯が出ない）は §2 のあいまいさによる。A3(b) の帯の文は取得の後の失敗を指し、取得中に出すと誤りになる。取得中も全体図の Kernel の欄は「確認できない」で、稼働中とは出ないので、§2 の目的は満たす。judge は APPROVED
 
 - 2026-11-07T01:17:53+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=CHANGES_REQUIRED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T01:21:20+0900 release: status → merged（main=af775c822092。夜間の判定に合格した候補 acc739f42867 を、オーナーが朝に承認して統合）
