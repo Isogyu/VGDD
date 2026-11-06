@@ -1,7 +1,7 @@
 ---
 id: T-026
 title: 統治のライブ画面の先頭に「統治の全体図」と「停止の全面表示」を置く（可視化 V1・V2）
-status: review
+status: blocked
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64, V1, V2]   # 記録用。司法には渡さない
@@ -79,3 +79,5 @@ depends_on: [T-024]
 - 補った解釈・逸脱：(1) 最初の取得の結果が出るまでは帯を出さない（§2 の (a)〜(c) に定めがない。全体図の Kernel の欄は「確認できない」）。最初の取得が応答しないまま続くと、次の取得で中断されるので帯のない状態が続く (2) 「最後に取得に成功した時刻」は、2xx・JSON・`state` の項目がある応答で更新する（`state: null`・検証の不合格でも更新し、帯は amber）(3) 古さの判定は、別の `setInterval` で進める `now` を渡す（表示は最大 60 秒遅れる）(4) amber の帯に `role` を付けない (5) `KernelPanel.tsx` の先頭と useEffect のコメントを動作に合わせて直した。試験は §2 より1件多い（`current` が true のものだけを数える）
 - 拒否された操作：worktree の外の scratchpad への Write（フック）、複合の git コマンド2回（ハーネス）。W22 は回避せず、Write は `grep -oF` で主な固定の文14個の一致を確かめる形に替え、コマンドは分けた
 - 01:06 行政の長が差分を確認（`files_allowed` の5つだけ、追加 425・削除 7。`GovernanceView.tsx` は import 1行と差し込み1行、`KernelPanel.tsx` は再取得とコメントだけで表示の文と分岐は変更なし。A1 の箱の title・role・figures と A3・A4 の固定の文を §2 と読み合わせた。A5 の試験①〜⑦は `it(` の名前で対応を確かめた。禁止語・秘密情報の形・`dangerouslySetInnerHTML`・`console`・`localStorage` なし。行政の長は試験と画面を自分では動かしていない）。`status: review` で main にコミットし申請。T-025（held）の統合の後は、裁判所が最新の main と組み合わせて検査し直す
+
+- 2026-11-07T01:08:02+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
