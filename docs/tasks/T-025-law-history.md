@@ -1,7 +1,7 @@
 ---
 id: T-025
 title: 統治のライブ画面に「法律が判例で育った歴史」の区画を足す（可視化 V3）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64, V3]   # 記録用。司法には渡さない
@@ -78,3 +78,5 @@ depends_on: [T-024]
 - 00:46 行政の長が差分を確認（`files_allowed` の6つだけ、追加 583・削除 0、`GovernanceView.tsx` は import 1行と差し込み1行だけ。A1〜A5 と読み合わせ、固定の文は §2 と一致。A6 は `it(` の名前で①〜⑦の対応を確かめた。禁止語・秘密情報の形・`dangerouslySetInnerHTML`・`console`・`localStorage` なし。行政の長は試験と画面を自分では動かしていない）。`status: review` で main にコミットし申請
 
 - 2026-11-07T00:48:55+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T01:12:53+0900 release: status → merged（main=3e579a523b13。夜間の判定に合格した候補 0d556f7f0e16 を、オーナーが朝に承認して統合）
