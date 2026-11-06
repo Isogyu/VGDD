@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 // 型だけを読む（governance.ts は node:fs を使うので、値は読み込まない）
 import type { GovernanceData, GovernanceTicket, TimelineEvent } from "@/lib/governance";
 import { formatMdHm } from "@/lib/time";
+import GovernanceMap from "@/components/GovernanceMap";
 import KernelPanel from "@/components/KernelPanel";
 import KernelInvariants from "@/components/KernelInvariants";
 
@@ -147,6 +148,7 @@ export default function GovernanceView() {
         </p>
       </header>
 
+      <GovernanceMap board={data.board} summary={data.summary} />
       <KernelPanel />
       <KernelInvariants />
 
