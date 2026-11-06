@@ -1,9 +1,9 @@
-# 主張と証拠の対応（VGDD Governance Kernel、法律 p0.4.4）
+# 主張と証拠の対応（VGDD Governance Kernel、法律 p0.4.5）
 
 作品で言うこと（主張）を、規範（仕様）・判例（適合性テスト）・実運用の記録に結ぶ。**確かめた範囲**の列は、どの方法で確かめたかを分けて書く。「実装済み」と書いてよいのは、判例か実運用の記録で確かめたものだけ（憲法の約束4）。規範の正本は `vgdd/kernel/SPEC.md` と `vgdd/kernel/capabilities.json`。ここは案内で、規範を写さない。
 
-- 試験の対象：法律 p0.4.4（`vgdd/kernel/capabilities.json` の `kernel_version`）。フックは p0.4.3（p0.4.4 ではフックを変えていない）
-- 適合性テスト：`node vgdd/conformance/run.mjs`（依存なし、Node 22 以上）。原本 377/377。稼働中の写し（`--impl z3`）は 2026-11-06 22:15 に 377/377（記録は Z3 にあり、公開の写しは `docs/governance/kernel-invariants.json` の `verified_by`）
+- 試験の対象：法律 p0.4.5（`vgdd/kernel/capabilities.json` の `kernel_version`）
+- 適合性テスト：`node vgdd/conformance/run.mjs`（依存なし、Node 22 以上）。原本 387/387。稼働中の写し（`--impl z3`）は 2026-11-07 01:25 に 387/387（記録は Z3 にあり、公開の写しは `docs/governance/kernel-invariants.json` の `verified_by`）
 - 実運用の記録：票の §6（`docs/tasks/T-0*.md`）、票の盤（`docs/tasks/_board.json`）、操作の集計（`docs/governance/summary.json`）。証拠ストアと判定の本文は Z3 にあり、公開しない
 
 ## 1. 代表例
@@ -58,6 +58,6 @@
 
 ## 4. まだ確かめていないこと
 
-- 本番での停止（kill switch）の実演：判例（K 群）では確かめたが、本番ではまだ（予定：T-026 の統合の後）。今の法律 p0.4.4 では、過去のチェックポイントの食い違いが1件でも残っていると `kernel-resume.sh` は再開しない（`verify-chain.mjs` の終了コード。本番の写しの `checkpoint_mismatches` は 1）。p0.4.5 で直す予定で、反映まで本番では停止しない
-- 新しい checkout から公開の手順だけで起動と試験をすること（第三者の再現）。確かめた範囲は、一時的な clone（main 6f924ca、2026-11-07 00:58、macOS、Claude Code の sandbox の中）での `npm ci`・`npm test`（324 件）・`npm run typecheck`・`npm run lint`（エラー 0、警告 1）だけ。`npm run build` は sandbox がポートを開けないため失敗し、コードの結果としては判定できない。適合性テスト・`npm run dev`・`npm run seed`・画面は未確認
+- 本番での停止（kill switch）の実演：判例（K 群）では確かめたが、本番ではまだ。p0.4.4 までは、過去の記録の取り方の競合による食い違いで `kernel-resume.sh` が再開できなかった。p0.4.5 で直した（判例 A8〜A15）が、本番の再開はまだ実行していない
+- 新しい checkout から公開の手順だけで起動と試験をすること（第三者の再現）。確かめた範囲は、一時的な clone（main d519ba9、2026-11-07 01:28、macOS、Claude Code の sandbox の中）での `npm ci`・`npm test`（360 件）・`npm run typecheck`・`npm run lint`（エラー 0、警告 1）だけ。`npm run build` は sandbox がポートを開けないため失敗し、コードの結果としては判定できない。適合性テスト・`npm run dev`・`npm run seed`・画面は未確認
 - 不変条件のうち「一部」（INV-03・07・08・11）と「対象外」（INV-09）の残る穴：`docs/kernel.md` §4b

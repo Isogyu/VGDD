@@ -64,7 +64,7 @@
 
 ## 強制の限界
 
-[`SPEC.md` §12](../vgdd/kernel/SPEC.md) と [`kernel.md` §4b・§6](kernel.md) にあります。実際の sandbox と起動設定は適合性テストの範囲外で、2026-11-03 の実セッション（フック p0.1.2〜p0.2.0。[`vgdd-status.md`](vgdd-status.md) の V6・V7）で確かめました。p0.4.4 では、この迂回の検証をやり直していません。
+[`SPEC.md` §12](../vgdd/kernel/SPEC.md) と [`kernel.md` §4b・§6](kernel.md) にあります。実際の sandbox と起動設定は適合性テストの範囲外で、2026-11-03 の実セッション（フック p0.1.2〜p0.2.0。[`vgdd-status.md`](vgdd-status.md) の V6・V7）で確かめました。今の版では、この迂回の検証をやり直していません。
 
 ---
 
