@@ -1,7 +1,7 @@
 ---
 id: T-027
 title: ブラウザーのタイトルと /governance の見出しを、VGDD が主役と伝わる形にする
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -85,3 +85,5 @@ Codex の点検（2026-11-07、立法補佐が実行）：「ライブ」は一�
 **Claude の点検済み、Codex は未点検**（2026-11-07 00:3x）。files_allowed の2つで足り、A1・A2 の行が既存の `layout.tsx:8-9`、`GovernanceView.tsx:144・146` に対応することを確かめた。既存の試験に旧い文字列を見ているものはない（`src` の試験を検索）。
 
 - 2026-11-07T01:40:43+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T02:26:46+0900 release: status → merged（main=fb100ae2a8d5。夜間の判定に合格した候補 8fe152f8c95f を、オーナーが朝に承認して統合）
