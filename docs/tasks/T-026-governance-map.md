@@ -1,7 +1,7 @@
 ---
 id: T-026
 title: 統治のライブ画面の先頭に「統治の全体図」と「停止の全面表示」を置く（可視化 V1・V2）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64, V1, V2]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 3
 time_limit_min: 210
 security_review: false         # 新しい API もファイルの読み込みも足さない（既存の2つの API を読むだけ）
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a709fe1738ee26e8c
+worker: W22
 files_allowed:
   - src/lib/governance-map.ts         # 新設：全体図の数字を組み立てる純粋関数
   - src/lib/governance-map.test.ts    # 新設
@@ -74,4 +74,8 @@ depends_on: [T-024]
 
 ## 6. 記録
 
-（統合後に追記）
+- 01:00 行政の長が W22 を起動（worktree `agent-a709fe1738ee26e8c`、main 6f924ca から）。仕様はオーナーが 00:59:02 に approve-spec で承認済み（立法補佐の指示の条件を、01:00 の Kernel の写しの `approvals[].current` で確かめた）。T-025 と重なる `GovernanceView.tsx` の衝突を避けるため、import の位置を `import KernelPanel` の直前と指示した（A5 の範囲内）
+- W22 の報告：HEAD `2a56fd817e968b895ef0a53e02f22b65f691fa28`。test 332 件（27 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:717` で差分の外）。**画面と API は動かしていない**（dev サーバーは sandbox の `listen EPERM` で起動せず、描画・帯の出し分け・60 秒ごとの取得は未確認。§3 で統合の後に確かめる）
+- 補った解釈・逸脱：(1) 最初の取得の結果が出るまでは帯を出さない（§2 の (a)〜(c) に定めがない。全体図の Kernel の欄は「確認できない」）。最初の取得が応答しないまま続くと、次の取得で中断されるので帯のない状態が続く (2) 「最後に取得に成功した時刻」は、2xx・JSON・`state` の項目がある応答で更新する（`state: null`・検証の不合格でも更新し、帯は amber）(3) 古さの判定は、別の `setInterval` で進める `now` を渡す（表示は最大 60 秒遅れる）(4) amber の帯に `role` を付けない (5) `KernelPanel.tsx` の先頭と useEffect のコメントを動作に合わせて直した。試験は §2 より1件多い（`current` が true のものだけを数える）
+- 拒否された操作：worktree の外の scratchpad への Write（フック）、複合の git コマンド2回（ハーネス）。W22 は回避せず、Write は `grep -oF` で主な固定の文14個の一致を確かめる形に替え、コマンドは分けた
+- 01:06 行政の長が差分を確認（`files_allowed` の5つだけ、追加 425・削除 7。`GovernanceView.tsx` は import 1行と差し込み1行、`KernelPanel.tsx` は再取得とコメントだけで表示の文と分岐は変更なし。A1 の箱の title・role・figures と A3・A4 の固定の文を §2 と読み合わせた。A5 の試験①〜⑦は `it(` の名前で対応を確かめた。禁止語・秘密情報の形・`dangerouslySetInnerHTML`・`console`・`localStorage` なし。行政の長は試験と画面を自分では動かしていない）。`status: review` で main にコミットし申請。T-025（held）の統合の後は、裁判所が最新の main と組み合わせて検査し直す
