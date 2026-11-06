@@ -1,0 +1,205 @@
+{
+  "schema": "vgdd.law-history.v1",
+  "note": "法律（vgdd/）の版ごとの公開の要約。立法補佐が版ごとに書き、オーナーの承認で入る。found_by は穴を見つけた主体（executive_head＝行政の長、legislative＝立法補佐、codex＝Codex の監査、judge＝Claude の司法、owner＝オーナー、operation＝運用の記録）。prev_failed は、その版で足した判例を前の版にかけて落ちた件数（空回りしていないことの証拠。測っていなければ null）",
+  "versions": [
+    {
+      "version": "p0.2.0",
+      "date": "2026-11-03",
+      "title": "本稼働：フック・裁判所・二系統の司法・憲法審査",
+      "fixed": [
+        "役割ごとの権限をフックで強制し、main への統合を裁判所だけにした"
+      ],
+      "found_by": [
+        "legislative"
+      ],
+      "precedents": [],
+      "tests_total": null,
+      "prev_failed": null,
+      "obs": []
+    },
+    {
+      "version": "p0.2.4",
+      "date": "2026-11-03",
+      "title": "運用で見つかった誤検知と不具合の修正（p0.2.1〜p0.2.4）",
+      "fixed": [
+        "基盤の票は main の受け入れ条件で判定する",
+        "動的ルートの角かっこを文字どおりに照合する",
+        "記録のコミットを周回の最後にまとめる",
+        "取り消した差し戻しを数えない"
+      ],
+      "found_by": [
+        "operation"
+      ],
+      "precedents": [],
+      "tests_total": null,
+      "prev_failed": null,
+      "obs": []
+    },
+    {
+      "version": "p0.3.0",
+      "date": "2026-11-04",
+      "title": "作業員のコードを sandbox の中で検査する",
+      "fixed": [
+        "裁判所が作業員の書いたテストをオーナーの権限で動かしていた",
+        "検査・判定・統合を申請の SHA に固定する"
+      ],
+      "found_by": [
+        "operation"
+      ],
+      "precedents": [],
+      "tests_total": null,
+      "prev_failed": null,
+      "obs": [
+        "OBS-023",
+        "OBS-025"
+      ]
+    },
+    {
+      "version": "p0.3.2",
+      "date": "2026-11-05",
+      "title": "統合キューと夜間の運転（p0.3.1〜p0.3.2）",
+      "fixed": [
+        "最新の main と申請を組み合わせた候補を検査する（鎖で積まない）",
+        "夜は判定まで、朝にオーナーが release で統合する",
+        "共有の git の設定の書き換えで裁判所の git を乗っ取れる穴",
+        "夜の作業員の権限を票の files_allowed だけにする"
+      ],
+      "found_by": [
+        "operation"
+      ],
+      "precedents": [],
+      "tests_total": null,
+      "prev_failed": null,
+      "obs": [
+        "OBS-033",
+        "OBS-036"
+      ]
+    },
+    {
+      "version": "p0.4.0",
+      "date": "2026-11-05",
+      "title": "Governance Kernel：仕様の承認・全体の停止と再開・適合性テスト",
+      "fixed": [
+        "仕様が未承認の票、承認の後に受け入れ条件を書き換えた票も統合された（G1・G4）",
+        "作業ツリーで files_allowed を広げた票も統合された（G9）",
+        "停止の手段がなかった"
+      ],
+      "found_by": [
+        "legislative",
+        "codex"
+      ],
+      "precedents": [
+        "G1",
+        "G4",
+        "G5",
+        "G9",
+        "K1",
+        "R1",
+        "C2"
+      ],
+      "tests_total": 218,
+      "prev_failed": 71,
+      "obs": [
+        "OBS-044"
+      ]
+    },
+    {
+      "version": "p0.4.1",
+      "date": "2026-11-05",
+      "title": "朝の統合（release）を錠で直列にする",
+      "fixed": [
+        "release を同時に動かすと、片方の取り消しがもう片方の統合を消しえた"
+      ],
+      "found_by": [
+        "operation"
+      ],
+      "precedents": [
+        "L1",
+        "L2",
+        "L4"
+      ],
+      "tests_total": 228,
+      "prev_failed": 3,
+      "obs": [
+        "OBS-048"
+      ]
+    },
+    {
+      "version": "p0.4.2",
+      "date": "2026-11-06",
+      "title": "他人の書きかけの票を裁判所の名前で main に入れない",
+      "fixed": [
+        "立法補佐の書きかけが、裁判所の記録のコミットに混ざって main に入った"
+      ],
+      "found_by": [
+        "operation",
+        "codex"
+      ],
+      "precedents": [
+        "G9",
+        "G11",
+        "G12",
+        "G13"
+      ],
+      "tests_total": 231,
+      "prev_failed": 4,
+      "obs": [
+        "OBS-050",
+        "OBS-052"
+      ]
+    },
+    {
+      "version": "p0.4.3",
+      "date": "2026-11-06",
+      "title": "司法が使えないことを判定として扱わない・Kernel の状態の写し",
+      "fixed": [
+        "Codex の判定ファイルがないと『省いた』とみなし、judge の APPROVED だけで統合された（G15）",
+        "CLI の空の応答・壊れた出力が『指摘0件の差し戻し』になり、もう一方の APPROVED だけで統合された（G19）",
+        "チェックポイントの取り方の競合で、改ざんの疑いを誤って報告した"
+      ],
+      "found_by": [
+        "executive_head",
+        "codex",
+        "operation"
+      ],
+      "precedents": [
+        "G15",
+        "G19",
+        "J1",
+        "L12",
+        "ST1",
+        "G14"
+      ],
+      "tests_total": 348,
+      "prev_failed": 66,
+      "obs": [
+        "OBS-053",
+        "OBS-055"
+      ]
+    },
+    {
+      "version": "p0.4.4",
+      "date": "2026-11-06",
+      "title": "不変条件の Kernel（INV-01〜12）",
+      "fixed": [
+        "不変条件を判例と結び、判例が欠ければ適合性テストが落ちるようにした",
+        "承認が法律の系統に結び付いていなかった（INV-06）",
+        "独立した作業が止まらないことに判例がなかった（INV-12）"
+      ],
+      "found_by": [
+        "owner",
+        "codex"
+      ],
+      "precedents": [
+        "INV06a",
+        "INV06d",
+        "INV12",
+        "INV-META",
+        "ST10"
+      ],
+      "tests_total": 377,
+      "prev_failed": 13,
+      "obs": []
+    }
+  ]
+}
