@@ -676,9 +676,24 @@ function groupST() {
   const seen = fs.existsSync(sbxLog) ? fs.readFileSync(sbxLog, 'utf8').split('\n').filter(Boolean) : [];
   record('ST', 'ST14', '裁判所は --repo の値を、監査の sandbox に VGDD_REPO として渡す（既定と違う場所でも、検査するリポジトリの .env.local を読ませない）',
     seen.length > 0 && seen.every((r) => fs.realpathSync(r) === fs.realpathSync(fx.main)), seen.slice(0, 2).join(','));
+  // 相対パスの --repo でも、起動の時点の場所で解決した絶対パスが渡る
+  const fr = gateFixture('st14r');
+  fs.rmSync(path.join(fr.z3, 'sbx-repo.log'), { force: true });
+  sh('bash', [path.join(IMPL.bin, 'gate-runner.sh'), '--repo', 'app', '--once', '--interval', '1'], { cwd: fr.base, env: { ...process.env, ...UTF8, VGDD_Z3_DIR: fr.z3, STUB_VERDICT: 'APPROVED' }, timeout: 120000 });
+  const seenR = fs.existsSync(path.join(fr.z3, 'sbx-repo.log')) ? fs.readFileSync(path.join(fr.z3, 'sbx-repo.log'), 'utf8').split('\n').filter(Boolean) : [];
+  record('ST', 'ST14b', '--repo を相対パス（app）で渡しても、監査の sandbox には起動の場所で解決した絶対パスが渡る',
+    seenR.length > 0 && seenR.every((r) => path.isAbsolute(r) && fs.realpathSync(r) === fs.realpathSync(fr.main)), seenR.slice(0, 1).join(','));
+  // 本物の sandboxed-run.sh：VGDD_REPO の .env.local は読めず、同じ場所の通常のファイルは読める（sandbox-exec がなければ省く）
+  if (sh('bash', ['-c', 'command -v sandbox-exec']).status === 0) {
+    const sb = path.join(fx.base, 'sbx-real'); fs.mkdirSync(sb, { recursive: true });
+    write(path.join(sb, '.env.local'), 'SECRET=x\n'); write(path.join(sb, 'plain.txt'), 'ok\n');
+    const wtd = fs.mkdtempSync(path.join(os.tmpdir(), 'vgdd-sbx-wt-'));
+    const run = (f) => sh('bash', [path.join(IMPL.bin, 'sandboxed-run.sh'), '--dir', wtd, '--', 'cat', path.join(sb, f)], { env: { ...process.env, VGDD_Z3_DIR: fx.z3, VGDD_REPO: sb } });
+    record('ST', 'ST14c', '本物の監査の sandbox では、VGDD_REPO の .env.local は読めず、同じ場所の通常のファイルは読める', run('.env.local').status !== 0 && run('plain.txt').status === 0);
+  }
   const v2 = JSON.parse(fs.readFileSync(path.join(VG, 'settings.v2.json'), 'utf8'));
-  record('ST', 'ST15', '設定の原本 vgdd/settings.v2.json も docs/governance を保護する（Edit・Write の拒否と sandbox の denyWrite）',
-    ['Edit(docs/governance/**)', 'Write(docs/governance/**)'].every((x) => (v2.permissions?.deny || []).includes(x)) && (v2.sandbox?.filesystem?.denyWrite || []).includes('docs/governance'));
+  record('ST', 'ST15', '設定の原本 vgdd/settings.v2.json も docs/governance を保護する（Edit・Write の拒否4つと sandbox の denyWrite）',
+    ['Edit(docs/governance/**)', 'Write(docs/governance/**)', 'Edit(**/docs/governance/**)', 'Write(**/docs/governance/**)'].every((x) => (v2.permissions?.deny || []).includes(x)) && (v2.sandbox?.filesystem?.denyWrite || []).includes('docs/governance'));
   // 作業員が差分に状態の写しを入れて申請すれば、保護パスとして司法の前に blocked
   g = runGate(gateFixture('st7', { change: { 'src/lib/a.ts': 'export const v = 2;\n', 'docs/governance/kernel-state.json': '{"approvals":[]}\n' } }), 'APPROVED');
   record('ST', 'ST7', '作業員の差分に状態の写しが含まれれば、司法の前に保護パスとして blocked',

@@ -241,9 +241,11 @@
       ],
       "precedents": [
         "ST14",
+        "ST14b",
+        "ST14c",
         "ST15"
       ],
-      "tests_total": 391,
+      "tests_total": 394,
       "prev_failed": 1,
       "obs": []
     }

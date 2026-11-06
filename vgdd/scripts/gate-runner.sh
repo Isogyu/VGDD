@@ -54,6 +54,7 @@ done
 Z3="${VGDD_Z3_DIR:-${HOME}/tsubuyaki-z3}"
 # p0.4.6：監査の sandbox（sandboxed-run.sh）は VGDD_REPO の .env.local を読ませない。--repo の値を渡す（既定と違う場所で使うと、
 #   p0.4.5 までは対象のリポジトリの .env.local が監査中のコードから読めた。行政の長の報告）
+REPO="$(cd "$REPO" 2>/dev/null && pwd -P)" || { echo "--repo のフォルダがない" >&2; exit 64; }   # 起動の時点で絶対・正規化したパスに（相対パスで渡されても、監査の作業場所で解決しない。Codex の監査 p0.4.6 #1）
 export VGDD_REPO="$REPO"
 VERDICTS="$Z3/evidence/verdicts"
 EVENTS="$Z3/evidence/gate_events.jsonl"
