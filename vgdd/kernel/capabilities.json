@@ -628,7 +628,9 @@
         "ST7",
         "ST8",
         "ST9",
-        "ST10"
+        "ST10",
+        "ST11",
+        "ST12"
       ],
       "known_gaps": [
         "中身が Z3 と一致することは、Z3 を読めるオーナーの照合に依る（行政は照合できない）",
@@ -731,10 +733,10 @@
       "title": "行政 AI は自分自身の権限を拡張できない",
       "status": "enforced",
       "tests": [
-        "CAP-LAW-WRITE",
-        "CAP-EVIDENCE-WRITE",
-        "CAP-KERNEL-STATE-WRITE",
-        "CAP-GIT-CONFIG"
+        "C1:CAP-LAW-WRITE",
+        "C1:CAP-EVIDENCE-WRITE",
+        "C1:CAP-KERNEL-STATE-WRITE",
+        "C1:CAP-GIT-CONFIG"
       ]
     },
     {
@@ -742,17 +744,20 @@
       "title": "司法 AI は自らが検証する実装を直接修正しない",
       "status": "enforced",
       "tests": [
-        "T-judge",
-        "M-judge"
+        "C3:T-judge",
+        "C3:M-judge"
       ]
     },
     {
       "id": "INV-03",
       "title": "AI の委任によって権限が増加してはならない",
-      "status": "enforced",
+      "status": "partial",
       "tests": [
-        "CAP-SRC-WRITE-OUTSIDE",
-        "CAP-MAIN-COMMIT"
+        "C1:CAP-SRC-WRITE-OUTSIDE",
+        "C1:CAP-MAIN-COMMIT"
+      ],
+      "gaps": [
+        "確かめているのは、作業員が自分の worktree の外と main に書けないことだけ。委任の連鎖（サブエージェントがさらに起こす）での権限の継承は試していない"
       ]
     },
     {
@@ -760,12 +765,12 @@
       "title": "重大な違反時には通常の自律実行より停止制御を優先する",
       "status": "enforced",
       "tests": [
-        "K1",
-        "K3",
-        "K4",
-        "K6",
-        "G5",
-        "N5"
+        "K:K1",
+        "K:K3",
+        "K:K4",
+        "K:K6",
+        "G:G5",
+        "N:N5"
       ]
     },
     {
@@ -773,12 +778,12 @@
       "title": "必須の司法検証を行政 AI の自己評価で代替できない",
       "status": "enforced",
       "tests": [
-        "G2",
-        "G15",
-        "G19",
-        "J1",
-        "I3",
-        "L7"
+        "G:G2",
+        "G:G15",
+        "G:G19",
+        "C3:J1",
+        "C3:I3",
+        "L:L7"
       ]
     },
     {
@@ -786,12 +791,13 @@
       "title": "承認は対象・範囲・ポリシーバージョンに紐づける",
       "status": "enforced",
       "tests": [
-        "G4",
-        "S6",
-        "INV06a",
-        "INV06b",
-        "INV06c",
-        "L10"
+        "G:G4",
+        "C2:S6",
+        "INV:INV06a",
+        "INV:INV06b",
+        "INV:INV06d",
+        "INV:INV06c",
+        "L:L10"
       ]
     },
     {
@@ -799,7 +805,7 @@
       "title": "自動再試行には有限の回数・時間・予算上限を設ける",
       "status": "partial",
       "tests": [
-        "G16"
+        "G:G16"
       ],
       "gaps": [
         "差し戻しの上限3回は票の記録で数えるが、上限での停止の判例はない",
@@ -811,11 +817,12 @@
       "title": "モデルの性能向上によって利用権限が自動拡張されない",
       "status": "partial",
       "tests": [
-        "INV08",
-        "CAP-LAW-WRITE"
+        "INV:INV08",
+        "C1:CAP-LAW-WRITE"
       ],
       "gaps": [
-        "モデルの能力評価と選択（ADR-044・045）をまだ持たない。役割ごとのモデルは定義で固定し、行政は定義を書き換えられないことだけを確かめる"
+        "定義に model が書かれていること（空でない）と、行政が定義を書き換えられないこと（C1）だけを確かめる。期待するモデルの照合と、実際の起動のモデルの観測はない",
+        "モデルの能力評価と選択（ADR-044・045）をまだ持たない"
       ]
     },
     {
@@ -829,11 +836,11 @@
       "title": "重大な仕様変更は正規の立法・承認手続きを経る",
       "status": "enforced",
       "tests": [
-        "G1",
-        "G4",
-        "S1",
-        "I4",
-        "CAP-SPEC-DRAFT"
+        "G:G1",
+        "G:G4",
+        "C2:S1",
+        "C3:I4",
+        "C1:CAP-SPEC-DRAFT"
       ]
     },
     {
@@ -841,11 +848,11 @@
       "title": "検証・是正・承認・委任・モデル切替を監査可能にする",
       "status": "partial",
       "tests": [
-        "A1",
-        "A3",
-        "A5",
-        "R1",
-        "ST1"
+        "A:A1",
+        "A:A3",
+        "A:A5",
+        "K:R1",
+        "ST:ST1"
       ],
       "gaps": [
         "モデルの切り替えの監査は対象外（INV-09 と同じ）",
@@ -857,8 +864,8 @@
       "title": "独立した作業は、他のタスクの承認待ちだけを理由に一律停止しない（安全停止を除く）",
       "status": "enforced",
       "tests": [
-        "INV12",
-        "G5"
+        "INV:INV12",
+        "G:G5"
       ]
     }
   ]

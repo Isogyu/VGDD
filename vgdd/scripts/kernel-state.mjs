@@ -33,7 +33,7 @@ const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?([+-]\d{2}:?\d{2
 const VER_RE = /^p\d+\.\d+\.\d+[a-z]?$/;
 // 時刻。+0900 の形（gate-runner の ts）は +09:00 にそろえる（画面の Date.parse が読める形に）
 const str = (v) => (typeof v === 'string' && ISO_RE.test(v) ? v.replace(/([+-]\d{2})(\d{2})$/, '$1:$2') : null);
-const ver = (v) => (typeof v === 'string' && VER_RE.test(v) ? v : null);   // 法律・フックの版
+const ver = (v) => (typeof v === 'string' && v.length <= 40 && VER_RE.test(v) ? v : null);   // 法律・フックの版
 const IMPLS = new Set(['repo', 'z3']);
 // 範囲：配列は最大 500 件（新しいものを残す）、件数は 0〜1,000,000 の整数（画面の検証と同じ。範囲外で写し全体が捨てられないように。T-022 の点検 #6）
 const MAX_ITEMS = 500; const MAX_COUNT = 1_000_000;
@@ -123,26 +123,30 @@ const conformance = conf && cpass <= ctotal ? { passed: cpass, total: ctotal, im
 
 // p0.4.4：不変条件（INV-01〜12）と承認待ちの票は、別のファイル kernel-invariants.json に書く（vgdd.kernel-invariants.v1）。
 //   kernel-state.json の形（v1）は変えない（Kernel の区画 T-022 は strict で検証するので、項目を足すと全体が捨てられる）
+//   自由な文（不変条件や票の題名）は出さない。ID・状態・件数・真偽だけ（Codex の監査 p0.4.4 #3。題名は画面が固定の文で持つ）
 const INV_STATUS = new Set(['enforced', 'partial', 'not_applicable']);
-const text = (v, n) => (typeof v === 'string' && v.length <= n && !/[\n\r]/.test(v) ? v : null);
 let capsInv = []; try { capsInv = JSON.parse(capsSrc.stdout).invariants || []; } catch { /* なし */ }
+// 不変条件ごとの結果は、今の法律の版を稼働中の実装（z3）で試した記録のときだけ使う（別の版・原本の結果を今の検証済みに見せない。#7）
+const confCurrent = !!conf && conf.impl === 'z3' && ver(conf.kernel_version) !== null && conf.kernel_version === kernel_version;
 const invariants = capsInv.filter((i) => /^INV-\d{2}$/.test(i.id || '') && INV_STATUS.has(i.status)).slice(0, 50).map((i) => {
-  const r = conf?.invariants?.[i.id];
-  return { id: i.id, title: text(i.title, 80), status: i.status, tests: Array.isArray(i.tests) ? cnt(i.tests.length) : 0, verified: r === 'pass' ? true : r === 'fail' ? false : null };
+  const r = confCurrent ? conf.invariants?.[i.id] : undefined;
+  return { id: i.id, status: i.status, tests: Array.isArray(i.tests) ? cnt(i.tests.length) : 0, verified: r === 'pass' ? true : r === 'fail' ? false : null };
 });
-// 承認待ち（ADR-039 の最小形）：main の票のうち status が ready・in_progress・review で、今の仕様と法律の系統の承認がないもの
+const verified_by = confCurrent ? { kernel_version: ver(conf.kernel_version), impl: 'z3', at: str(conf.at) } : null;
+// 承認待ち（ADR-039 の最小形）：main の票のうち status が ready・in_progress・review・blocked で、今の仕様と法律の系統の承認がないもの
+//   （未承認の申請を裁判所が blocked にした票も残す。#4）
 const pending_approvals = [];
 for (const rel of tree.filter((f) => /^docs\/tasks\/T-\d{3,4}-[^/]*\.md$/.test(f))) {
   const body = git('show', `main:${rel}`).stdout || '';
   const fm = (body.match(/^---\n([\s\S]*?)\n---/) || [])[1] || '';
   const get = (k) => ((fm.match(new RegExp(`^${k}: *(.*)$`, 'm')) || [])[1] || '').replace(/ *#.*$/, '').trim();
-  if (!['ready', 'in_progress', 'review'].includes(get('status'))) continue;
+  if (!['ready', 'in_progress', 'review', 'blocked'].includes(get('status'))) continue;
   const task = get('id'); if (!TASK_RE.test(task)) continue;
   const ok = digestBin && spawnSync('node', [digestBin, '--repo', REPO, '--ref', 'main', '--ticket', rel, '--check', path.join(EV, 'spec_approvals.jsonl')], { encoding: 'utf8' }).status === 0;
-  if (!ok) pending_approvals.push({ task, title: text(get('title'), 120), status: get('status') });
+  if (!ok) pending_approvals.push({ task, status: get('status') });
   if (pending_approvals.length >= MAX_ITEMS) break;
 }
-const invState = { schema: 'vgdd.kernel-invariants.v1', generated_at: null, kernel_version, invariants, pending_approvals };
+const invState = { schema: 'vgdd.kernel-invariants.v1', generated_at: null, kernel_version, verified_by, invariants, pending_approvals };
 
 const state = { schema: 'vgdd.kernel-state.v1', generated_at: null, kernel_version, policy_version, stopped, judiciary, approvals, held, rulings, annulments, verdicts: { count: cnt(vcount), by_task: Object.fromEntries(Object.entries(by_task).sort().slice(-MAX_ITEMS)) }, disagreements, evidence, conformance };
 

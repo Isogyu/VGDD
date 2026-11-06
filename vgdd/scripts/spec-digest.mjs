@@ -34,11 +34,19 @@ if (!repo || !ticket) { console.error('使い方: spec-digest.mjs --repo <repo> 
 
 // 裁判所と同じく、リポジトリのフックと fsmonitor を読まない（OBS-033）
 const git = (...a) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-C', repo, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-// 法律の系統（kernel_version の先頭 pN.N）。権限の表が ref にない・読めないときは null（版を結び付けない）
+// 法律の系統（kernel_version の先頭 pN.N）。権限の表が ref に**ない**ときだけ null（版を結び付けない。法律を持たないリポジトリ）。
+//   あるのに読めない・JSON でない・版の形（pN.N.N）が違うときは INVALID で、どの承認も効かない（fail-closed。Codex の監査 p0.4.4 #1）。
+//   権限の表は保護パス（vgdd/）で、行政は main から消せない
+const INVALID = Symbol('invalid');
 const policyLine = (() => {
-  try { const v = JSON.parse(git('show', `${ref}:vgdd/kernel/capabilities.json`)).kernel_version; const m = /^(p\d+\.\d+)\./.exec(String(v)); return m ? m[1] : null; } catch { return null; }
+  const CAPS = 'vgdd/kernel/capabilities.json';
+  try { git('cat-file', '-e', `${ref}:${CAPS}`); } catch { return null; }
+  try { const v = JSON.parse(git('show', `${ref}:${CAPS}`)).kernel_version; const m = /^(p\d+\.\d+)\.\d+[a-z]?$/.exec(typeof v === 'string' ? v : ''); return m ? m[1] : INVALID; } catch { return INVALID; }
 })();
-if (wantLine) { console.log(policyLine ?? ''); process.exit(0); }
+if (wantLine) {
+  if (policyLine === INVALID) { console.error('権限の表が読めない・版の形が違う（承認を記録しない）'); process.exit(65); }
+  console.log(policyLine ?? ''); process.exit(0);
+}
 const rel = 'docs/tasks/' + ticket.split('/').pop();
 let text;
 try { text = git('show', `${ref}:${rel}`); } catch { console.error(`票が ${ref} にない: ${rel}`); process.exit(66); }
@@ -104,8 +112,8 @@ const digest = 'sha256:' + crypto.createHash('sha256').update(canonical, 'utf8')
 
 if (check) {
   const lines = fs.existsSync(check) ? fs.readFileSync(check, 'utf8').split('\n').filter(Boolean) : [];
-  const ok = lines.some((l) => { try { const r = JSON.parse(l); return r.task === id && r.digest === digest && r.approved_by === 'owner' && (policyLine === null || r.policy_line === policyLine); } catch { return false; } });
-  console.log(ok ? `承認済み ${id} ${digest}` : `未承認 ${id} ${digest}（この仕様と法律の系統${policyLine ? ' ' + policyLine : ''}のオーナーの承認の記録がない）`);
+  const ok = lines.some((l) => { try { const r = JSON.parse(l); return r.task === id && r.digest === digest && r.approved_by === 'owner' && policyLine !== INVALID && (policyLine === null || r.policy_line === policyLine); } catch { return false; } });
+  console.log(ok ? `承認済み ${id} ${digest}` : `未承認 ${id} ${digest}（この仕様と法律の系統${typeof policyLine === 'string' ? ' ' + policyLine : ''}のオーナーの承認の記録がない${policyLine === INVALID ? '。権限の表が読めない' : ''}）`);
   process.exit(ok ? 0 : 3);
 }
 if (show) console.log(canonical + '\n');
