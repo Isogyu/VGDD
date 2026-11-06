@@ -12,6 +12,10 @@
 //   node spec-digest.mjs --repo <repo> --ref main --ticket docs/tasks/T-009-xxx.md            … 指紋を1行で出す
 //   node spec-digest.mjs ... --show                                                         … 正規化した仕様の本文と指紋を出す（承認の前に人が読む）
 //   node spec-digest.mjs ... --check <spec_approvals.jsonl>                                 … 承認済みなら exit 0、未承認は exit 3
+//   node spec-digest.mjs ... --policy-line                                                  … 同じ ref の法律の系統（kernel_version の pN.N）を1行で出す
+// p0.4.4（INV-06：承認は対象・範囲・ポリシーの版に結び付ける。ADR-038）：同じ ref に法律の権限の表（vgdd/kernel/capabilities.json）が
+//   あれば、承認の記録の policy_line が、その ref の法律の系統（例 p0.4）と一致するときだけ承認済みとする。法律の系統が変われば
+//   （p0.4 → p0.5）承認し直す。版の記録のない古い承認は、権限の表のある ref では承認済みとしない（fail-closed）
 // 終了コード：0 ＝ 成功（--check なら承認済み）、3 ＝ 未承認・承認と違う、65 ＝ 票の形が不正、66 ＝ 票が ref にない、64 ＝ 引数
 
 import fs from 'node:fs';
@@ -25,10 +29,16 @@ const ref = opt('--ref') || 'main';
 const ticket = opt('--ticket');
 const check = opt('--check');
 const show = args.includes('--show');
+const wantLine = args.includes('--policy-line');
 if (!repo || !ticket) { console.error('使い方: spec-digest.mjs --repo <repo> --ref main --ticket docs/tasks/T-NNN-*.md [--show | --check <jsonl>]'); process.exit(64); }
 
 // 裁判所と同じく、リポジトリのフックと fsmonitor を読まない（OBS-033）
 const git = (...a) => execFileSync('git', ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-C', repo, ...a], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+// 法律の系統（kernel_version の先頭 pN.N）。権限の表が ref にない・読めないときは null（版を結び付けない）
+const policyLine = (() => {
+  try { const v = JSON.parse(git('show', `${ref}:vgdd/kernel/capabilities.json`)).kernel_version; const m = /^(p\d+\.\d+)\./.exec(String(v)); return m ? m[1] : null; } catch { return null; }
+})();
+if (wantLine) { console.log(policyLine ?? ''); process.exit(0); }
 const rel = 'docs/tasks/' + ticket.split('/').pop();
 let text;
 try { text = git('show', `${ref}:${rel}`); } catch { console.error(`票が ${ref} にない: ${rel}`); process.exit(66); }
@@ -94,8 +104,8 @@ const digest = 'sha256:' + crypto.createHash('sha256').update(canonical, 'utf8')
 
 if (check) {
   const lines = fs.existsSync(check) ? fs.readFileSync(check, 'utf8').split('\n').filter(Boolean) : [];
-  const ok = lines.some((l) => { try { const r = JSON.parse(l); return r.task === id && r.digest === digest && r.approved_by === 'owner'; } catch { return false; } });
-  console.log(ok ? `承認済み ${id} ${digest}` : `未承認 ${id} ${digest}（この仕様はオーナーの承認の記録と合わない）`);
+  const ok = lines.some((l) => { try { const r = JSON.parse(l); return r.task === id && r.digest === digest && r.approved_by === 'owner' && (policyLine === null || r.policy_line === policyLine); } catch { return false; } });
+  console.log(ok ? `承認済み ${id} ${digest}` : `未承認 ${id} ${digest}（この仕様と法律の系統${policyLine ? ' ' + policyLine : ''}のオーナーの承認の記録がない）`);
   process.exit(ok ? 0 : 3);
 }
 if (show) console.log(canonical + '\n');

@@ -109,7 +109,7 @@ function fixture(name) {
   write(path.join(main, 'CLAUDE.md'), '# 憲法（試験用）\n');
   write(path.join(main, 'vgdd/README.md'), '法律（試験用）\n');
   write(path.join(main, '.claude/settings.json'), '{}\n');
-  write(path.join(main, '.gitignore'), 'merge-requests/\n.claude/worktrees/\ndocs/governance/kernel-state.json*\n');
+  write(path.join(main, '.gitignore'), 'merge-requests/\n.claude/worktrees/\ndocs/governance/kernel-state.json*\ndocs/governance/kernel-invariants.json*\n');
   git(main, 'add', '-A'); git(main, 'commit', '-q', '-m', 'init');
   fs.mkdirSync(path.join(main, 'merge-requests/done'), { recursive: true });
   const wt = path.join(main, '.claude/worktrees/w1');
@@ -348,7 +348,8 @@ out=""; task=""; mode=judge; while [ $# -gt 0 ]; do case "$1" in --out) out="$2"
 if [ "$mode" = security ]; then [ -z "\${STUB_SECURITY_NOFILE:-}" ] || exit 69; else [ -z "\${STUB_CODEX_NOFILE:-}" ] || exit 69; fi
 printf '{"final_verdict":"%s","parse_ok":true,"codex":{"findings":[]}}\\n' "\${STUB_CODEX_VERDICT:-\${STUB_VERDICT:-CHANGES_REQUIRED}}" > "$out/$task-$(git rev-parse HEAD | cut -c1-12)-codex-$mode.json"
 `;
-function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export const v = 2;\n' }, stop = false, afterApprove = null, ticket = {} } = {}) {
+const POLICY_LINE = (/^(p\d+\.\d+)\./.exec(CAPS.kernel_version) || [])[1] || null;
+function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export const v = 2;\n' }, stop = false, afterApprove = null, ticket = {}, approveExtra = { policy_line: POLICY_LINE } } = {}) {
   const fx = fixture(name);
   const id = 'T-930';
   commitTicket(fx, id, ticket);
@@ -366,7 +367,7 @@ function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export 
   for (const f of ['judge.sh', 'judge-codex.sh', 'sandboxed-run.sh']) fs.chmodSync(path.join(fx.z3, 'bin', f), 0o755);
   if (approve) {
     const d = digest(fx, 'main', `docs/tasks/${id}-probe.md`).out || 'sha256:unavailable';
-    write(path.join(fx.z3, 'evidence/spec_approvals.jsonl'), JSON.stringify({ schema: 'vgdd.spec-approval.v1', task: id, digest: d, approved_by: 'owner' }) + '\n');
+    write(path.join(fx.z3, 'evidence/spec_approvals.jsonl'), JSON.stringify({ schema: 'vgdd.spec-approval.v1', task: id, digest: d, approved_by: 'owner', ...approveExtra }) + '\n');
   }
   if (afterApprove) afterApprove(fx, id);
   // 票を review にする（行政の長の申請の前の作業。§6 の記録は仕様ではない）
@@ -494,6 +495,45 @@ function groupG() {
   record('G', 'G8', '夜間（--hold）は合格しても統合せず、held として朝の承認を待つ', !g.inMain && g.events.some((e) => e.type === 'held'), `inMain=${g.inMain}`);
 }
 
+// ---- INV 不変条件（p0.4.4。ADR-034〜046 の総括の INV-01〜12） ------------------------------------------
+const withCaps = (fx) => { write(path.join(fx.main, 'vgdd/kernel/capabilities.json'), JSON.stringify({ kernel_version: CAPS.kernel_version }) + '\n'); git(fx.main, 'add', '-A'); git(fx.main, 'commit', '-q', '-m', '権限の表（試験用）'); };
+function groupINV() {
+  // INV-06：承認は法律の系統に結び付く。権限の表のある main では、系統の記録のない承認・違う系統の承認は効かない
+  let g = runGate(gateFixture('inv06a', { approveExtra: {}, afterApprove: withCaps }), 'APPROVED');
+  record('INV', 'INV06a', '法律の系統（policy_line）の記録のない承認は、権限の表のある main では効かない（司法を呼ばず blocked）',
+    !g.inMain && !g.judged && g.status === 'blocked' && g.events.some((e) => /承認されていない/.test(e.reason || '')), `status=${g.status} judged=${g.judged}`);
+  g = runGate(gateFixture('inv06b', { approveExtra: { policy_line: 'p0.3' }, afterApprove: withCaps }), 'APPROVED');
+  record('INV', 'INV06b', '前の法律の系統（p0.3）の承認は、今の系統の main では効かない（法律が変われば承認し直す）', !g.inMain && !g.judged && g.status === 'blocked', `status=${g.status}`);
+  g = runGate(gateFixture('inv06c', { afterApprove: withCaps }), 'APPROVED');
+  record('INV', 'INV06c', '今の法律の系統の承認なら統合される（陽性の対照）', g.inMain && g.status === 'merged', `status=${g.status} ${g.code ? g.out : ''}`);
+  // INV-12：独立した作業は、ほかの票の承認待ちだけを理由に止まらない（同じ周回で、未承認の票は blocked、承認済みの票は統合）
+  const fx = gateFixture('inv12');
+  commitTicket(fx, 'T-931', { status: 'review' });
+  const wt2 = path.join(fx.base, 'wt-931');
+  git(fx.main, 'worktree', 'add', '-q', '-b', 'task/T-931', wt2, 'main');
+  write(path.join(wt2, 'src/lib/a.ts'), 'export const v = 9;\n'); git(wt2, 'add', '-A'); git(wt2, 'commit', '-q', '-m', '未承認の票の実装');
+  write(path.join(fx.main, 'merge-requests/T-931.json'), JSON.stringify({ task: 'T-931', branch: 'task/T-931', head: git(wt2, 'rev-parse', 'HEAD') }) + '\n');
+  g = runGate(fx, 'APPROVED');
+  const st931 = (fs.readFileSync(path.join(fx.main, 'docs/tasks/T-931-probe.md'), 'utf8').match(/^status: (.*)$/m) || [])[1];
+  record('INV', 'INV12', '同じ周回で、未承認の票（T-931）は blocked、それと独立した承認済みの票（T-930）は統合される（承認待ちで全体が止まらない）',
+    g.inMain && g.status === 'merged' && st931 === 'blocked', `T-930=${g.status} T-931=${st931}`);
+  // INV-08：役割ごとのモデルは定義で固定（行政は定義を書き換えられない＝CAP-LAW-WRITE の .claude/agents の probe）
+  const defs = ['worker', 'judge', 'constitutional-review'].map((a) => [a, (frontOf(path.join(IMPL.agents, `${a}.md`)).match(/^model:\s*(\S+)/m) || [])[1]]);
+  record('INV', 'INV08', '役割ごとのモデルが定義で固定されている（worker・judge・憲法審査。実行時の性能で自動的に変わらない）', defs.every(([, m]) => !!m), defs.map(([a, m]) => `${a}=${m || 'なし'}`).join(' '));
+}
+// 不変条件の自己検査：権限の表の invariants の各項目に、強制なら合格した判例があり、対象外なら理由がある
+function groupInvMeta() {
+  for (const inv of CAPS.invariants || []) {
+    if (inv.status === 'not_applicable') { record('INV', `${inv.id}:meta`, `${inv.id} は対象外（理由：${inv.reason || 'なし'}）`, !!inv.reason); continue; }
+    const missing = []; const failed = [];
+    for (const t of inv.tests || []) { const rs = results.filter((x) => x.id === t); if (!rs.length) missing.push(t); else if (!rs.every((x) => x.ok)) failed.push(t); }
+    record('INV', `${inv.id}:meta`, `${inv.id}（${inv.status}）の判例 ${(inv.tests || []).length} 件がすべて実行され合格している`,
+      (inv.tests || []).length > 0 && !missing.length && !failed.length && (inv.status === 'enforced' || (inv.gaps || []).length > 0),
+      [missing.length ? `ない：${missing.join(',')}` : '', failed.length ? `不合格：${failed.join(',')}` : '', inv.status !== 'enforced' && !(inv.gaps || []).length ? '一部なのに gaps がない' : ''].filter(Boolean).join(' '));
+  }
+  record('INV', 'INV-ALL', '不変条件 INV-01〜12 がすべて権限の表にある', ['01','02','03','04','05','06','07','08','09','10','11','12'].every((n) => (CAPS.invariants || []).some((i) => i.id === `INV-${n}`)));
+}
+
 // ---- ST Kernel の状態の書き出し（p0.4.3） ------------------------------------------------------------
 function groupST() {
   const fx = gateFixture('st1');
@@ -550,6 +590,21 @@ function groupST() {
   record('ST', 'ST8', '入力の記録に紛れ込んだ SHA・セッション ID・パス・理由の本文の形は、時刻・版・実装の欄を通っても書き出されない（欄ごとの形で検査）',
     !!st8 && st8.conformance?.at === null && st8.conformance?.impl === null && st8.conformance?.kernel_version === null && st8.policy_version === null
       && st8.approvals?.some((a) => a.task === 'T-931' && a.approved_at === null) && !/session-|toolu_|\/Users\/|理由の本文|eeeeeeee|cccccccc/.test(g.kstate), g.kstate ? '' : g.out);
+  // p0.4.4：不変条件と承認待ちの写し（kernel-invariants.json）
+  const f10 = gateFixture('st10');
+  write(path.join(f10.main, 'vgdd/kernel/capabilities.json'), JSON.stringify({ kernel_version: CAPS.kernel_version, invariants: CAPS.invariants }) + '\n');
+  commitTicket(f10, 'T-932', { status: 'ready' });   // 未承認の ready の票
+  git(f10.main, 'add', '-A'); git(f10.main, 'commit', '-q', '--allow-empty', '-m', '権限の表と未承認の票（試験用）');
+  write(path.join(f10.z3, 'evidence/conformance.jsonl'), JSON.stringify({ at: '2026-11-06T08:00:00+09:00', impl: 'repo', kernel_version: CAPS.kernel_version, passed: 1, total: 1, invariants: { 'INV-01': 'pass', 'INV-07': 'fail', 'INV-09': 'n/a' } }) + '\n');
+  runGate(f10, 'APPROVED');
+  let iv = null; const ivf = path.join(f10.main, 'docs/governance/kernel-invariants.json'); const ivs = fs.existsSync(ivf) ? fs.readFileSync(ivf, 'utf8') : '';
+  try { iv = JSON.parse(ivs); } catch { /* なし */ }
+  const byId = Object.fromEntries((iv?.invariants || []).map((i) => [i.id, i]));
+  record('ST', 'ST10', '不変条件の写し：INV-01〜12 が状態（強制・一部・対象外）と最後の適合性テストの結果つきで出る。未承認の ready の票が承認待ちに出て、承認済みの票は出ない。git で追跡しない',
+    !!iv && iv.schema === 'vgdd.kernel-invariants.v1' && (iv.invariants || []).length === 12 && byId['INV-01']?.verified === true && byId['INV-07']?.verified === false && byId['INV-09']?.status === 'not_applicable' && byId['INV-09']?.verified === null
+      && iv.pending_approvals?.some((p) => p.task === 'T-932') && !iv.pending_approvals?.some((p) => p.task === 'T-930')
+      && !/\/Users\/|tsubuyaki-z3|vgdd-conf|[0-9a-f]{8,}/.test(ivs) && sh('git', ['-C', f10.main, 'status', '--porcelain', '--', 'docs/governance']).stdout.trim() === '',
+    iv ? JSON.stringify(iv.pending_approvals).slice(0, 120) : 'ない');
   // 作業員が差分に状態の写しを入れて申請すれば、保護パスとして司法の前に blocked
   g = runGate(gateFixture('st7', { change: { 'src/lib/a.ts': 'export const v = 2;\n', 'docs/governance/kernel-state.json': '{"approvals":[]}\n' } }), 'APPROVED');
   record('ST', 'ST7', '作業員の差分に状態の写しが含まれれば、司法の前に保護パスとして blocked',
@@ -883,7 +938,9 @@ try {
   groupH();
   groupN();
   groupL();
+  groupINV();
   groupMeta();
+  groupInvMeta();
   if (opt('--observe')) observed = observe(opt('--observe'));
 } catch (e) {
   console.error(`試験の準備に失敗：${e.stack || e}`);
@@ -897,7 +954,8 @@ console.log(`\n合計 ${results.length} 件：合格 ${results.length - failed.l
 //   Z3 に書けるのはオーナーだけなので、実行するのもオーナー（sandbox の外）。件数と合否と実装と日時だけ
 if (args.includes('--record')) {
   const z3 = process.env.VGDD_Z3_DIR || Z3REAL;
-  fs.appendFileSync(path.join(z3, 'evidence/conformance.jsonl'), JSON.stringify({ schema: 'vgdd.conformance-record.v1', at: new Date(Date.now() + 9 * 3600e3).toISOString().replace(/\.\d+Z$/, '+09:00'), impl, kernel_version: CAPS.kernel_version, passed: results.length - failed.length, total: results.length }) + '\n');
+  fs.appendFileSync(path.join(z3, 'evidence/conformance.jsonl'), JSON.stringify({ schema: 'vgdd.conformance-record.v1', at: new Date(Date.now() + 9 * 3600e3).toISOString().replace(/\.\d+Z$/, '+09:00'), impl, kernel_version: CAPS.kernel_version, passed: results.length - failed.length, total: results.length,
+    invariants: Object.fromEntries((CAPS.invariants || []).map((i) => [i.id, i.status === 'not_applicable' ? 'n/a' : (results.find((x) => x.id === `${i.id}:meta`)?.ok ? 'pass' : 'fail')])) }) + '\n');
 }
 if (opt('--json')) fs.writeFileSync(opt('--json'), JSON.stringify({ schema: 'vgdd.conformance-report.v1', impl, kernel_version: CAPS.kernel_version, at: new Date().toISOString(), totals: byGroup, results, observed }, null, 2) + '\n');
 process.exit(failed.length ? 1 : 0);

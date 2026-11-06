@@ -26,12 +26,13 @@ trel="$(git -C "$REPO" ls-tree --name-only main docs/tasks/ | grep "^docs/tasks/
 main_sha="$(git -C "$REPO" rev-parse main)"
 node "$HERE/spec-digest.mjs" --repo "$REPO" --ref "$main_sha" --ticket "$trel" --show
 digest="$(node "$HERE/spec-digest.mjs" --repo "$REPO" --ref "$main_sha" --ticket "$trel")"
+pl="$(node "$HERE/spec-digest.mjs" --repo "$REPO" --ref "$main_sha" --ticket "$trel" --policy-line)"   # p0.4.4（INV-06）：承認を法律の系統に結び付ける
 if [ "$YES" -ne 1 ]; then
   printf '\nこの仕様（main %s の %s）を承認しますか？ [y/N] ' "${main_sha:0:12}" "$trel"
   read -r ans; [ "$ans" = "y" ] || [ "$ans" = "Y" ] || { echo "承認しなかった"; exit 1; }
 fi
 ts="$(date +%Y-%m-%dT%H:%M:%S%z)"
-jq -nc --arg ts "$ts" --arg t "$task" --arg f "$trel" --arg r "$main_sha" --arg d "$digest" --arg n "$NOTE" \
-  '{schema:"vgdd.spec-approval.v1",ts:$ts,task:$t,ticket:$f,ref:$r,digest:$d,approved_by:"owner",note:$n}' >> "$Z3/evidence/spec_approvals.jsonl"
+jq -nc --arg ts "$ts" --arg t "$task" --arg f "$trel" --arg r "$main_sha" --arg d "$digest" --arg n "$NOTE" --arg pl "$pl" \
+  '{schema:"vgdd.spec-approval.v1",ts:$ts,task:$t,ticket:$f,ref:$r,digest:$d,policy_line:$pl,approved_by:"owner",note:$n}' >> "$Z3/evidence/spec_approvals.jsonl"
 printf '{"ts":"%s","type":"spec_approved","task":"%s","digest":"%s","ref":"%s"}\n' "$ts" "$task" "$digest" "${main_sha:0:12}" >> "$Z3/evidence/gate_events.jsonl"
 echo "承認を記録した: ${task} ${digest}"

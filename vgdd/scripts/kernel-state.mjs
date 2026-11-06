@@ -121,6 +121,29 @@ const conf = lines(path.join(EV, 'conformance.jsonl')).pop();
 const cpass = cnt(conf?.passed); const ctotal = cnt(conf?.total);
 const conformance = conf && cpass <= ctotal ? { passed: cpass, total: ctotal, impl: IMPLS.has(conf.impl) ? conf.impl : null, kernel_version: ver(conf.kernel_version), at: str(conf.at) } : null;
 
+// p0.4.4：不変条件（INV-01〜12）と承認待ちの票は、別のファイル kernel-invariants.json に書く（vgdd.kernel-invariants.v1）。
+//   kernel-state.json の形（v1）は変えない（Kernel の区画 T-022 は strict で検証するので、項目を足すと全体が捨てられる）
+const INV_STATUS = new Set(['enforced', 'partial', 'not_applicable']);
+const text = (v, n) => (typeof v === 'string' && v.length <= n && !/[\n\r]/.test(v) ? v : null);
+let capsInv = []; try { capsInv = JSON.parse(capsSrc.stdout).invariants || []; } catch { /* なし */ }
+const invariants = capsInv.filter((i) => /^INV-\d{2}$/.test(i.id || '') && INV_STATUS.has(i.status)).slice(0, 50).map((i) => {
+  const r = conf?.invariants?.[i.id];
+  return { id: i.id, title: text(i.title, 80), status: i.status, tests: Array.isArray(i.tests) ? cnt(i.tests.length) : 0, verified: r === 'pass' ? true : r === 'fail' ? false : null };
+});
+// 承認待ち（ADR-039 の最小形）：main の票のうち status が ready・in_progress・review で、今の仕様と法律の系統の承認がないもの
+const pending_approvals = [];
+for (const rel of tree.filter((f) => /^docs\/tasks\/T-\d{3,4}-[^/]*\.md$/.test(f))) {
+  const body = git('show', `main:${rel}`).stdout || '';
+  const fm = (body.match(/^---\n([\s\S]*?)\n---/) || [])[1] || '';
+  const get = (k) => ((fm.match(new RegExp(`^${k}: *(.*)$`, 'm')) || [])[1] || '').replace(/ *#.*$/, '').trim();
+  if (!['ready', 'in_progress', 'review'].includes(get('status'))) continue;
+  const task = get('id'); if (!TASK_RE.test(task)) continue;
+  const ok = digestBin && spawnSync('node', [digestBin, '--repo', REPO, '--ref', 'main', '--ticket', rel, '--check', path.join(EV, 'spec_approvals.jsonl')], { encoding: 'utf8' }).status === 0;
+  if (!ok) pending_approvals.push({ task, title: text(get('title'), 120), status: get('status') });
+  if (pending_approvals.length >= MAX_ITEMS) break;
+}
+const invState = { schema: 'vgdd.kernel-invariants.v1', generated_at: null, kernel_version, invariants, pending_approvals };
+
 const state = { schema: 'vgdd.kernel-state.v1', generated_at: null, kernel_version, policy_version, stopped, judiciary, approvals, held, rulings, annulments, verdicts: { count: cnt(vcount), by_task: Object.fromEntries(Object.entries(by_task).sort().slice(-MAX_ITEMS)) }, disagreements, evidence, conformance };
 
 // 書き出し（Codex の指摘 #7）：出力先の親と祖先（--repo の中）がシンボリックリンクでない実のディレクトリであることを確かめ、
@@ -135,11 +158,15 @@ try {
   }
   fs.mkdirSync(dir, { recursive: true });
   if (!fs.lstatSync(dir).isDirectory()) throw Object.assign(new Error('出力先の親がディレクトリでない'), { code: 'ENOTDIR_LINK' });
-  state.generated_at = jst(Date.now());
-  const tdir = fs.mkdtempSync(path.join(dir, '.kernel-state.json.tmp-'));
-  const tmp = path.join(tdir, 'kernel-state.json');
-  try {
-    fs.writeFileSync(tmp, JSON.stringify(state, null, 2) + '\n', { flag: 'wx', mode: 0o644 });
-    fs.renameSync(tmp, OUT);
-  } finally { fs.rmSync(tdir, { recursive: true, force: true }); }
+  state.generated_at = invState.generated_at = jst(Date.now());
+  const put = (obj, out) => {
+    const tdir = fs.mkdtempSync(path.join(dir, `.${path.basename(out)}.tmp-`));
+    const tmp = path.join(tdir, path.basename(out));
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n', { flag: 'wx', mode: 0o644 });
+      fs.renameSync(tmp, out);
+    } finally { fs.rmSync(tdir, { recursive: true, force: true }); }
+  };
+  put(state, OUT);
+  put(invState, path.join(dir, 'kernel-invariants.json'));
 } catch (e) { console.error(`書き出しに失敗：${e.code || e.message}`); process.exit(1); }
