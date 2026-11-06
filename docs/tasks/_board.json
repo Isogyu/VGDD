@@ -1,9 +1,9 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-07T01:21:23.190+09:00",
+  "generated_at": "2026-11-07T02:27:00.932+09:00",
   "totals": {
-    "tickets": 27,
-    "merged": 27,
+    "tickets": 30,
+    "merged": 28,
     "rejected": 34,
     "blocked": 0,
     "disagreements": 15
@@ -251,6 +251,33 @@
       "returns": 1,
       "merged_at": "2026-11-07T01:21:20+0900",
       "disagreements": 2
+    },
+    {
+      "id": "T-027",
+      "title": "ブラウザーのタイトルと /governance の見出しを、VGDD が主役と伝わる形にする",
+      "status": "merged",
+      "estimate_h": 0.2,
+      "returns": 0,
+      "merged_at": "2026-11-07T02:26:46+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-028",
+      "title": "票の記録を、自由な文を含まない公開用のイベント（列挙値だけ）に変える API を作る（統治シアター U0）",
+      "status": "ready",
+      "estimate_h": 2,
+      "returns": 0,
+      "merged_at": null,
+      "disagreements": 0
+    },
+    {
+      "id": "T-029",
+      "title": "統治シアターの画面の骨格（区画・色・余白）を作り、/governance/theater で見られるようにする（統治シアター U1）",
+      "status": "ready",
+      "estimate_h": 2,
+      "returns": 0,
+      "merged_at": null,
+      "disagreements": 0
     }
   ]
 }
