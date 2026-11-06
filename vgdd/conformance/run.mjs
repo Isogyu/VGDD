@@ -690,7 +690,18 @@ function groupST() {
     const wtd = fs.mkdtempSync(path.join(os.tmpdir(), 'vgdd-sbx-wt-'));
     const run = (f) => sh('bash', [path.join(IMPL.bin, 'sandboxed-run.sh'), '--dir', wtd, '--', 'cat', path.join(sb, f)], { env: { ...process.env, VGDD_Z3_DIR: fx.z3, VGDD_REPO: sb } });
     record('ST', 'ST14c', '本物の監査の sandbox では、VGDD_REPO の .env.local は読めず、同じ場所の通常のファイルは読める', run('.env.local').status !== 0 && run('plain.txt').status === 0);
+  } else {
+    // 省いたことを結果に残す（合格に数えない。Codex の再監査 p0.4.6）
+    record('ST', 'ST14c', '本物の監査の sandbox の判例は、この環境に sandbox-exec がないため実行していない（macOS で実行する）', false, '未実行');
   }
+  // CDPATH を継承していても、--repo の相対パスは起動の場所で解決する
+  const fc = gateFixture('st14d');
+  fs.rmSync(path.join(fc.z3, 'sbx-repo.log'), { force: true });
+  fs.mkdirSync(path.join(fc.base, 'decoy', 'app'), { recursive: true });
+  sh('bash', [path.join(IMPL.bin, 'gate-runner.sh'), '--repo', 'app', '--once', '--interval', '1'], { cwd: fc.base, env: { ...process.env, ...UTF8, VGDD_Z3_DIR: fc.z3, STUB_VERDICT: 'APPROVED', CDPATH: path.join(fc.base, 'decoy') }, timeout: 120000 });
+  const seenC = fs.existsSync(path.join(fc.z3, 'sbx-repo.log')) ? fs.readFileSync(path.join(fc.z3, 'sbx-repo.log'), 'utf8').split('\n').filter(Boolean) : [];
+  record('ST', 'ST14d', 'CDPATH を継承していても、--repo の相対パスは起動の場所で解決する（別の場所の同名のフォルダに移らない）',
+    seenC.length > 0 && seenC.every((r) => fs.realpathSync(r) === fs.realpathSync(fc.main)), seenC.slice(0, 1).join(','));
   const v2 = JSON.parse(fs.readFileSync(path.join(VG, 'settings.v2.json'), 'utf8'));
   record('ST', 'ST15', '設定の原本 vgdd/settings.v2.json も docs/governance を保護する（Edit・Write の拒否4つと sandbox の denyWrite）',
     ['Edit(docs/governance/**)', 'Write(docs/governance/**)', 'Edit(**/docs/governance/**)', 'Write(**/docs/governance/**)'].every((x) => (v2.permissions?.deny || []).includes(x)) && (v2.sandbox?.filesystem?.denyWrite || []).includes('docs/governance'));
