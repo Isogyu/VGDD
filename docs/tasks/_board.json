@@ -1,12 +1,12 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-07T01:12:58.114+09:00",
+  "generated_at": "2026-11-07T01:21:23.190+09:00",
   "totals": {
     "tickets": 27,
-    "merged": 26,
+    "merged": 27,
     "rejected": 34,
     "blocked": 0,
-    "disagreements": 14
+    "disagreements": 15
   },
   "tickets": [
     {
@@ -246,11 +246,11 @@
     {
       "id": "T-026",
       "title": "統治のライブ画面の先頭に「統治の全体図」と「停止の全面表示」を置く（可視化 V1・V2）",
-      "status": "blocked",
+      "status": "merged",
       "estimate_h": 3,
       "returns": 1,
-      "merged_at": null,
-      "disagreements": 1
+      "merged_at": "2026-11-07T01:21:20+0900",
+      "disagreements": 2
     }
   ]
 }
