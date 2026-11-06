@@ -965,6 +965,19 @@ function groupA(fx, probes) {
   const ok = v(t2);
   fs.writeFileSync(t2, lines.slice(0, -2).join('\n') + '\n');
   record('A', 'A7', '末尾を切り詰めると、チェックポイントとの照合で検証が失敗する', ok === 0 && v(t2) === 1);
+  // p0.4.5（OBS-055）：件数と末尾の行を別々に読んだ競合の形（N 行・ハッシュは N+1 行目）は注記にとどめ、検証は通る。それ以外の食い違いは失敗
+  const t3dir = path.join(fx.base, 'race'); fs.mkdirSync(t3dir);
+  const t3 = path.join(t3dir, 'tool_calls.jsonl'); fs.writeFileSync(t3, lines.join('\n') + '\n');
+  const cp3 = (sha) => fs.writeFileSync(path.join(t3dir, 'checkpoints.jsonl'), JSON.stringify({ ts: 'x', file: 'tool_calls.jsonl', count: lines.length - 1, last_sha256: sha }) + '\n');
+  cp3(sha256hex(lines[lines.length - 1]));
+  const r3 = sh('node', [IMPL.verify, t3]);
+  record('A', 'A8', 'チェックポイントの件数 N に対してハッシュが N+1 行目と一致する（取り方の競合の形）なら、検証は通り、注記を出す', r3.status === 0 && /チェックポイントの注記/.test(r3.stderr), `exit ${r3.status}`);
+  cp3('0'.repeat(64));
+  const r4 = sh('node', [IMPL.verify, t3]);
+  record('A', 'A9', 'ハッシュがどの行とも一致しない食い違いは、今までどおり検証が失敗する（陰性の対照）', r4.status === 1, `exit ${r4.status}`);
+  const t5 = path.join(t3dir, 'tool_calls.jsonl'); const tl5 = [...lines]; tl5[lines.length - 2] = tl5[lines.length - 2].replace(/"decision":"(allow|deny)"/, (m, d) => `"decision":"${d === 'allow' ? 'deny' : 'allow'}"`);
+  fs.writeFileSync(t5, tl5.join('\n') + '\n'); cp3(sha256hex(lines[lines.length - 1]));
+  record('A', 'A10', '競合の形のチェックポイントがあっても、途中の行を書き換えればハッシュチェーンの検証で失敗する', sh('node', [IMPL.verify, t5]).status === 1);
 }
 
 // ---- 観測（合否なし）：実際のリポジトリで、票の status を誰が変えたか ------------------------------------
