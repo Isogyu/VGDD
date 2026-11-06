@@ -10,6 +10,7 @@ import type { GovernanceData, GovernanceTicket, TimelineEvent } from "@/lib/gove
 import { formatMdHm } from "@/lib/time";
 import KernelPanel from "@/components/KernelPanel";
 import KernelInvariants from "@/components/KernelInvariants";
+import LawHistory from "@/components/LawHistory";
 
 // 盤の列（この順に左から並べる）。5つ以外の status は「その他」へ
 const COLUMNS: { status: string; label: string }[] = [
@@ -149,6 +150,7 @@ export default function GovernanceView() {
 
       <KernelPanel />
       <KernelInvariants />
+      <LawHistory />
 
       {/* 2. 数字のタイル */}
       <section aria-label="統治の数字" className="flex flex-col gap-2">
