@@ -1,6 +1,6 @@
 {
   "schema": "vgdd.capabilities.v1",
-  "kernel_version": "p0.4.3",
+  "kernel_version": "p0.4.4",
   "note": "Governance Kernel の権限の表（ADR-001・ADR-003）。役割ごとに、何ができ、何ができず、それを どの層が強制しているかを書く。expect はフック（Policy Decision Point）の判定。enforced_by はその操作を実際に止める層（複数あれば全部）。'promise' は強制がなく約束だけのもの（弱点として公開する）。probes は適合性テスト（vgdd/conformance/run.mjs）がフックに実際に入力する操作で、{self} はその役割の作業場所のルート、{main} は main の checkout、{wt} は作業員の worktree、{z3} は Z3。 個々の probe に expect があれば、その役割についてはそちらを優先する。",
   "layers": {
     "hook": "PreToolUse フック policy.mjs（Policy Decision Point。拒否と記録）",
@@ -627,7 +627,11 @@
         "ST4",
         "ST7",
         "ST8",
-        "ST9"
+        "ST9",
+        "ST10",
+        "ST11",
+        "ST12",
+        "ST11b"
       ],
       "known_gaps": [
         "中身が Z3 と一致することは、Z3 を読めるオーナーの照合に依る（行政は照合できない）",
@@ -721,6 +725,149 @@
       "known_gaps": [
         "起動は止めない。未承認の票は裁判所が司法の前に blocked にする（G1・G4）ので main には入らず、無駄になるのは作業員の時間だけ",
         "Agent ツールの入力から票を特定できないため、フックでは強制できない"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "INV-01",
+      "title": "行政 AI は自分自身の権限を拡張できない",
+      "status": "enforced",
+      "tests": [
+        "C1:CAP-LAW-WRITE",
+        "C1:CAP-EVIDENCE-WRITE",
+        "C1:CAP-KERNEL-STATE-WRITE",
+        "C1:CAP-GIT-CONFIG"
+      ]
+    },
+    {
+      "id": "INV-02",
+      "title": "司法 AI は自らが検証する実装を直接修正しない",
+      "status": "enforced",
+      "tests": [
+        "C3:T-judge",
+        "C3:M-judge"
+      ]
+    },
+    {
+      "id": "INV-03",
+      "title": "AI の委任によって権限が増加してはならない",
+      "status": "partial",
+      "tests": [
+        "C1:CAP-SRC-WRITE-OUTSIDE",
+        "C1:CAP-MAIN-COMMIT"
+      ],
+      "gaps": [
+        "確かめているのは、作業員が自分の worktree の外と main に書けないことだけ。委任の連鎖（サブエージェントがさらに起こす）での権限の継承は試していない"
+      ]
+    },
+    {
+      "id": "INV-04",
+      "title": "重大な違反時には通常の自律実行より停止制御を優先する",
+      "status": "enforced",
+      "tests": [
+        "K:K1",
+        "K:K3",
+        "K:K4",
+        "K:K6",
+        "G:G5",
+        "N:N5"
+      ]
+    },
+    {
+      "id": "INV-05",
+      "title": "必須の司法検証を行政 AI の自己評価で代替できない",
+      "status": "enforced",
+      "tests": [
+        "G:G2",
+        "G:G15",
+        "G:G19",
+        "C3:J1",
+        "C3:I3",
+        "L:L7"
+      ]
+    },
+    {
+      "id": "INV-06",
+      "title": "承認は対象・範囲・ポリシーバージョンに紐づける",
+      "status": "enforced",
+      "tests": [
+        "G:G4",
+        "C2:S6",
+        "INV:INV06a",
+        "INV:INV06b",
+        "INV:INV06d",
+        "INV:INV06e",
+        "INV:INV06c",
+        "L:L10"
+      ]
+    },
+    {
+      "id": "INV-07",
+      "title": "自動再試行には有限の回数・時間・予算上限を設ける",
+      "status": "partial",
+      "tests": [
+        "G:G16"
+      ],
+      "gaps": [
+        "差し戻しの上限3回は票の記録で数えるが、上限での停止の判例はない",
+        "時間と費用の上限は Kernel で強制していない（夜間の until と票の数の上限だけ）"
+      ]
+    },
+    {
+      "id": "INV-08",
+      "title": "モデルの性能向上によって利用権限が自動拡張されない",
+      "status": "partial",
+      "tests": [
+        "INV:INV08",
+        "C1:CAP-LAW-WRITE"
+      ],
+      "gaps": [
+        "定義に model が書かれていること（空でない）と、行政が定義を書き換えられないこと（C1）だけを確かめる。期待するモデルの照合と、実際の起動のモデルの観測はない",
+        "モデルの能力評価と選択（ADR-044・045）をまだ持たない"
+      ]
+    },
+    {
+      "id": "INV-09",
+      "title": "モデルの切り戻しを成果物の復旧完了と同一視しない",
+      "status": "not_applicable",
+      "reason": "モデルの段階導入と切り戻し（ADR-046）をまだ持たない。成果物の切り戻しは release の取り消し（L3・L5）と停止の再開の確認（R 群）だけ"
+    },
+    {
+      "id": "INV-10",
+      "title": "重大な仕様変更は正規の立法・承認手続きを経る",
+      "status": "enforced",
+      "tests": [
+        "G:G1",
+        "G:G4",
+        "C2:S1",
+        "C3:I4",
+        "C1:CAP-SPEC-DRAFT"
+      ]
+    },
+    {
+      "id": "INV-11",
+      "title": "検証・是正・承認・委任・モデル切替を監査可能にする",
+      "status": "partial",
+      "tests": [
+        "A:A1",
+        "A:A3",
+        "A:A5",
+        "K:R1",
+        "ST:ST1"
+      ],
+      "gaps": [
+        "モデルの切り替えの監査は対象外（INV-09 と同じ）",
+        "委任（作業員の起動）の記録は証拠ストアのツール呼び出しで、票との結び付けは行政の §6 の記録に依る"
+      ]
+    },
+    {
+      "id": "INV-12",
+      "title": "独立した作業は、他のタスクの承認待ちだけを理由に一律停止しない（安全停止を除く）",
+      "status": "enforced",
+      "tests": [
+        "INV:INV12",
+        "G:G5"
       ]
     }
   ]

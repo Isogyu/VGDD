@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -33,7 +34,7 @@ const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?([+-]\d{2}:?\d{2
 const VER_RE = /^p\d+\.\d+\.\d+[a-z]?$/;
 // 時刻。+0900 の形（gate-runner の ts）は +09:00 にそろえる（画面の Date.parse が読める形に）
 const str = (v) => (typeof v === 'string' && ISO_RE.test(v) ? v.replace(/([+-]\d{2})(\d{2})$/, '$1:$2') : null);
-const ver = (v) => (typeof v === 'string' && VER_RE.test(v) ? v : null);   // 法律・フックの版
+const ver = (v) => (typeof v === 'string' && v.length <= 40 && VER_RE.test(v) ? v : null);   // 法律・フックの版
 const IMPLS = new Set(['repo', 'z3']);
 // 範囲：配列は最大 500 件（新しいものを残す）、件数は 0〜1,000,000 の整数（画面の検証と同じ。範囲外で写し全体が捨てられないように。T-022 の点検 #6）
 const MAX_ITEMS = 500; const MAX_COUNT = 1_000_000;
@@ -121,6 +122,37 @@ const conf = lines(path.join(EV, 'conformance.jsonl')).pop();
 const cpass = cnt(conf?.passed); const ctotal = cnt(conf?.total);
 const conformance = conf && cpass <= ctotal ? { passed: cpass, total: ctotal, impl: IMPLS.has(conf.impl) ? conf.impl : null, kernel_version: ver(conf.kernel_version), at: str(conf.at) } : null;
 
+// p0.4.4：不変条件（INV-01〜12）と承認待ちの票は、別のファイル kernel-invariants.json に書く（vgdd.kernel-invariants.v1）。
+//   kernel-state.json の形（v1）は変えない（Kernel の区画 T-022 は strict で検証するので、項目を足すと全体が捨てられる）
+//   自由な文（不変条件や票の題名）は出さない。ID・状態・件数・真偽だけ（Codex の監査 p0.4.4 #3。題名は画面が固定の文で持つ）
+const INV_STATUS = new Set(['enforced', 'partial', 'not_applicable']);
+let capsInv = []; try { capsInv = JSON.parse(capsSrc.stdout).invariants || []; } catch { /* なし */ }
+// 不変条件ごとの結果は、今の法律の版を稼働中の実装（z3）で試した記録のときだけ使う（別の版・原本の結果を今の検証済みに見せない。#7）
+const implSha = (() => {   // run.mjs --record と同じ並びで、稼働中の Z3 の実装の指紋を作る（照合にだけ使い、出さない）
+  const files = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh'].map((f) => path.join(Z3, 'bin', f)).concat([path.join(Z3, 'hooks/policy.mjs'), path.join(Z3, 'hooks/verify-chain.mjs')]);
+  return crypto.createHash('sha256').update(files.map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return '<なし>'; } }).join('\n--\n'), 'utf8').digest('hex');
+})();
+const confCurrent = !!conf && conf.impl === 'z3' && ver(conf.kernel_version) !== null && conf.kernel_version === kernel_version && conf.impl_sha256 === implSha;
+const invariants = capsInv.filter((i) => /^INV-\d{2}$/.test(i.id || '') && INV_STATUS.has(i.status)).slice(0, 50).map((i) => {
+  const r = confCurrent ? conf.invariants?.[i.id] : undefined;
+  return { id: i.id, status: i.status, tests: Array.isArray(i.tests) ? cnt(i.tests.length) : 0, verified: r === 'pass' ? true : r === 'fail' ? false : null };
+});
+const verified_by = confCurrent ? { kernel_version: ver(conf.kernel_version), impl: 'z3', at: str(conf.at) } : null;
+// 承認待ち（ADR-039 の最小形）：main の票のうち status が ready・in_progress・review・blocked で、今の仕様と法律の系統の承認がないもの
+//   （未承認の申請を裁判所が blocked にした票も残す。#4）
+const pending_approvals = [];
+for (const rel of tree.filter((f) => /^docs\/tasks\/T-\d{3,4}-[^/]*\.md$/.test(f))) {
+  const body = git('show', `main:${rel}`).stdout || '';
+  const fm = (body.match(/^---\n([\s\S]*?)\n---/) || [])[1] || '';
+  const get = (k) => ((fm.match(new RegExp(`^${k}: *(.*)$`, 'm')) || [])[1] || '').replace(/ *#.*$/, '').trim();
+  if (!['ready', 'in_progress', 'review', 'blocked'].includes(get('status'))) continue;
+  const task = get('id'); if (!TASK_RE.test(task)) continue;
+  const ok = digestBin && spawnSync('node', [digestBin, '--repo', REPO, '--ref', 'main', '--ticket', rel, '--check', path.join(EV, 'spec_approvals.jsonl')], { encoding: 'utf8' }).status === 0;
+  if (!ok) pending_approvals.push({ task, status: get('status') });
+  if (pending_approvals.length >= MAX_ITEMS) break;
+}
+const invState = { schema: 'vgdd.kernel-invariants.v1', generated_at: null, kernel_version, verified_by, invariants, pending_approvals };
+
 const state = { schema: 'vgdd.kernel-state.v1', generated_at: null, kernel_version, policy_version, stopped, judiciary, approvals, held, rulings, annulments, verdicts: { count: cnt(vcount), by_task: Object.fromEntries(Object.entries(by_task).sort().slice(-MAX_ITEMS)) }, disagreements, evidence, conformance };
 
 // 書き出し（Codex の指摘 #7）：出力先の親と祖先（--repo の中）がシンボリックリンクでない実のディレクトリであることを確かめ、
@@ -135,11 +167,15 @@ try {
   }
   fs.mkdirSync(dir, { recursive: true });
   if (!fs.lstatSync(dir).isDirectory()) throw Object.assign(new Error('出力先の親がディレクトリでない'), { code: 'ENOTDIR_LINK' });
-  state.generated_at = jst(Date.now());
-  const tdir = fs.mkdtempSync(path.join(dir, '.kernel-state.json.tmp-'));
-  const tmp = path.join(tdir, 'kernel-state.json');
-  try {
-    fs.writeFileSync(tmp, JSON.stringify(state, null, 2) + '\n', { flag: 'wx', mode: 0o644 });
-    fs.renameSync(tmp, OUT);
-  } finally { fs.rmSync(tdir, { recursive: true, force: true }); }
+  state.generated_at = invState.generated_at = jst(Date.now());
+  const put = (obj, out) => {
+    const tdir = fs.mkdtempSync(path.join(dir, `.${path.basename(out)}.tmp-`));
+    const tmp = path.join(tdir, path.basename(out));
+    try {
+      fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n', { flag: 'wx', mode: 0o644 });
+      fs.renameSync(tmp, out);
+    } finally { fs.rmSync(tdir, { recursive: true, force: true }); }
+  };
+  put(state, OUT);
+  put(invState, path.join(dir, 'kernel-invariants.json'));
 } catch (e) { console.error(`書き出しに失敗：${e.code || e.message}`); process.exit(1); }
