@@ -1002,10 +1002,10 @@ function groupA(fx, probes) {
   record('A', 'A13', '競合の形のチェックポイントのとき、N+1 行目を差し替えると検証は失敗する', v3().status === 1);
   put(lines, [{ count: N, last_sha256: sha256hex(lines[N + 1]) }]);
   record('A', 'A14', 'ハッシュが N+2 行目と一致する食い違いは競合とみなさず、検証は失敗する', v3().status === 1);
-  put(lines, [raceCp, { count: N + 1, last_sha256: sha256hex(lines[N + 1]) }, { count: 1, last_sha256: '0'.repeat(64) }]);
+  put(lines, [raceCp, { count: N + 1, last_sha256: sha256hex(lines[N]) }, { count: 1, last_sha256: '0'.repeat(64) }]);
   const mix = v3(); const mixS = v3(['--summary-json']);
   record('A', 'A15', '正常・競合・不正のチェックポイントが混ざれば失敗（通常の出力と --summary-json の両方。注記は出す）。競合と正常だけなら --summary-json でも通る',
-    mix.status === 1 && mixS.status === 1 && /チェックポイントの注記/.test(mix.stderr) && (put(lines, [raceCp, { count: N + 1, last_sha256: sha256hex(lines[N + 1]) }]), v3(['--summary-json']).status === 0));
+    mix.status === 1 && mixS.status === 1 && /チェックポイントの注記/.test(mix.stderr) && (put(lines, [raceCp, { count: N + 1, last_sha256: sha256hex(lines[N]) }]), v3(['--summary-json']).status === 0));
 }
 
 // ---- 観測（合否なし）：実際のリポジトリで、票の status を誰が変えたか ------------------------------------
