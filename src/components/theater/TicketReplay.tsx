@@ -4,18 +4,23 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import type { Replay } from "@/lib/governance-replay-schema";
 import {
   elapsedLabel,
+  FEATURED_TICKETS,
   formatJst,
   INITIAL_REPLAY,
   intervalMs,
   labelFor,
-  pickFeatured,
+  marksLabel,
+  REPLAY_FILTERS,
   REPLAY_SPEEDS,
+  replayOptions,
   replayReducer,
+  ticketMarks,
   ticketSignature,
   toneFor,
   verdictLabels,
   type EventClass,
   type ReplayAction,
+  type ReplayFilter,
 } from "@/lib/theater-replay";
 import { theaterTokens } from "./tokens";
 
@@ -39,6 +44,9 @@ const TONE_TOKENS = {
 
 const BEFORE_START = "再生を押すと、この票の記録を順に追います";
 
+// 外枠は親の高さに従い、収まらない分は区画の中でスクロールする（T-040 A2）
+const ROOT_CLASS = "flex h-full min-h-0 flex-col gap-2 overflow-y-auto";
+
 const BUTTON_CLASS =
   "rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100 hover:bg-slate-700 aria-disabled:cursor-not-allowed aria-disabled:border-slate-800 aria-disabled:bg-slate-900 aria-disabled:text-slate-400";
 
@@ -53,12 +61,22 @@ function ToneBadge({ event }: { event: EventClass }) {
   );
 }
 
+// 選ぶ欄の文（T-040 A2）。代表の票には先頭に★、印があれば後ろに（…）
+function optionText(option: ReplayTicket): string {
+  const featured = (FEATURED_TICKETS as readonly string[]).includes(option.id) ? "★" : "";
+  const marks = marksLabel(ticketMarks(option));
+  return `${featured}${option.id} ${option.title}${marks ? `（${marks}）` : ""}`;
+}
+
 // 統治シアターの下の区画に置く、票1枚の再生（T-032）。データは取りに行かず、props の出来事だけを出す。
+// 選べるのは記録のある全票。代表の票を先頭に、残りを ID の順に並べ、印で絞り込める（T-040）。
 export default function TicketReplay({ tickets, onEventChange, initialTicketId = null }: TicketReplayProps) {
-  const options = pickFeatured(tickets);
-  // 初期値は作られたときにだけ使われる
+  const [filter, setFilter] = useState<ReplayFilter>("all");
+  const allOptions = replayOptions(tickets, "all");
+  const options = filter === "all" ? allOptions : replayOptions(tickets, filter);
+  // 初期値は作られたときにだけ使われる。最初の並び（"all"）にあればその票
   const [selectedId, setSelectedId] = useState(
-    options.find((option) => option.id === initialTicketId)?.id ?? options[0]?.id ?? null,
+    allOptions.find((option) => option.id === initialTicketId)?.id ?? allOptions[0]?.id ?? null,
   );
   const [replay, dispatch] = useReducer(replayReducer, INITIAL_REPLAY);
 
@@ -104,10 +122,34 @@ export default function TicketReplay({ tickets, onEventChange, initialTicketId =
     latest.current.onEventChange(latest.current.currentEvent);
   }, [notifyKey]);
 
+  // 絞り込みのボタンの組は、並びが空でも出して押せる（T-040 A2）
+  const filterGroup = (
+    <div role="group" aria-label="票の絞り込み" className="flex flex-wrap gap-1">
+      {REPLAY_FILTERS.map(({ value, label }) => (
+        <button
+          key={value}
+          type="button"
+          aria-pressed={filter === value}
+          onClick={() => setFilter(value)}
+          className={`${BUTTON_CLASS} aria-pressed:border-slate-300 aria-pressed:font-semibold`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+  // 件数は絞り込みの前の、出来事が1件以上ある票の数（代表の票を含む）
+  const indexNote = (
+    <p className="shrink-0 text-xs text-slate-300">
+      {`記録のある票は全 ${allOptions.length} 票です。★の代表の票を先頭に、残りを ID の順に並べます`}
+    </p>
+  );
   if (!ticket) {
     return (
-      <div className="h-full min-h-0">
-        <p>再生できる票がありません</p>
+      <div className={ROOT_CLASS}>
+        <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">{filterGroup}</div>
+        {indexNote}
+        <p>この条件に合う票はありません</p>
       </div>
     );
   }
@@ -124,18 +166,19 @@ export default function TicketReplay({ tickets, onEventChange, initialTicketId =
   ] as const;
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
+    <div className={ROOT_CLASS}>
       <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
+        {filterGroup}
         <label className="flex min-w-0 items-center gap-2 text-sm">
           <span className="shrink-0">票を選ぶ</span>
           <select
             value={ticket.id}
             onChange={(e) => setSelectedId(e.target.value)}
-            className="min-w-0 max-w-full truncate rounded border border-slate-600 bg-slate-800 px-2 py-1 text-slate-100"
+            className="min-w-0 max-w-full truncate rounded border border-slate-600 bg-slate-800 px-2 py-1 text-slate-100 lg:max-w-md"
           >
             {options.map((option) => (
               <option key={option.id} value={option.id}>
-                {option.id} {option.title}
+                {optionText(option)}
               </option>
             ))}
           </select>
@@ -167,6 +210,7 @@ export default function TicketReplay({ tickets, onEventChange, initialTicketId =
           ))}
         </div>
       </div>
+      {indexNote}
 
       <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 rounded border border-slate-700 bg-slate-900 px-3 py-2">
         {currentEvent && <ToneBadge event={currentEvent} />}
@@ -179,7 +223,7 @@ export default function TicketReplay({ tickets, onEventChange, initialTicketId =
         </p>
       </div>
 
-      <ol aria-label="この票の出来事" tabIndex={0} className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
+      <ol aria-label="この票の出来事" tabIndex={0} className="min-h-16 flex-1 space-y-1 overflow-y-auto pr-1">
         {events.map((event, i) => {
           const isCurrent = i === replay.index;
           return (

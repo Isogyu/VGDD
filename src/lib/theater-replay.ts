@@ -166,6 +166,61 @@ export function pickFeatured<T extends { id: string }>(tickets: readonly T[]): T
   return FEATURED_TICKETS.flatMap((id) => tickets.find((ticket) => ticket.id === id) ?? []);
 }
 
+// 全票の索引（T-040）。印は公開用の出来事の分類（T-028）に出てきた数だけで数える。
+// 生の §6・判定の結論・今の状態から推し量らず、後の訂正や取り消しで引かない。released は裁定に入れない。
+
+export type TicketMarks = { returned: number; disagreement: number; ruling: number };
+
+/** 票ごとの印の数（差し戻し・判定の不一致・人の裁定） */
+export function ticketMarks(ticket: { events: readonly EventClass[] }): TicketMarks {
+  const marks: TicketMarks = { returned: 0, disagreement: 0, ruling: 0 };
+  for (const { kind, reason } of ticket.events) {
+    if (kind === "returned") marks.returned += 1;
+    else if (kind === "minor_disagreement" || (kind === "blocked" && reason === "disagreement")) marks.disagreement += 1;
+    else if (kind === "ruling") marks.ruling += 1;
+  }
+  return marks;
+}
+
+export type ReplayFilter = "all" | keyof TicketMarks;
+
+export const REPLAY_FILTERS: readonly { value: ReplayFilter; label: string }[] = [
+  { value: "all", label: "すべて" },
+  { value: "disagreement", label: "不一致あり" },
+  { value: "ruling", label: "裁定あり" },
+  { value: "returned", label: "差し戻しあり" },
+];
+
+/** 出来事が1件以上ある票を、代表の票（pickFeatured の順）を先頭に、残りを id の昇順で並べ、絞り込みの印が 1 以上のものだけ残す */
+export function replayOptions<T extends { id: string; events: readonly EventClass[] }>(
+  tickets: readonly T[],
+  filter: ReplayFilter,
+): T[] {
+  const withEvents = tickets.filter((ticket) => ticket.events.length > 0);
+  const featured = pickFeatured(withEvents);
+  // 同じ id の票は最初の1つだけ入れる
+  const seen = new Set<string>(featured.map((ticket) => ticket.id));
+  const rest: T[] = [];
+  for (const ticket of withEvents) {
+    if (seen.has(ticket.id)) continue;
+    seen.add(ticket.id);
+    rest.push(ticket);
+  }
+  // 文字列の昇順（ロケールに依らない比較）
+  rest.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const ordered = [...featured, ...rest];
+  return filter === "all" ? ordered : ordered.filter((ticket) => ticketMarks(ticket)[filter] >= 1);
+}
+
+/** 0 でない印だけを「差し戻し」「不一致」「裁定」の順に「・」でつなぐ。すべて 0 なら空 */
+export function marksLabel(marks: TicketMarks): string {
+  const parts: string[] = [];
+  if (marks.returned > 0) parts.push(`差し戻し ${marks.returned}`);
+  if (marks.disagreement > 0) parts.push(`不一致 ${marks.disagreement}`);
+  if (marks.ruling > 0) parts.push(`裁定 ${marks.ruling}`);
+  return parts.join("・");
+}
+
 /** 票が変わったか、出来事の数か seq の並びが変わったかを比べるための文字列 */
 export function ticketSignature(ticket: { id: string; events: readonly { seq: number }[] } | null): string {
   return ticket ? `${ticket.id}|${ticket.events.map((event) => event.seq).join(",")}` : "";
