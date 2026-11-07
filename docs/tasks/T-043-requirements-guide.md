@@ -1,7 +1,7 @@
 ---
 id: T-043
 title: 初心者向けの要件確認（/requirements）を足す。固定の質問・回答・未解決の事項・受け入れ条件の候補を LLM から独立したデータで持ち、票の下書きの文を出す
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 3
 time_limit_min: 210
 security_review: true          # 新しい API とローカルのデータ。外へ出さない・Z3 に触れないことを確かめる
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a63c5d0f33ec9eeef
+worker: W40
 files_allowed:
   - src/lib/requirements/questions.ts                 # 新設：固定の質問の型
   - src/lib/requirements/model.ts                     # 新設：完成度・未解決の一覧・下書きの文・AI の提案の検証（純粋関数）
@@ -96,6 +96,14 @@ held の後、立法補佐が候補で確かめる（build は作業員の sandb
 決定論的な監査＋ judge ＋ Codex judge ＋ Codex security。ほかの票とファイルが重ならないので、並行でよい。
 
 ## 6. 記録
+
+- 23:52 行政の長が W40 を起動（worktree `agent-a63c5d0f33ec9eeef`、main f4c3403 から、モデルは Opus。T-040 の W38・T-042 の W39 と並行。D-67 の同時3体の枠の中）。仕様はオーナーが 23:50:01 に approve-spec で承認済み（23:51:40 の Kernel の写しの `approvals[].current` で確かめた）。依存の T-034 は統合済み。作業員の起動は Kernel の窓口の外（法律の改正 L2 の配置の前のため、予算の管理の外）
+- W40 の報告：HEAD `fb146daeca3b73b0523123f5421525cb45c9f2b9`、f4c3403 の上に1コミット。test 1003 件（52 ファイル。新しい試験は model 20・store と API 26・画面 4）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:875` の `stopsDir` で差分の外）
+- 行政の長の確認（試験は再実行していない）：差分は A0 の10ファイルだけ（+2458）。新しいファイルに `@/lib/db`・`@/lib/ai`・`child_process`・`console.` はない（git grep）。画面の `fetch` は `/api/requirements*` と `/api/governance/kernel` だけ。画面に「承認する」の文字はない。2つの `route.ts` は、どのメソッドも最初に `checkLoopback`（要求の URL の hostname と `Host` の両方が loopback）を通し、更新は `checkUpdateHeaders`（`Origin` が欠け・`"null"`・別の origin なら 403、`Content-Type` が `application/json` でなければ 415）、本文は `readJsonBody`（ストリームを読みながら数え、32,768 バイトを超えた時点で 413。`Content-Length` は見ない）。内部のエラーは固定の符号だけを返す
+- W40 が「§2 から外れる解釈」として挙げたもの：既存の API の `connection()` を使わない（行政の長の「既存の流儀に合わせる」の指示から外れる）。理由は、`connection()` が要求の外で例外を投げ、A4 の `Request` を直接渡す試験で GET が必ず 500 になること、POST・PUT を export するルートは Next.js がビルド時に静的に固めないこと（`hasNonStaticMethods`）。行政の長の判断：§2 は `connection()` を定めていないので、§2 の範囲内とした。静的に固められないことは build で未検証
+- 読み方が割れる所（W40 の選んだ読み方）：(1) 「回答を変えたら、前の提案と採否を無効にする」は、回答の中身が変わったときだけ無効にする（票の ID だけを変えた保存では提案を残す）。`answers_version` は保存のたびに増やすので、その後は古い版の材料で作った提案の JSON は拒まれる (2) 「反例が未確認」は、下書きの「未解決の事項」と `unresolved()` の結果（画面の右の欄）の両方に出す (3) `parseAiSuggestions` の `json` は、貼った文字列と解析済みの値の両方を受ける (4) 文字数の「字」はコードポイントで数える（画面の `maxLength` は UTF-16 で数えるので、画面の上限は同じかより厳しい）
+- 補った解釈（文面の範囲内）：(1) 入口の検査の関数は `store.ts`（サーバー側だけ）に置く（ルートのファイルは決まった名前しか export できないため） (2) `suggestions_version` の列を足す（A4 が求める）。取り込み・採否の更新・回答の変更による無効化で増やすので、同じ版での2回目の採否は 409 (3) 範囲外の採否の番号は 400 (4) 画面に「未決定に戻す」のボタン（`decision: "pending"`） (5) `Origin` は、要求の URL の origin と同じ、host が `Host` と同じ、文字列が origin の直列化そのもの（パス付きは拒む）。`Content-Type` の charset は utf-8 だけ (6) 本文が UTF-8 として正しくなければ 400 (7) `Host` の末尾の点・空のポート・利用者の情報は拒み、大文字は許す (8) DB のパスの検査に `TSUBUYAKI_DB_PATH` も入れる。Z3 との比較は大文字と小文字を区別しない。正規化だけの形と記号リンクを解いた形の両方で比べる (9) 検査を通った指定についてだけ、DB を開く前に親のフォルダを作る (10) 記録の ID は UUID。形の違う ID は DB に触れずに 404 (11) 空白だけの提案は拒む。提案 0 件の取り込みは許す (12) 承認の状態は、記録を開いたときと票の ID を変えて保存したときに1回だけ取る（定期には取らない）。未来の `generated_at` は「古い」としない (13) 応答に `Cache-Control: no-store`
+- **確かめていない**：実際のブラウザでの操作（質問に答える・未解決が減る・下書きが出る・AI の提案の取り込みと古い版の拒否・採否・コピー）、実サーバーでの API（Next.js の dev・start で `req.url` の host が `Host` から作られるか。食い違えば正しい要求も 403 になる。ブラウザが同じ origin の PUT・POST に `Origin` を付けるか）、375px での収まり、`npm run build`（`connection()` なしで静的に固められないこと、バンドラーが `node:sqlite` を扱えること、cacheComponents の下で `/requirements` を prerender できること）、dev の HMR で DB が何度も開かれないか。残る限界として、パスの検査と DB を開く間の記号リンクの差し替え（TOCTOU）。§3 で立法補佐が held の候補で確かめる
 
 ## オーナーに聞くこと
 
