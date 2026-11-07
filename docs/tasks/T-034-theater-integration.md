@@ -119,3 +119,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 
 1. 最初に見せる source は「提出記録」にする（clone した審査員でも中身が出る。録画では「稼働中の観測」に切り替えて見せられる）
 2. 試作の入口 `/governance/theater` は残す（消すのはファイルの削除なので、オーナーの承認が要る。提出の後に整理する）
+
+- 2026-11-07T15:28:45+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
