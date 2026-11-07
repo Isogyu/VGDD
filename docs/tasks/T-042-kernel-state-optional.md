@@ -42,12 +42,12 @@ depends_on: [T-022, T-030]
 - A0. 差分を許すパスは次の2つだけ：`src/lib/kernel-state-schema.ts`、`src/lib/kernel-state.test.ts`。それ以外は変更しない。今の項目と今の入力に対する検証・整形・`verdicts.by_task` の扱い（`pickKernelState`・`toWire`・`formatJst`）は変えない。A1 の新しい3項目を受け取り、`pickKernelState` と `toWire` の結果に保つ変更は許す。3項目はそれぞれ独立に省いてよく、省いた項目を作り足さない
 - A1. **任意の3項目**（`kernelStateSchema` の strict のまま、次の3つを `.optional()` で足す。書かれていなければ検証を通り、値は `undefined`）：
   - ここでの「数」は 0 以上 `Number.MAX_SAFE_INTEGER` 以下の整数で、新しい3項目だけの検証を使う（今の `Count`（上限 100 万）と `Iso` は流用もしないし変えもしない）。票の ID は今の `TaskId` と同じ（`T-` と ASCII の数字3〜4桁）
-  - `budget`：`{ period_id: 文字列（1〜40字）, until: タイムゾーン付きの有効な日時の文字列か null, tokens: { settled: 数, reserved: 数, unknown_runs: 数, limit: 数か null }, judge_calls: { used: 数, limit: 数か null }, attempts: { used: 数, limit: 数か null }, workers: { active: 数, limit: 数か null } }`（すべての階層で strict）。集計の対象は `period_id` の期間
+  - `budget`：`{ period_id: 文字列（1〜40字）, until: 次の形の日時の文字列か null（`YYYY-MM-DDTHH:MM:SS`、続けて任意で `.` と1〜9桁の小数秒、最後に `Z` か `+HH:MM`・`-HH:MM`。全体で 40 字まで。この形で `Date.parse` が数を返すこと。秒の省略や10桁以上の小数秒は受け付けない）, tokens: { settled: 数, reserved: 数, unknown_runs: 数, limit: 数か null }, judge_calls: { used: 数, limit: 数か null }, attempts: { used: 数, limit: 数か null }, workers: { active: 数, limit: 数か null } }`（すべての階層で strict）。集計の対象は `period_id` の期間
   - `runs`：`{ requested: 数, reserved: 数, started: 数, exited: 数, settled: 数, cancelled: 数, liveness_unknown: 数, usage_unknown: 数 }`（strict）。`requested`〜`cancelled` は今の状態ごとの件数、`liveness_unknown`・`usage_unknown` はそれぞれの不明の件数で、ほかの件数との重なりを許す。集計の対象は `period_id` の期間
   - `acceptance`：`{ accepted_count: 数, pending_count: 数, accepted: 票の ID の配列（最大 500）, pending: 票の ID の配列（最大 500） }`（strict）。件数は配列の長さ以上
   - 型 `KernelState` に、この3つを任意の項目として含める（`KernelStateWire` も同じ）
 - A2. **公開してよい項目だけ**：3項目に、文字列は `period_id`・`until`・票の ID しか入らない。それ以外の項目（理由の本文・パス・ハッシュなど）が中にあれば strict で拒む
-- A3. 試験（`kernel-state.test.ts` に足す。今の試験はそのまま）：3項目のない今の写し（リポジトリの `docs/governance/snapshots/submission/kernel-state.json` を含む）が今までどおり通ること。3項目の正しい合成の値が通り、`toWire` で同じ値が返ること。足したすべての階層の余分な鍵、数の欄の負の数・小数・安全な整数の範囲外、配列の票の ID でない文字列と 501 件、長すぎる `period_id`、不正な `until`、件数が配列の長さより小さい `acceptance` で、写し全体が `null` になること。30,000,000 が通ること。3項目のうち1つだけを足した写しが通ること
+- A3. 試験（`kernel-state.test.ts` に足す。今の試験はそのまま）：3項目のない今の写し（リポジトリの `docs/governance/snapshots/submission/kernel-state.json` を含む）が今までどおり通ること。3項目の正しい合成の値が通り、`toWire` で同じ値が返ること。足したすべての階層の余分な鍵、数の欄の負の数・小数・安全な整数の範囲外、配列の票の ID でない文字列と 501 件、長すぎる `period_id`、不正な `until`（秒の省略・10桁の小数秒・タイムゾーンなしを含む）、件数が配列の長さより小さい `acceptance` で、写し全体が `null` になること。30,000,000 が通ること。3項目のうち1つだけを足した写しが通ること
 - A4. `npm run -s test`・`npm run -s typecheck`・`npm run -s lint` が通る
 
 ## 3. 開発用テスト
