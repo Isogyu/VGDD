@@ -1,7 +1,7 @@
 ---
 id: T-043
 title: 初心者向けの要件確認（/requirements）を足す。固定の質問・回答・未解決の事項・受け入れ条件の候補を LLM から独立したデータで持ち、票の下書きの文を出す
-status: in_progress
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 3
 time_limit_min: 210
 security_review: true          # 新しい API とローカルのデータ。外へ出さない・Z3 に触れないことを確かめる
 unattended: false
-branch: worktree-agent-a63c5d0f33ec9eeef
-worker: W40
+branch: worktree-agent-a35928ef1988ceaae
+worker: W45
 files_allowed:
   - src/lib/requirements/questions.ts                 # 新設：固定の質問の型
   - src/lib/requirements/model.ts                     # 新設：完成度・未解決の一覧・下書きの文・AI の提案の検証（純粋関数）
@@ -111,3 +111,9 @@ held の後、立法補佐が候補で確かめる（build は作業員の sandb
 2. 初心者が本当に使えるかは未検証。開発の経験のない人に試してもらうまで、README では「仮説」と書く
 
 - 2026-11-08T00:14:54+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
+- 03:1x 差し戻しの指摘（オーナーが Z3 から共有。Codex judge と Codex security が同じ1点、judge は APPROVED）：`RequirementsGuide.tsx` の `open()` は成功のたびに承認の表示を空に戻すのに、取り直す `useEffect` の依存は `ticketId` だけ。そのため「読み込み直す」・同じ記録の再選択・同じ票 ID の別の記録を開くと取り直されず、表示が「読み込み中…」のまま戻らない（A5）。実装の不具合で、§2 は変えない（承認は 23:50:01 のまま。03:14:20 の Kernel の写しの `approvals[].current` で確かめた）
+- 03:15 行政の長が W45 を起動（worktree `agent-a35928ef1988ceaae`、main 7e255de から、モデルは Opus。T-042 の W43・T-044 の W44 と並行）。`fb146da` を cherry-pick させ、承認の表示を空に戻す契機と取り直す契機をそろえさせた。作業員の起動は台帳の外（昼の作業員は次の改正 L2 で窓口に寄せる）
+- W45 の報告：HEAD `7b8b493a3579d2871f566f262c08c6d2e6a2bda2`、7e255de の上に1コミット（A0 の10ファイル、+2539）。承認の表示を `ApprovalSlot = { generation, view }` の1つの state にした。空に戻す3か所（`create()`、`open()`、票 ID が変わったときの `save()`）は、どれも世代を1つ進める `resetApproval()` にした。取り直す `useEffect` の依存は `[ticketId, generation]` で、空に戻すたびに必ず取り直す。AbortController の中断は保ち、応答は取得を始めたときの世代と比べ、古ければ捨てる（`applyApprovalResponse`）。純粋関数（`resetApprovalSlot`・`applyApprovalResponse`）を部品のファイルから export し、試験を5件足した（空に戻すと世代が進む、3つの場面で依存が変わり新しい応答で表示が戻る、古い応答で上書きしない）。test は 1032 件（52 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:880` の `stopsDir` で差分の外）
+- 行政の長の確認（試験は再実行していない）：`fb146da` から変わったのは `RequirementsGuide.tsx`（+32 / -6）と `RequirementsGuide.test.tsx`（+57 / -2。-2 は import の書き換えで、今ある試験の中身は同じ）だけ。`setApproval(null)` はすべて `resetApproval()` に置き換わり、ほかの部分は変わっていない
+- 補った解釈：(1) 表示を空に戻すたびに必ず取り直す (2) `create()` の後は票 ID が null なので、世代が進んでも取得しない (3) `save()` で票 ID が変わらないときは、空に戻さず取り直しもしない（元の動きのまま）
+- **確かめていない**：ブラウザでの実際の操作（3つの場面で表示が戻るか、React が effect を動かし直して abort するか、開発時の StrictMode での見え方）。3つの場面が `open()` を通ることは、コードの構造で保っているだけで、試験していない。ほかに、前の記録と同じもの（実サーバーでの API と `GET /api/governance/kernel`、375px、`npm run build`）。§3 で立法補佐が held の候補で確かめる
