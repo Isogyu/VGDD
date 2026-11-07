@@ -1,7 +1,7 @@
 ---
 id: T-032
 title: 票1枚の記録を、再生・一時停止・1つ送り・1つ戻しで追える再生の部品を作る（統治シアター U4）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7, A8]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 3
 time_limit_min: 210
 security_review: false         # データを取りに行かない。props で受けた公開用のイベントを表示するだけ
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a3915ebf8babf02b6
+worker: W28
 files_allowed:
   - src/lib/theater-replay.ts                    # 新設：出来事の表示の文・時刻・再生の状態の純粋関数
   - src/lib/theater-replay.test.ts               # 新設
@@ -122,6 +122,12 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 決定論的な監査＋ judge ＋ Codex judge。T-031 とはファイルが重ならない（出来事から図の光る場所への変換 `focusFor` の呼び出しと、データの取得は T-034）。
 
 ## 6. 記録
+
+- 12:29 行政の長が W28 を起動（worktree `agent-a3915ebf8babf02b6`、main ea8367f から、モデルは Opus）。仕様はオーナーが 12:27:06 に approve-spec で承認済み（12:28:28 の Kernel の写しの `approvals[].current` で確かめた）。依存の T-029・T-030 は統合済み
+- W28 の報告：HEAD `ca1c13eca8b1a386c2ac6d02a3727a24adfac957`。test 673 件（34 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:851` で差分の外）。**再生・クリック・タイマーの片付け・再開の数え直し・`onEventChange` の呼び出しは、動かして確かめていない**（A8 の範囲外で、DOM の試験用ライブラリもない）。実際の CSS の見え方も未確認。§3 で立法補佐が held の候補で確かめる
+- 行政の長の確認（試験は再実行していない）：差分は `files_allowed` の4つだけ（+894）。A1 の16の文、A4 の遷移、A6 のタイマーと通知の実装を §2 と読み合わせた
+- 補った解釈：(1) `other`／`null` の `toneFor` は `"normal"`。A2 の「それ以外」に当たると読んだ。文は「記録の分類の外の出来事」なのに印が付かないので、`unknown` にしたいなら §2 の変更が要る (2) 0件の `setSpeed` は index と playing を初期に戻し、速さは指定に従う (3) 変化がなければ `replayReducer` は同じオブジェクトを返す (4) 時刻は `Date.parse` を使わず正規表現で読み、+9 時間を固定で足す。存在しない日時、`+2400` の形の時差、西暦 0000〜0099 年は「読めない」。日本に夏時間があった 1948〜51 年の日時は1時間ずれる（記録は 2026 年なので影響しない）(5) `onEventChange` のキーは「票の ID と seq の並び＋ index」。マウント直後は呼ばない。例の票がすべて消えたときも `null` を呼ぶ (6) 同じ seq の並びで中身だけが変わった `tickets` は §2 のとおり reset せず通知もしないので、親の持つ出来事は古いままになる (7) 票を選ぶ欄は `<select>`、速さは `aria-pressed` 付きのボタン3つ（ボタンは計8個）。押しても変わらないボタンは `disabled` でなく `aria-disabled` (8) `aria-live` の欄には A1 の文だけを入れ、印はその外 (9) 票にない補助として `pickFeatured`・`ticketSignature`・`verdictLabels`・`REPLAY_SPEEDS` を足した
+- T-034 への申し送り：一覧の自動スクロールは入れていない（A6 の「文字と強調の切り替えだけ」に従った）。区画が低いと、強調された行が見える範囲から外れることがある。今の出来事の文は固定の欄に常に出る
 
 ## オーナーに聞くこと
 

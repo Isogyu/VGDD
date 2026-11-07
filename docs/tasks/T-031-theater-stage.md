@@ -1,7 +1,7 @@
 ---
 id: T-031
 title: 統治シアターの主役の図（人・三権・Kernel・統合の SVG）を作り、記録の出来事ごとに光る場所を変える（統治シアター U3）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 3
 time_limit_min: 210
 security_review: false         # データを読まない。props で受けて描くだけ
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-aaa0305065aee77b0
+worker: W27
 files_allowed:
   - src/lib/theater-stage.ts                      # 新設：出来事 → 図のどこを光らせるかの純粋関数
   - src/lib/theater-stage.test.ts                 # 新設
@@ -100,6 +100,12 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 決定論的な監査＋ judge ＋ Codex judge。T-030 とはファイルが重ならない。
 
 ## 6. 記録
+
+- 12:29 行政の長が W27 を起動（worktree `agent-aaa0305065aee77b0`、main ea8367f から、モデルは Opus）。仕様はオーナーが 12:27:02 に approve-spec で承認済み（12:28:28 の Kernel の写しの `approvals[].current` で確かめた）
+- W27 の報告：HEAD `d446972aeb0268d60d070164b01d99d1e740bf87`。test 626 件（34 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:851` で差分の外）。**画面は動かしていない**。1440×900 の文字の重なり・欠け、Tailwind のクラスが CSS になること、`prefers-reduced-motion` は未確認で、§3 で立法補佐が held の候補で確かめる
+- 行政の長の確認（試験は再実行していない）：差分は `files_allowed` の4つだけ（+816）。A2 の表の全行を実装と照合した。`<path>`・`<polygon>` はそれぞれ8個ですべて `data-edge` の中。座標を読んだ範囲で、線は節を横切らない
+- 補った解釈：(1) §2 の表にない組み合わせ（`returned`・`blocked` で reason が `null` か表にない値）は `other` の行と同じ（何も光らせず `unknown`）(2) 司法の文字は3行に折り返した（「Claude と Codex」「（記録の構成。」「運用では Claude の別セッションでも可）」）。§2 は括弧の部分を2行目に折り返すとしているが、13px の1行では節の幅に収まらないため。文字は変えていない (3) `stopped` で止めるのは線の強調だけで、節の `data-active`、人の判断待ち、全体の確認できないは残す (4) `unknown` の「全体に」は、図の全面の灰色の破線の枠、左上の「確認できない」、各節の灰色の破線の枠。Kernel の停止中と人の判断待ちを優先する (5) 線のラベルは §1 の語。`held` でも escalate のラベルは「人への差し戻し」(6) 人の節の添え書き「承認・裁定・停止」は §1 と `tokens.ts` のコメントから (7) `viewBox` は `0 0 900 490` で文字は 13 以上。主役の区画の内側を幅約 899px と計算した値で、実測ではない (8) 司法の節の幅は 268 で、ほかの中段の節（260）より広い
+- T-034 への申し送り：SVG は `h-auto w-full` で幅に合わせて高さが決まる。画面の高さが 900 より低いと、区画に収まらず行が伸びる可能性がある
 
 ## オーナーに聞くこと
 
