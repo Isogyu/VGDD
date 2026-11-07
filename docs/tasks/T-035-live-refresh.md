@@ -1,7 +1,7 @@
 ---
 id: T-035
 title: 統治シアターの「稼働中の観測」を自動で取り直し、取得の時刻と失敗を見せる
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1.5
 time_limit_min: 120
 security_review: false         # 既存の API を取り直すだけ。API と公開の項目は変えない
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a26b67bf4ac66fd90
+worker: W31
 files_allowed:
   - src/lib/theater-refresh.ts                        # 新設：取り直した結果を今の表示に合わせる純粋関数
   - src/lib/theater-refresh.test.ts                   # 新設
@@ -105,6 +105,14 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 決定論的な監査＋ judge ＋ Codex judge。API と公開の項目は変えないので security は省く。続く票（Claude Code の使い分け、初めて見る人の案内）も `GovernanceTheater.tsx` を触るので、この票の統合の後に始める。
 
 ## 6. 記録
+
+- 21:28 行政の長が W31 を起動（worktree `agent-a26b67bf4ac66fd90`、main 813aa0a から、モデルは Opus）。仕様はオーナーが 21:23:47 に approve-spec で承認済み（21:28:15 の Kernel の写しの `approvals[].current` で確かめた）。依存の T-030・T-033・T-034 は統合済み
+- W31 の最初の報告：HEAD `8f8e059`。A3 の「最後の取得」を記録する条件を「両方とも failed のときだけ記録しない」と読んで実装し、行政の長の確認が要る点として挙げた。行政の長が差分を §2 と読み合わせ、文が2通りに読めること（片方だけ failed のとき時刻が進むか）をオーナーに確かめた
+- オーナーの判断：片方でも failed なら記録しない（失敗の文は出す）。§2 の A3 の文をこの意味に明確にして main 6b5e51d でコミットし、21:34:59 に承認し直した（21:36:53 の Kernel の写しの `approvals[].current` で確かめた）
+- W31 の直し：`shouldRecordFetch` を `!hasFailedSection(data)` に直し、試験の期待値を合わせた（片方だけ failed・missing と failed の組で false、ok と missing の組で true）。コミットに直しを入れ、オーナーの指示で基点を 6b5e51d に積み直した（衝突なし）。HEAD `ea931edca6a2b36ba0d2b428fc9821cb8f844d92`、6b5e51d の上に1コミット。test 817 件（42 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs` の `stopsDir` で差分の外）
+- 行政の長の確認（試験は再実行していない）：差分は A0 の4つだけ（+295 / -17）。8f8e059 からの変更は `theater-refresh.ts` の1行とコメントと試験だけ。期間の見分け（`periodRef` の番号を source の effect とその後始末で進め、応答の時点で番号が違えば反映しない）、排他（自動と「今すぐ取得」が同じ `refresh` を通り、`runningPeriodRef` で1つだけ。最初の取得も含む。前の期間の終わりの処理は今の期間の状態を消さない）、取り直しで replay の参照・`TicketReplay` の `key={source}` と描画の位置・`currentEvent` を変えないこと、`data` を `null` にするのは source を変えたときだけであることを、§2 と読み合わせた
+- 補った解釈（文面の範囲内）：(1) 提出記録の期間でも、最初の取得の結果で時刻と失敗の状態は内部で更新するが、表示はせず、source を変えたら初めに戻す (2) 「今すぐ取得」は `disabled` にせず、条件を満たさないときは押しても要求を出さない。切り替えのボタンと並べるため、両方を包む `div` を1つ足した（既存の `role="group"` はそのまま） (3) 失敗の文は見出しの区画の `dl` の下に `p` で置く（`role` は付けない） (4) `loadTheaterData` が reject したときの扱いは足していない（前のコードと同じ。`finally` で排他は戻る） (5) 応答の時点で今の表示の `data` が `null` なら、取り直しの結果は反映しない
+- **確かめていない**：タイマー（約15秒ごとの取り直し、source を変えたときと部品が外れたときの停止）、クリック（最初の取得の前の「今すぐ取得」、連打）、`live → submission → live` の往復の遅れた応答、1440×900 と 375px の実際の収まり（見出しの区画にボタン1つ・項目1つ・失敗のときの1行が増える）、`npm run build`、開発モードの StrictMode で effect が二重に走るときの振る舞い。§3 で立法補佐が held の候補で確かめる
 
 ## オーナーに聞くこと
 
