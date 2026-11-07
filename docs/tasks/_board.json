@@ -1,9 +1,9 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-07T19:47:17.131+09:00",
+  "generated_at": "2026-11-07T20:29:36.444+09:00",
   "totals": {
-    "tickets": 34,
-    "merged": 34,
+    "tickets": 35,
+    "merged": 35,
     "rejected": 35,
     "blocked": 0,
     "disagreements": 17
@@ -304,6 +304,15 @@
       "estimate_h": 3,
       "returns": 0,
       "merged_at": "2026-11-07T14:57:38+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-033",
+      "title": "統治シアターの下に「判例の比較」と「判断待ちと次の担当」の欄を足す（統治シアター U5・U6）",
+      "status": "merged",
+      "estimate_h": 2,
+      "returns": 0,
+      "merged_at": "2026-11-07T20:29:21+0900",
       "disagreements": 0
     },
     {
