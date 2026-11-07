@@ -1,7 +1,7 @@
 ---
 id: T-034
 title: 統治シアターを /governance の先頭に組み込み、今の区画を下の「証拠」に移し、旧い API から記録の文を除く（統治シアター U7）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7, A8]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64, D-65]   # 記録用。司法には渡さない
@@ -121,3 +121,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 2. 試作の入口 `/governance/theater` は残す（消すのはファイルの削除なので、オーナーの承認が要る。提出の後に整理する）
 
 - 2026-11-07T15:28:45+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T19:47:12+0900 release: status → merged（main=9d5079f2ce70。夜間の判定に合格した候補 dcccb5927899 を、オーナーが朝に承認して統合）
