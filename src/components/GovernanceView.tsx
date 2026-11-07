@@ -4,13 +4,14 @@
 // 出すのは件数と、票の §6 の行の時刻・担い手・状態だけ（記録の文は出さない。T-034）。生のログは扱わない。
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { PublicGovernance, PublicGovernanceEvent, PublicGovernanceTicket } from "@/lib/governance-public";
 import { formatMdHm } from "@/lib/time";
 import GovernanceMap from "@/components/GovernanceMap";
 import KernelPanel from "@/components/KernelPanel";
 import KernelInvariants from "@/components/KernelInvariants";
 import LawHistory from "@/components/LawHistory";
+import { EVIDENCE_SECTIONS, type EvidenceSectionKey } from "@/lib/evidence-sections";
 
 // 盤の列（この順に左から並べる）。5つ以外の status は「その他」へ
 const COLUMNS: { status: string; label: string }[] = [
@@ -90,6 +91,22 @@ function StatusBadge({ status }: { status: string | null }) {
   );
 }
 
+/**
+ * 「証拠」の区画1つを details で包む（T-041）。summary の文と open の初期値は EVIDENCE_SECTIONS の同じ key の行から取る。
+ * 開閉は details と summary の標準の振る舞いに任せ、React の state では持たない。
+ * open に渡す値は行ごとに決まった定数なので、再描画しても React が DOM の open を書き直すことはなく、
+ * 押して開閉した状態がそのまま残る（実質、初期値だけを与える形）。中身は閉じていてもマウントしたまま。
+ */
+function EvidenceDetails({ sectionKey, children }: { sectionKey: EvidenceSectionKey; children: ReactNode }) {
+  const row = EVIDENCE_SECTIONS.find((s) => s.key === sectionKey);
+  return (
+    <details open={row?.defaultOpen ?? false}>
+      <summary className="cursor-pointer py-2 font-medium">{row?.title ?? sectionKey}</summary>
+      {children}
+    </details>
+  );
+}
+
 export default function GovernanceView() {
   const [data, setData] = useState<PublicGovernance | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -146,97 +163,113 @@ export default function GovernanceView() {
         <p className="text-sm text-zinc-600 dark:text-zinc-300">
           題材のアプリ（つぶやき業務ログ）を AI のチームが開発したときの、実運用の集計・票の記録・検証結果。Kernel の写しは自動で取り直し、ほかの区画は画面を開いた時点のもの（件数とリポジトリの記録だけ。生のログは公開していない）
         </p>
+        <p className="text-sm text-zinc-600 dark:text-zinc-300">見出しを押すと開きます</p>
       </header>
 
-      <GovernanceMap board={data.board} summary={data.summary} />
-      <KernelPanel />
-      <KernelInvariants />
-      <LawHistory />
+      {/* 「証拠」の7つの区画。どれも details の中にマウントしたまま、見出しで開閉する（T-041） */}
+      <EvidenceDetails sectionKey="map">
+        <GovernanceMap board={data.board} summary={data.summary} />
+      </EvidenceDetails>
+      <EvidenceDetails sectionKey="kernel">
+        <KernelPanel />
+      </EvidenceDetails>
+      <EvidenceDetails sectionKey="invariants">
+        <KernelInvariants />
+      </EvidenceDetails>
+      <EvidenceDetails sectionKey="history">
+        <LawHistory />
+      </EvidenceDetails>
 
       {/* 2. 数字のタイル */}
-      <section aria-label="統治の数字" className="flex flex-col gap-2">
-        {summary ? (
-          <div className="flex flex-wrap gap-2">
-            <Tile label="証拠ストアの記録件数" value={summary.records} />
-            <Tile label="拒否" value={summary.tool_calls.deny} />
-            <Tile label="エージェントの種類" value={summary.agents} />
-            <Tile label="ハッシュチェーン" value={summary.chain_ok ? "改ざんなし" : "不整合"} />
-          </div>
-        ) : (
-          <p className="text-sm text-zinc-500">操作の集計はまだ書き出されていません</p>
-        )}
-        {board && (
-          <div className="flex flex-wrap gap-2">
-            <Tile label="票" value={board.tickets} />
-            <Tile label="統合" value={board.merged} />
-            <Tile label="差し戻し・停止の累計" value={board.rejected} note="裁判所が数えた、差し戻しと判断待ちの合計" />
-            <Tile label="司法の不一致" value={board.disagreements} />
-          </div>
-        )}
-      </section>
+      <EvidenceDetails sectionKey="numbers">
+        <section aria-label="統治の数字" className="flex flex-col gap-2">
+          {summary ? (
+            <div className="flex flex-wrap gap-2">
+              <Tile label="証拠ストアの記録件数" value={summary.records} />
+              <Tile label="拒否" value={summary.tool_calls.deny} />
+              <Tile label="エージェントの種類" value={summary.agents} />
+              <Tile label="ハッシュチェーン" value={summary.chain_ok ? "改ざんなし" : "不整合"} />
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-500">操作の集計はまだ書き出されていません</p>
+          )}
+          {board && (
+            <div className="flex flex-wrap gap-2">
+              <Tile label="票" value={board.tickets} />
+              <Tile label="統合" value={board.merged} />
+              <Tile label="差し戻し・停止の累計" value={board.rejected} note="裁判所が数えた、差し戻しと判断待ちの合計" />
+              <Tile label="司法の不一致" value={board.disagreements} />
+            </div>
+          )}
+        </section>
+      </EvidenceDetails>
 
       {/* 3. 票の盤 */}
-      <section aria-label="票の盤">
-        <h2 className="mb-2 text-sm font-medium text-zinc-500">票の盤</h2>
-        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          {columns.map((col) => (
-            <div key={col.status} className="rounded bg-zinc-50 p-2 dark:bg-zinc-900">
-              <h3 className="mb-2 text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                {col.label} <span className="text-zinc-400">{col.tickets.length}</span>
-              </h3>
-              <ul className="flex flex-col gap-1.5">
-                {col.tickets.map((t) => (
-                  <li key={t.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedId(t.id)}
-                      aria-pressed={t.id === currentId}
-                      className={`w-full rounded border p-2 text-left text-xs ${
-                        t.id === currentId
-                          ? "border-zinc-800 bg-white dark:border-zinc-200 dark:bg-zinc-800"
-                          : "border-zinc-200 bg-white hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-950"
-                      }`}
-                    >
-                      <div className="font-mono text-zinc-500">{t.id}</div>
-                      <div className="mt-0.5 line-clamp-3">{t.title}</div>
-                      <div className="mt-1 text-zinc-500">差し戻し {t.returns} 回</div>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </section>
+      <EvidenceDetails sectionKey="board">
+        <section aria-label="票の盤">
+          <h2 className="mb-2 text-sm font-medium text-zinc-500">票の盤</h2>
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+            {columns.map((col) => (
+              <div key={col.status} className="rounded bg-zinc-50 p-2 dark:bg-zinc-900">
+                <h3 className="mb-2 text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                  {col.label} <span className="text-zinc-400">{col.tickets.length}</span>
+                </h3>
+                <ul className="flex flex-col gap-1.5">
+                  {col.tickets.map((t) => (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(t.id)}
+                        aria-pressed={t.id === currentId}
+                        className={`w-full rounded border p-2 text-left text-xs ${
+                          t.id === currentId
+                            ? "border-zinc-800 bg-white dark:border-zinc-200 dark:bg-zinc-800"
+                            : "border-zinc-200 bg-white hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-950"
+                        }`}
+                      >
+                        <div className="font-mono text-zinc-500">{t.id}</div>
+                        <div className="mt-0.5 line-clamp-3">{t.title}</div>
+                        <div className="mt-1 text-zinc-500">差し戻し {t.returns} 回</div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      </EvidenceDetails>
 
       {/* 4. 票1枚の運命 */}
-      <section aria-label="票1枚の運命">
-        <h2 className="mb-2 text-sm font-medium text-zinc-500">票1枚の運命</h2>
-        {current ? (
-          <div className="rounded border border-zinc-200 p-3 dark:border-zinc-700">
-            <p className="text-sm font-medium">
-              <span className="font-mono text-zinc-500">{current.id}</span> {current.title}
-            </p>
-            {current.timeline.length === 0 ? (
-              <p className="mt-2 text-sm text-zinc-500">記録はまだありません</p>
-            ) : (
-              <ol className="mt-3 flex flex-col gap-2 border-l border-zinc-300 pl-4 dark:border-zinc-600">
-                {sortTimeline(current.timeline).map((e, i) => (
-                  <li key={`${e.ts}-${i}`} className="text-sm">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs text-zinc-500">{formatTs(e.ts)}</span>
-                      <span className="text-xs font-medium">{ACTOR_LABELS[e.actor]}</span>
-                      <StatusBadge status={e.status} />
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-        ) : (
-          <p className="text-sm text-zinc-500">票がありません</p>
-        )}
-      </section>
+      <EvidenceDetails sectionKey="fate">
+        <section aria-label="票1枚の運命">
+          <h2 className="mb-2 text-sm font-medium text-zinc-500">票1枚の運命</h2>
+          {current ? (
+            <div className="rounded border border-zinc-200 p-3 dark:border-zinc-700">
+              <p className="text-sm font-medium">
+                <span className="font-mono text-zinc-500">{current.id}</span> {current.title}
+              </p>
+              {current.timeline.length === 0 ? (
+                <p className="mt-2 text-sm text-zinc-500">記録はまだありません</p>
+              ) : (
+                <ol className="mt-3 flex flex-col gap-2 border-l border-zinc-300 pl-4 dark:border-zinc-600">
+                  {sortTimeline(current.timeline).map((e, i) => (
+                    <li key={`${e.ts}-${i}`} className="text-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs text-zinc-500">{formatTs(e.ts)}</span>
+                        <span className="text-xs font-medium">{ACTOR_LABELS[e.actor]}</span>
+                        <StatusBadge status={e.status} />
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-zinc-500">票がありません</p>
+          )}
+        </section>
+      </EvidenceDetails>
 
       {/* 5. 日時 */}
       <footer className="flex flex-wrap gap-4 text-xs text-zinc-500">
