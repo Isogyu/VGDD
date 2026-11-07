@@ -1,7 +1,7 @@
 ---
 id: T-034
 title: 統治シアターを /governance の先頭に組み込み、今の区画を下の「証拠」に移し、旧い API から記録の文を除く（統治シアター U7）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7, A8]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64, D-65]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 3
 time_limit_min: 210
 security_review: true          # API の応答を変える（公開してよい項目だけにする）
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a7ea5f6c7fe8f6632
+worker: W29
 files_allowed:
   - src/lib/governance-public.ts                   # 新設：旧い API の応答から記録の文を除く純粋関数
   - src/lib/governance-public.test.ts              # 新設
@@ -104,6 +104,16 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 決定論的な監査＋ judge ＋ Codex judge ＋ Codex security。T-033 を同時に進める場合は、`GovernanceView.tsx`・`page.tsx` を T-033 が触らないこと（T-033 は新しい部品だけ）。
 
 ## 6. 記録
+
+- 15:17 行政の長が W29 を起動（worktree `agent-a7ea5f6c7fe8f6632`、main 9ba7f0c から、モデルは Opus）。仕様はオーナーが 15:16:38 に approve-spec で承認済み（15:17:05 の Kernel の写しの `approvals[].current` で確かめた）。依存の T-028〜T-032 は統合済み
+- W29 の報告：HEAD `471837dd4fdb27c047db1b6b35dfa01b20445e89`。test 767 件（38 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs` の `stopsDir` で差分の外）。**source の切り替え、古い応答の破棄、取得後の表示、再生と図の連動、1440×900 と 375px の実際の収まり、route を通した `GET /api/governance` の応答、`npm run build` は確かめていない**。§3 で立法補佐が held の候補で確かめる
+- 行政の長の確認（試験は再実行していない）：差分は `files_allowed` の9つだけ（+440 / -21）。`governance-public.ts`・`GovernanceTheater.tsx` の全体と、route・page・`GovernanceView`・`TheaterShell` の差分を §2 と読み合わせた。`eval/`・`scripts/` に `api/governance` を使う箇所はない（main で検索）
+- 審査で問われそうな点：
+  1. replay の取得中は「読み込み中…」、失敗のときだけ「記録を取得できませんでした」を出す。A3 の文面は「replay が `ok` でなければ」だが、取得前に失敗と出さないのが A3 の趣旨と読んだ
+  2. 時刻の形が、写し（`11/7 02:03`）と出来事（`11/07 02:03`）で違う。写しの `generated_at` は `+09:00` の形で、`theater-replay.ts` の `formatJst` は `+0900` の形しか読めないため、写しには `kernel-state-schema.ts` の `formatJst` を使った。どちらの関数も変更禁止のファイルにある
+  3. `TheaterShell` の `content-start` は、幅 1024px 未満で見出しの下に空きを作らないために足した（A4）。同じ部品を使う試作の入口 `/governance/theater` にも効く
+- 補った解釈：(1) `deny_kinds`・`by_agent` の動的なキーは `Object.fromEntries` で写す（`__proto__` というキーでもプロトタイプが変わらない。試験を足した） (2) 古い要求は中止せず、応答を捨てるフラグで防ぐ（`loadTheaterData(source, fetch)` に `fetch` をそのまま渡すため。古い要求は最後まで走るが、画面には反映しない）
+- 申請の基点は 9ba7f0c のまま。その後 main は abdc3c0 まで文書の2コミットで進んだが、差分とファイルは重ならない。積み直さず、裁判所が最新の main と組み合わせた候補を作る（オーナーの判断）
 
 ## オーナーに聞くこと
 
