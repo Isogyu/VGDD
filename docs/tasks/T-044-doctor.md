@@ -1,0 +1,73 @@
+---
+id: T-044
+title: 読み取りだけの導入診断（scripts/doctor.mjs）を足す。必要なコマンド・版・設定・保護・写しの一致を、秘密を出さずに確かめる
+status: ready
+requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
+requirements_source: ticket
+related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
+proposal_from: 2026-11-07 立法補佐が起草（オーナーの承認前）。全範囲の設計 §11 の③導入
+estimate_h: 1.5
+time_limit_min: 120
+security_review: true          # 環境を読むスクリプト。秘密を出さないことを確かめる
+unattended: false
+branch: null
+worker: null
+files_allowed:
+  - scripts/doctor.mjs                                # 新設：読み取りだけの診断
+  - scripts/doctor.test.mjs                           # 新設：純粋関数の試験（node:test）
+files_forbidden:
+  - src/**
+  - scripts/seed.mjs
+  - scripts/demo-capture.mjs
+  - docs/**
+  - .claude/**
+  - CLAUDE.md
+  - .github/**
+  - vgdd/**
+  - merge-requests/**
+  - package.json
+  - package-lock.json
+depends_on: []
+---
+
+## 1. 目的
+
+VGDD を別の環境に置く人（IT の担当者）が、置く前と後に「何が足りないか」を確かめられるようにする。今は `docs/adoption.md` の確認表を人が読むだけ。読み取りだけの診断を足し、必要なコマンド・版・設定・保護・写しの一致を、秘密を出さずに一覧にする。直すことはしない（書き込まない）。WSL2 の検証（`docs/drafts/windows-wsl2-check.md`）の①②でも使う。審査：深さ20（安心して使える形）。
+
+## 2. 受け入れ条件
+
+- A0. 差分を許すパスは次の2つだけ：`scripts/doctor.mjs`、`scripts/doctor.test.mjs`。それ以外は変更しない。依存を足さない（Node の組み込みだけ）。**子プロセスと shell を一切起動しない**（外部のコマンドは実行しない）
+- A1. **診断の項目**（`node scripts/doctor.mjs [--repo <パス>] [--z3 <パス>] [--json]`。既定の `--repo` は今のフォルダ、`--z3` は環境変数 `VGDD_Z3_DIR`、なければ `~/tsubuyaki-z3`）。項目ごとに `ok`・`warn`・`fail`・`skip` と、決まった短い文を出す：
+  1. Node.js の版（`process.versions.node`）：24 以上は `ok`、22〜23 は `warn`「適合性テストだけ動く」、22 未満は `fail`
+  2. `git`・`jq`・`shasum`・`npm`・`python3` が `PATH` の上に実行できる通常のファイルとしてあるか（存在を調べるだけで、実行しない。`sha256sum` は `shasum` の代わりとして合格にしない）。1つでもなければ `fail`
+  3. OS（`process.platform`）と `sandbox-exec`：macOS で `/usr/bin/sandbox-exec` があれば `ok`、macOS でなければ `fail`。macOS 以外は `warn`「裁判所の監査の sandbox は macOS 専用。この OS では実稼働の安全制御は未検証」
+  4. `--repo` の `.claude/settings.json`：ない・JSON として読めない・`sandbox.enabled` が true でない、はどれも `fail`（値の中身は出さない）
+  5. `--repo` の `vgdd/settings.v2.json`（設定の原本）：なければ `fail`
+  6. `--z3` のフォルダ：なければ `warn`「Kernel の保護領域がない。clone で試すだけなら不要」で、7 は `skip`。あれば `bin/`・`hooks/`・`evidence/` の有無を見て、足りなければ `warn`
+  7. `--z3` があるとき、許可リストのファイル（`vgdd/scripts/` の `gate-runner.sh`・`judge.sh`・`judge-codex.sh`・`release.sh`・`night-runner.sh`・`sandboxed-run.sh`・`kernel-state.mjs`・`spec-digest.mjs`・`approve-spec.sh` と `vgdd/hooks/policy.mjs`）について、`--z3` の `bin/`・`hooks/` の同じ名前のファイルと中身（`node:crypto` の SHA-256。値は出さない）が同じか。違う・ないは `warn`「配置済みの写しが原本と違う：<許可リストのファイル名>」
+  8. `--repo` の `.env.local` は `lstat` で有無だけを見る（開かない・読まない・ハッシュしない）。有れば `ok`「API キーの設定ファイルがある（中身は読んでいない）」、なければ `ok`「API キーの設定ファイルはない（API なしで動く）」
+  - 読めない対象のファイルは `fail`。内容を読むのはサイズの上限つきの通常のファイルだけ（設定の JSON は 1MiB、比べるファイルは 10MiB）。記号リンク・特殊なファイルはたどらず、固定の結果にする
+  - 出力の最後に固定の1行「この診断は導入の完了や実稼働の安全を保証しない」を出す
+- A2. **読み取りだけ**（診断の本体）：ファイルを書かない・消さない・動かさない。ネットワークに出ない。終了コードは、`fail` が1つでもあれば 1、それ以外は 0
+- A3. **秘密を出さない**：標準出力と標準エラーに出してよいのは、固定の項目の ID・状態・固定の文と、A1-7 の許可リストのファイル名だけ。環境変数の値、ファイルの中身、パス（`HOME` を含む）、CLI の引数、例外の message と stack を出さない。`--json` は `{ "items": [{ "id", "status", "message" }] }` だけ
+- A4. 試験：`node --test scripts/doctor.test.mjs` が終了コード 0 で通ること（vitest の対象外なので、`npm run -s test` とは別に動かす）。`doctor.mjs` を import しただけでは診断・出力・`process.exit` が起きないこと。判定の純粋関数（版の比較、各項目の状態、終了コード）を合成の入力で試す。試験が自分で作った一時フォルダの中だけで、合成の `--repo`・`--z3` を作り、写しが同じ・違う・ない場合、設定が不正な JSON・読めない場合、合成の秘密の文字列を入れた `.env.local` と改行を含むファイル名がある場合に、通常の形式と `--json` の両方の出力に、秘密の文字列・一時フォルダの絶対パス・`HOME` が出ないこと。本物の Z3 と本物の `.env.local` は使わない
+- A5. `npm run -s test`・`npm run -s typecheck`・`npm run -s lint` が通る（今の試験に影響しない）
+
+## 3. 開発用テスト
+
+held の後、立法補佐が候補で `node scripts/doctor.mjs` と `--json` を動かし、オーナーの環境で項目がすべて出て、出力に秘密・絶対パスがないことを確かめる。
+
+## 4. 手順の案
+
+1. A1 の純粋関数と試験 → 本体
+2. コミットは1つ。メッセージの先頭は票の ID
+
+## 5. 統合審査
+
+決定論的な監査＋ judge ＋ Codex judge ＋ Codex security。ほかの票とファイルが重ならないので、並行でよい。
+
+## 6. 記録
+
+## オーナーに聞くこと
+
+1. 診断は `vgdd/` の外（`scripts/`）に置く（Kernel の一部ではなく、導入の補助。法律の改正にしない）
