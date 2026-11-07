@@ -356,6 +356,37 @@
       "tests_total": 443,
       "prev_failed": 3,
       "obs": []
+    },
+    {
+      "version": "p0.4.10",
+      "date": "2026-11-08",
+      "title": "作業員の起動を Kernel の窓口に寄せ、自動修正に前の試行の記録を渡す",
+      "fixed": [
+        "昼の作業員は行政の長が Agent ツールで起動し、承認・予算の台帳・同時の数の照合を通っていなかった（フックで worker・tester の Agent での起動を拒み、申請 → 窓口 → night-runner --launch にした）",
+        "自動修正で作業員を起動し直すとき、差し戻しの行しか渡さず、前の作業員の説明と司法の指摘を区別していなかった（根拠のある指摘・事実・未検証の仮説を分けて渡し、同じ指摘が続けば人へ戻す）",
+        "作業員の起動の申請の場所に、置ける者と形の決まりがなかった"
+      ],
+      "found_by": [
+        "owner",
+        "legislative",
+        "codex"
+      ],
+      "precedents": [
+        "W0",
+        "W1",
+        "W2",
+        "W3",
+        "W4",
+        "W5",
+        "W6",
+        "CAP-LAUNCH-WORKER",
+        "CAP-LAUNCH-REQUEST",
+        "CAP-LAUNCH-REQUEST-NAME",
+        "CAP-AGENT-OTHER"
+      ],
+      "tests_total": 473,
+      "prev_failed": 20,
+      "obs": []
     }
   ]
 }

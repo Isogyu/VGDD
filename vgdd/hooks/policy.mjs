@@ -179,6 +179,7 @@ function isProtectedRel(rel) {
   //   書き出しの一時ディレクトリと親の差し替えも止めるため、docs/governance/ を丸ごと保護する（summary.json もオーナーが書く。Codex の再監査 #3）
   if (r === 'docs/governance' || r.startsWith('docs/governance/')) return 'docs/governance（Kernel の状態の写し。裁判所とオーナーだけが書く）';
   if (r.startsWith('merge-requests/done/')) return 'merge-requests/done（gate-runner が処理済みの申請を置く）';
+  if (r.startsWith('merge-requests/launch/done/')) return 'merge-requests/launch/done（起動の窓口が処理済みの申請を置く）';
   if (r === '.claude' || r.startsWith('.claude/')) {
     const wt = r.match(/^\.claude\/worktrees\/([^/]+)(?:\/(.*))?$/);
     if (!wt) return '.claude（権限ルール・フック登録・エージェント定義）';
@@ -261,6 +262,11 @@ function judgeWritePath(rawPath, projectDir, agentType, confine) {
   if (/^merge-requests\/[^/]+\.json$/.test(rel) && agentType) {
     return `merge-requests（統合の申請は行政の長だけが置ける。agent_type=${agentType} からは不可）`;
   }
+  // p0.4.10：作業員の起動の申請（merge-requests/launch/T-NNN.json）も行政の長（agent_type なし）だけ。名前は票の ID の形だけ
+  if (/^merge-requests\/launch\//.test(rel)) {
+    if (agentType) return `merge-requests/launch（作業員の起動の申請は行政の長だけが置ける。agent_type=${agentType} からは不可）`;
+    if (!/^merge-requests\/launch\/T-[0-9]{3,4}\.json$/.test(rel)) return 'merge-requests/launch（申請のファイル名は T-NNN.json だけ）';
+  }
   return null;
 }
 
@@ -304,6 +310,7 @@ const BASH_PROTECTED_TOKENS = [
   { re: /docs\/tasks\/_board\.json/, noRead: false, label: 'docs/tasks/_board.json' },
   { re: /docs\/governance(?![\w.-])|kernel-(state|invariants)\.json/, noRead: false, label: 'docs/governance（Kernel の状態の写し）' },   // p0.4.3。p0.4.5：docs/governance.md（文書）を取り違えない
   { re: new RegExp(String.raw`merge-requests\/done` + END_OF_WORD), noRead: false, label: 'merge-requests/done' },
+  { re: new RegExp(String.raw`merge-requests\/launch\/done` + END_OF_WORD), noRead: false, label: 'merge-requests/launch/done' },   // p0.4.10：起動の窓口が処理済みの申請を置く
   { re: tok(String.raw`(\.\.\/)?preparation`), noRead: false, label: '準備資料' },
   { re: tok(String.raw`(\.\.\/)?event_records`), noRead: false, label: '作業記録' },
 ];
@@ -603,6 +610,14 @@ function judge(input, projectDir, git) {
   };
 
   switch (tool) {
+    case 'Agent':
+    case 'Task': {
+      // p0.4.10：作業員（worker）とテスト担当（tester）は、Kernel の起動の窓口（申請 merge-requests/launch/T-NNN.json）からだけ起動する。
+      //   Agent ツールでの起動は、どの役割からも拒む（予算の台帳・承認・同時の数の照合を通らないため）。ほかのサブエージェントは今のまま許す
+      const st = String(ti.subagent_type || '').trim().toLowerCase();
+      if (st === 'worker' || st === 'tester') return { target: null, decision: 'deny', reason: `作業員（${st}）は Agent ツールでは起動できない。起動の窓口（merge-requests/launch/T-NNN.json に {"task":"T-NNN"} を置く）を使う` };
+      return { target: null, decision: 'allow', reason: 'worker・tester 以外のサブエージェント' };
+    }
     case 'Edit':
     case 'Write':
     case 'MultiEdit':

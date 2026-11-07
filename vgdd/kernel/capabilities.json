@@ -1,6 +1,6 @@
 {
   "schema": "vgdd.capabilities.v1",
-  "kernel_version": "p0.4.9",
+  "kernel_version": "p0.4.10",
   "note": "Governance Kernel の権限の表（ADR-001・ADR-003）。役割ごとに、何ができ、何ができず、それを どの層が強制しているかを書く。expect はフック（Policy Decision Point）の判定。enforced_by はその操作を実際に止める層（複数あれば全部）。'promise' は強制がなく約束だけのもの（弱点として公開する）。probes は適合性テスト（vgdd/conformance/run.mjs）がフックに実際に入力する操作で、{self} はその役割の作業場所のルート、{main} は main の checkout、{wt} は作業員の worktree、{z3} は Z3。 個々の probe に expect があれば、その役割についてはそちらを優先する。",
   "layers": {
     "hook": "PreToolUse フック policy.mjs（Policy Decision Point。拒否と記録）",
@@ -734,6 +734,107 @@
         "起動は止めない。未承認の票は裁判所が司法の前に blocked にする（G1・G4）ので main には入らず、無駄になるのは作業員の時間だけ",
         "Agent ツールの入力から票を特定できないため、フックでは強制できない"
       ]
+    },
+    {
+      "id": "CAP-LAUNCH-WORKER",
+      "title": "作業員（worker）・テスト担当（tester）を Agent ツールで起動する（p0.4.10。起動は Kernel の窓口だけ）",
+      "allowed": [],
+      "enforced_by": [
+        "hook"
+      ],
+      "probes": [
+        {
+          "tool": "Agent",
+          "subagent_type": "worker",
+          "description": "T-901 を実装",
+          "prompt": "票を実装する"
+        },
+        {
+          "tool": "Agent",
+          "subagent_type": "tester",
+          "description": "T-901 の試験",
+          "prompt": "試験を書く"
+        },
+        {
+          "tool": "Task",
+          "subagent_type": "Worker",
+          "description": "x",
+          "prompt": "x"
+        }
+      ],
+      "expect": {
+        "executive_head": "deny",
+        "worker": "deny",
+        "tester": "deny"
+      }
+    },
+    {
+      "id": "CAP-LAUNCH-REQUEST",
+      "title": "作業員の起動の申請（merge-requests/launch/T-NNN.json）を置く（p0.4.10。行政の長だけ）",
+      "allowed": [
+        "executive_head"
+      ],
+      "enforced_by": [
+        "hook"
+      ],
+      "probes": [
+        {
+          "tool": "Write",
+          "file_path": "{self}/merge-requests/launch/T-901.json",
+          "content": "{\"task\":\"T-901\"}"
+        }
+      ],
+      "expect": {
+        "executive_head": "allow",
+        "worker": "deny",
+        "tester": "deny"
+      }
+    },
+    {
+      "id": "CAP-LAUNCH-REQUEST-NAME",
+      "title": "作業員の起動の申請に、票の ID の形でない名前を使う（p0.4.10）",
+      "allowed": [],
+      "enforced_by": [
+        "hook"
+      ],
+      "probes": [
+        {
+          "tool": "Write",
+          "file_path": "{self}/merge-requests/launch/../launch/x.json",
+          "content": "{}"
+        },
+        {
+          "tool": "Write",
+          "file_path": "{self}/merge-requests/launch/T-901.json.sh",
+          "content": "x"
+        }
+      ],
+      "expect": {
+        "executive_head": "deny",
+        "worker": "deny",
+        "tester": "deny"
+      }
+    },
+    {
+      "id": "CAP-AGENT-OTHER",
+      "title": "worker・tester 以外のサブエージェントを Agent ツールで起動する（調べもの・点検。p0.4.10 でも許す。予算の台帳の外）",
+      "allowed": [
+        "executive_head"
+      ],
+      "enforced_by": [
+        "hook"
+      ],
+      "probes": [
+        {
+          "tool": "Agent",
+          "subagent_type": "general-purpose",
+          "description": "調べもの",
+          "prompt": "x"
+        }
+      ],
+      "expect": {
+        "executive_head": "allow"
+      }
     }
   ],
   "invariants": [

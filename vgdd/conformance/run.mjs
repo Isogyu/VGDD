@@ -20,6 +20,7 @@
 //   G  裁判所の場面（本物の gate-runner に代わりの司法をつなぎ、承認・判定・停止・保護パスの組み合わせで動かす） … 成立条件②④
 //   K  停止と再開（STOP 中のフック、再開の前の安全確認）                                                   … ADR-010・ADR-027
 //   A  証跡（全判定の記録、スキーマ、改ざん・切り詰めの検出）                                               … 成立条件⑤
+//   W  起動の窓口と前の試行の記録（申請の検証・night-runner --launch・指摘と仮説の区別。p0.4.10）            … SPEC §5-4
 //   B  予算の台帳（予約・精算・不明の扱い・同時の予約・重複・停止・期間・破損・超過。p0.4.9）               … SPEC §9
 
 import fs from 'node:fs';
@@ -359,7 +360,7 @@ if [ "$mode" = security ]; then [ -z "\${STUB_SECURITY_NOFILE:-}" ] || exit 69; 
 printf '{"final_verdict":"%s","parse_ok":true,"codex":{"findings":[]}}\\n' "\${STUB_CODEX_VERDICT:-\${STUB_VERDICT:-CHANGES_REQUIRED}}" > "$out/$task-$(git rev-parse HEAD | cut -c1-12)-codex-$mode.json"
 `;
 // 実装の指紋（kernel-state.mjs の implSha と同じ並び）。run.mjs --record が残し、状態の写しが稼働中の Z3 と照合する
-const IMPL_FILES = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh', 'ledger.mjs', 'metered.sh', 'budget-set.sh', 'night-runner.sh', 'review-constitution.sh', 'approve-spec.sh', 'kernel-stop.sh', 'kernel-resume.sh'];
+const IMPL_FILES = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh', 'ledger.mjs', 'metered.sh', 'budget-set.sh', 'night-runner.sh', 'review-constitution.sh', 'approve-spec.sh', 'kernel-stop.sh', 'kernel-resume.sh', 'launcher.sh', 'prior-record.mjs'];
 const implShaFor = (bin, policy) => sha256hex(IMPL_FILES.map((f) => path.join(bin, f)).concat([policy, path.join(path.dirname(policy), 'verify-chain.mjs')]).map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return '<なし>'; } }).join('\n--\n'));
 const POLICY_LINE = (/^(p\d+\.\d+)\./.exec(CAPS.kernel_version) || [])[1] || null;
 function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export const v = 2;\n' }, stop = false, afterApprove = null, ticket = {}, approveExtra = { policy_line: POLICY_LINE } } = {}) {
@@ -1296,6 +1297,64 @@ function groupB() {
     `denied=${denied?.judge_parse_ok} calledDenied=${calledDenied} allowed=${allowed?.judge_parse_ok}`);
 }
 
+// ---- W 起動の窓口と前の試行の記録（p0.4.10。SPEC §5-4） ------------------------------------------------
+function groupW() {
+  const pr = path.join(IMPL.bin, 'prior-record.mjs');
+  const la = path.join(IMPL.bin, 'launcher.sh');
+  if (!fs.existsSync(pr) || !fs.existsSync(la)) { record('W', 'W0', '起動の窓口（launcher.sh）と前の試行の記録（prior-record.mjs）が実装にある', false, 'ない'); return; }
+  record('W', 'W0', '起動の窓口（launcher.sh）と前の試行の記録（prior-record.mjs）が実装にある', true);
+  // W1〜W3 前の試行の記録
+  const vd = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'vgdd-conf-w-')));
+  write(path.join(vd, 'T-980-aaa.json'), JSON.stringify({ task_id: 'T-980', judge: { findings: [
+    { severity: 'major', category: 'requirement', file: 'src/a.ts', line: 3, requirement_id: 'A1', reason: '値が /Users/someone/secret.txt の sk-ant-api03-ABCDEFGHIJKLMNOP を読む。連絡は a@example.com' },
+    { severity: 'minor', category: 'test', file: '/etc/passwd', line: null, requirement_id: null, reason: 'x' }] } }));
+  write(path.join(vd, 'T-980-bbb-codex-security.json'), JSON.stringify({ task_id: 'T-980', mode: 'security', codex: { findings: [{ severity: 'critical', category: 'security', file: '../../etc/x', line: 1, requirement_id: 'A2', reason: '外へ送る' }] } }));
+  write(path.join(vd, 'T-981-ccc.json'), JSON.stringify({ task_id: 'T-981', judge: { findings: [{ severity: 'major', category: 'requirement', file: 'src/b.ts', line: 1, requirement_id: 'A9', reason: '別の票の指摘' }] } }));
+  write(path.join(vd, 'w.json'), JSON.stringify({ result: '原因は X と思う。/Users/me/work を見た。もう直った' }));
+  write(path.join(vd, 'ch.txt'), 'src/a.ts\n../outside.ts\n/abs/x.ts\n');
+  const P = (extra = []) => { const r = sh('node', [pr, '--task', 'T-980', '--verdicts', vd, '--since', '2000-01-01T00:00:00Z', '--worker-log', path.join(vd, 'w.json'), '--changed', path.join(vd, 'ch.txt'), ...extra]); try { return JSON.parse(r.stdout); } catch { return null; } };
+  const o = P();
+  const t = o?.text || '';
+  record('W', 'W1', '前の試行の記録は、司法の指摘（根拠あり）・変えたファイル（事実）・前の作業員の報告（未検証の仮説）を分けて渡し、別の票の指摘を混ぜない',
+    /司法の指摘（根拠：判定の記録/.test(t) && /前の作業員の報告（\*\*未検証の仮説\*\*/.test(t) && /原因は X と思う/.test(t) && /\[critical・Codex security\] A2/.test(t) && !/別の票の指摘/.test(t) && o?.findings === 3, `findings=${o?.findings}`);
+  record('W', 'W2', '前の試行の記録に、絶対パス・秘密らしい文字列・メールアドレス・worktree の外のパスを入れない',
+    !!o && !/\/Users\/|sk-ant-|example\.com|\/etc\/passwd|\.\.\/|\/abs\//.test(t) && /src\/a\.ts/.test(t), t.match(/\/Users\/|sk-ant-|example\.com|\/etc|\.\.\//)?.[0] || '');
+  const again = P(['--prev-signature', o?.signature || 'x']);
+  const diff = P(['--prev-signature', 'A7|requirement|src/z.ts']);
+  record('W', 'W3', '同じ重い指摘（requirement_id・category・file）で続けて差し戻されたことを見分ける（repeated。違う指摘では false）', again?.repeated === true && diff?.repeated === false, `same=${again?.repeated} diff=${diff?.repeated}`);
+
+  // W4〜W6 起動の窓口（launcher.sh → night-runner.sh --launch。dry-run）
+  const fx = fixture('w');
+  commitTicket(fx, 'T-982', { status: 'ready' });
+  commitTicket(fx, 'T-983', { status: 'ready' });
+  if (fs.existsSync(path.join(IMPL.bin, 'spec-digest.mjs'))) fs.copyFileSync(path.join(IMPL.bin, 'spec-digest.mjs'), path.join(fx.z3, 'bin/spec-digest.mjs'));
+  const d = digest(fx, 'main', 'docs/tasks/T-982-probe.md').out || 'sha256:unavailable';
+  write(path.join(fx.z3, 'evidence/spec_approvals.jsonl'), JSON.stringify({ schema: 'vgdd.spec-approval.v1', task: 'T-982', digest: d, approved_by: 'owner', policy_line: POLICY_LINE }) + '\n');
+  touch(path.join(fx.z3, 'evidence/gate_events.jsonl'));
+  const fake = path.join(fx.base, 'gate-runner.sh'); write(fake, '#!/bin/bash\nsleep 120\n'); fs.chmodSync(fake, 0o755);
+  const bg = spawn('bash', [fake], { detached: true, stdio: 'ignore' });
+  const rq = path.join(fx.main, 'merge-requests/launch');
+  try {
+    write(path.join(rq, 'T-982.json'), JSON.stringify({ task: 'T-982' }));
+    write(path.join(rq, 'T-983.json'), JSON.stringify({ task: 'T-983' }));
+    write(path.join(rq, 'T-984.json'), JSON.stringify({ task: 'T-984', note: '余分な項目' }));
+    write(path.join(rq, 'T-985.json'), JSON.stringify({ task: 'T-999' }));
+    write(path.join(rq, 'evil.json'), JSON.stringify({ task: 'T-982' }));
+    fs.symlinkSync(path.join(fx.base, 'nowhere.json'), path.join(rq, 'T-986.json'));
+    const r = sh('bash', [la, '--repo', fx.main, '--once', '--dry-run'], { cwd: fx.main, env: { ...process.env, ...UTF8, VGDD_Z3_DIR: fx.z3 }, timeout: 120000 });
+    const done = fs.readdirSync(path.join(rq, 'done'));
+    const verdictOf = (prefix) => done.filter((n) => n.startsWith(prefix)).map((n) => n.split('.').slice(-2, -1)[0]).join(',');
+    const left = fs.readdirSync(rq).filter((n) => n !== 'done');
+    record('W', 'W4', '起動の窓口は、形の合わない申請（余分な項目・名前と中身の ID の違い・名前の形・記号リンク）を起動せずに拒む',
+      verdictOf('T-984') === 'rejected' && verdictOf('T-985') === 'rejected' && verdictOf('evil') === 'rejected' && verdictOf('T-986') === 'rejected', `done=${done.join(' ')}`);
+    record('W', 'W5', '起動の窓口は、形の合う申請を受け付けて done に移し（二度起動しない）、night-runner --launch に渡す', verdictOf('T-982') === 'accepted' && verdictOf('T-983') === 'accepted' && left.length === 0, `left=${left.join(',')} ${r.stdout.slice(-200)}`);
+    const log982 = (() => { try { return fs.readFileSync(path.join(fx.z3, 'launch/T-982.log'), 'utf8'); } catch { return ''; } })();
+    const log983 = (() => { try { return fs.readFileSync(path.join(fx.z3, 'launch/T-983.log'), 'utf8'); } catch { return ''; } })();
+    record('W', 'W6', 'night-runner --launch：承認済みの票は1票・並行1でレーンに割り当て、仕様が未承認の票は作業員に渡さない',
+      /（dry-run）T-982 をレーンに割り当てる/.test(log982) && /parallel=1 /.test(log982) && /T-983: 仕様がオーナーに承認されていない/.test(log983) && !/（dry-run）T-983/.test(log983), `${log982.slice(-160)} | ${log983.slice(-160)}`);
+  } finally { try { process.kill(-bg.pid); } catch { /* 終わっている */ } }
+}
+
 // ---- 権限の表の自己検査（どの権限にも確かめ方がある） ------------------------------------------
 function groupMeta() {
   const ids = new Set(results.map((r) => r.id));
@@ -1428,6 +1487,7 @@ try {
   groupN();
   groupL();
   groupB();
+  groupW();
   groupINV();
   groupMeta();
   groupInvMeta();
