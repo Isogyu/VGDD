@@ -1,7 +1,7 @@
 ---
 id: T-032
 title: 票1枚の記録を、再生・一時停止・1つ送り・1つ戻しで追える再生の部品を作る（統治シアター U4）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7, A8]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -135,3 +135,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 2. 例の票の3つ目を T-002 から T-013 に替えた。T-002 の上限到達は、3回の差し戻しがどれも法律の不具合と連鎖によるもので、オーナーが取り消して統合した。公開用のイベントには取り消しが出ないため、再生すると「正当な上限到達」に見える
 
 - 2026-11-07T12:43:09+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T14:57:38+0900 release: status → merged（main=2797bdbf9df2。夜間の判定に合格した候補 f40f864beb54 を、オーナーが朝に承認して統合）
