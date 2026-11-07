@@ -1,7 +1,7 @@
 ---
 id: T-042
 title: Kernel の写しの読み取りを、予算・実行・受け入れの新しい項目（任意）にも対応させる（新旧の両方の写しを読める）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1
 time_limit_min: 90
 security_review: true          # 写しの検証（公開の項目）を変える
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a2268f64d923de204
+worker: W39
 files_allowed:
   - src/lib/kernel-state-schema.ts                    # 任意の3項目の検証と型を足すだけ
   - src/lib/kernel-state.test.ts                      # 試験を足す
@@ -65,6 +65,13 @@ held の後、立法補佐が候補で `/governance` を開き、提出記録・
 決定論的な監査＋ judge ＋ Codex judge ＋ Codex security。法律の改正 L3（書く側）より前に統合する。
 
 ## 6. 記録
+
+- 23:52 行政の長が W39 を起動（worktree `agent-a2268f64d923de204`、main f4c3403 から、モデルは Opus。T-040 の W38・T-043 の W40 と並行。D-67 の同時3体の枠の中）。仕様はオーナーが 23:49:57 に approve-spec で承認済み（23:51:40 の Kernel の写しの `approvals[].current` で確かめた）。依存の T-022・T-030 は統合済み。作業員の起動は Kernel の窓口の外（法律の改正 L2 の配置の前のため、予算の管理の外）
+- W39 の報告：HEAD `d37a2a7fdf819af0a0257194bac869bd71216e8c`、f4c3403 の上に1コミット。test 967 件（49 ファイル。`kernel-state.test.ts` は 54 件で、今の 41 件は1行も変えていない）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:875` の `stopsDir` で差分の外）。§2 から外れる解釈はない
+- 行政の長の確認（試験は再実行していない）：差分は A0 の2つだけ（+325 / -2）。`kernel-state-schema.ts` で変わったのは、新しい3項目の検証（`SafeCount`＝0 以上 `MAX_SAFE_INTEGER` 以下の整数、`OffsetDateTime`、`budget`・`runs`・`acceptance` の strict のスキーマ）を足したこと、`kernelStateSchema` に3つを `.optional()` で足したこと、3つの型の export、コメントの1行だけ。今の `Count`・`Iso`・`TaskId`・今の項目・`pickKernelState`・`toWire`・`formatJst` は変わっていない（`TaskId` は流用）。省いた項目は鍵ごと出ないことを試験で確かめている
+- 読み方が割れる所（W39 の選んだ読み方）：(1) 「タイムゾーン付きの有効な日時」は、秒まで必須・小数秒は 1〜9 桁まで任意・タイムゾーンは `Z` か `±HH:MM`（`+0900` と分なしは拒む）・うるう秒（`:60`）は拒む・暦の上で有効な日時、とした。書く側（L1・L3）がこの形で出すかの確認が要る (2) 「件数は配列の長さ以上」は、`accepted_count >= accepted.length` と `pending_count >= pending.length` のそれぞれの組とした
+- 補った解釈（文面の範囲内）：(1) `until` の長さの上限を 40 字にした（文面に上限はない） (2) `period_id` の文字の種類は制限しない（文面は「文字列（1〜40字）」だけ。40 字以内なら任意の文が入る） (3) 3つの型 `KernelBudget`・`KernelRuns`・`KernelAcceptance` を export した (4) 試験を文面より広げた（数の欄の `"1"`・NaN・Infinity・null、3項目の鍵の欠け、3項目の値が null・配列・文字列・数）
+- **確かめていない**：画面（`/governance`）で提出記録と稼働中の観測の両方が今までどおり出ること（今の写しと提出記録が `pickKernelState` を通ることは試験で確かめた）、`npm run build`。§3 で立法補佐が held の候補で確かめる
 
 ## オーナーに聞くこと
 
