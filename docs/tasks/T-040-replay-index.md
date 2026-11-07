@@ -1,7 +1,7 @@
 ---
 id: T-040
 title: 票の再生で、代表の3枚だけでなく記録のある全票を選べるようにし、記録の分類の印と絞り込みを付ける
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 2
 time_limit_min: 150
 security_review: false         # 公開用の出来事の API（T-028）の値を並べ替えて数えるだけ。API は変えない
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a8a85d080c413eec0
+worker: W38
 files_allowed:
   - src/lib/theater-replay.ts                         # 並びと印を組み立てる純粋関数を足す（今の関数は変えない）
   - src/lib/theater-replay.test.ts                    # 上に合わせて足すだけ
@@ -100,6 +100,14 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 決定論的な監査＋ judge ＋ Codex judge。T-039 の統合の後に作業員を起動する（同じ `TicketReplay.tsx` を触る）。
 
 ## 6. 記録
+
+- 23:52 行政の長が W38 を起動（worktree `agent-a8a85d080c413eec0`、T-039 を統合した後の main f4c3403 から、モデルは Opus。T-042 の W39・T-043 の W40 と並行。D-67 の同時3体の枠の中）。仕様はオーナーが 22:17:14 に approve-spec で承認済み（23:51:40 の Kernel の写しの `approvals[].current` で確かめた）。依存の T-028・T-032・T-039 は統合済み。作業員の起動は Kernel の窓口の外（法律の改正 L2 の配置の前のため、予算の管理の外）
+- W38 の報告：HEAD `31e9913b223b290d699080e62b4e97a8d9648475`、f4c3403 の上に1コミット。test 977 件（49 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:875` の `stopsDir` で差分の外）。§2 から外れる解釈はない
+- 行政の長の確認（試験は再実行していない）：差分は A0 の4つだけ（+351 / -34）。`theater-replay.ts` と `theater-replay.test.ts` は行を足しただけで、消した行は 0（今の export と今の試験は変わっていない）。印は `kind`（と `blocked` の `reason`）だけで数える。`TicketReplay.tsx` は、並びを `replayOptions` に替え、絞り込みのボタンの組・★と印の付いた `option`・件数の1行・空の表示を足し、`initialTicketId` を最初の並び（`"all"`）から選ぶ。再生・タイマー・通知（`notifyKey`）・最初に戻す条件のコードは変わっていない
+- 直した今の試験（`TicketReplay.test.tsx`。A4 の理由のもの）：(1) 選ぶ欄の期待を、全票・★・印つきに (2) ボタンの数を、絞り込みの4つを足した 12 に (3) 区画の中のスクロールで、`overflow-y-auto` の出る回数と一覧の `min-h-16` (4) `initialTicketId` の「並びにない票」を、並びに入るようになった T-002 から出来事のない T-050 に (5) 「例の票がないとき」の2つを、代表でない票だけでも再生できること・空の表示の確かめに (6) 「出来事が0件の票」を、空の表示の確かめにまとめた。ほかの今の確かめはそのまま
+- 読み方が割れる所（W38 の選んだ読み方）：(1) 記録のある票が全体で 0 のときも、A2 の「並びが空」として「この条件に合う票はありません」を出す（今の「再生できる票がありません」は使われなくなる） (2) 空のときも件数の1行（「全 0 票」）を出し、ボタンの組の下に置く（A2 で出さないと挙げたものに入っていないため） (3) 「今の再生の説明の行」は、今の出来事を示す行（`aria-live` と「再生では時間を圧縮しています」の行）と読み、その上に件数の1行を置く
+- 補った解釈（文面の範囲内）：(1) 外枠に `overflow-y-auto` を付け、出来事の一覧の `min-h-0` を `min-h-16` にした（一覧が高さ 0 に縮まず、収まらない分は区画の中でスクロールする） (2) 1024px 以上で `select` に `lg:max-w-md` を付けた（長い文は `truncate` で切れる） (3) ★は `FEATURED_TICKETS` に入っているかで決める (4) 同じ id の票が入力に2つあるときは最初の1つだけ
+- **確かめていない**：クリックによる絞り込みと選び直し（外れたら先頭に移る・選んだ票が変わらなければ再生の位置を保つ・空のとき確定の後に `onEventChange(null)` を1回・「すべて」で先頭を選ぶ。どれもコードを読んだだけで、回数の試験もない）、実際の記録での印の数（§3 の T-017・T-014・T-002 など、全 37 票）、1440×900 と 375px の実際の収まり（ボタンの組が増え、16rem の中で出来事の一覧に残る高さが小さくなる）、`npm run build`。§3 で立法補佐が held の候補で確かめる
 
 ## オーナーに聞くこと
 
