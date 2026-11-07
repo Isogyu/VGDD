@@ -1,7 +1,7 @@
 ---
 id: T-035
 title: 統治シアターの「稼働中の観測」を自動で取り直し、取得の時刻と失敗を見せる
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -120,3 +120,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 2. 取得に失敗したときは、前の取得の表示を残し、失敗したことを文で出す（停止中に通信が一度失敗しても、赤い表示が消えて「稼働中」に見えないようにするため）
 
 - 2026-11-07T21:39:40+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T21:49:16+0900 release: status → merged（main=fe02ef4d3b7f。夜間の判定に合格した候補 70c1fc5f9fc6 を、オーナーが朝に承認して統合）
