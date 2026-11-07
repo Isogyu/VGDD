@@ -1,4 +1,4 @@
-# VGDD Governance Kernel 規範仕様（Kernel p0.4.7）
+# VGDD Governance Kernel 規範仕様（Kernel p0.4.8）
 
 - 作成：2026-11-05（開催期間中に新規作成）
 - 位置づけ：VGDD の統治を強制する部分（Governance Kernel）の**規範**。言語やモデルに依存しない形で書く。このリポジトリの `vgdd/hooks/`・`vgdd/scripts/` は**参照実装**で、`vgdd/conformance/run.mjs` が規範との一致を試す（ADR-023・ADR-034 の前提）
@@ -97,6 +97,7 @@
 
 - 適合性テストは `vgdd/conformance/run.mjs`。群と成立条件の対応：C1（役割分離と権限）→①④、C2（仕様の統治）→②、C3（独立司法）→③、G（裁判所の場面）→②④、H（行政の長の main へのコミット）→④、K（停止と再開）、N（夜間の代行）、A（証跡）→⑤、M（権限の表の自己検査：どの権限にも確かめ方があり、参照した試験が合格している）
 - テストは、止めるべき操作が止まることと、**通すべき操作が通ること（陽性の対照）**の両方を試さなければならない（MUST）。前の版の実装に対して実行し、新しい規則の試験が実際に落ちることを確かめる（試験が空回りしていないことの確認）
+- 配置済みの設定（`.claude/settings.json`）は、原本 `vgdd/settings.v2.json` の拒否の規則・sandbox の書き込みと読み取りの禁止の一覧をすべて含み、sandbox の `enabled`・`failIfUnavailable`・`allowUnsandboxedCommands` は原本と同じ値、フックは同じ構造でなければならない（MUST。p0.4.8、判例 ST16）。案件ごとに足してよいのは、拒否の規則と禁止の一覧の項目だけ（フックの追加や置き場所の変更は ST16 に通らない）。ほかの項目（allow・ask・network など）は比べない。`run.mjs --impl z3` が試す写しの場所は `VGDD_Z3_DIR`（なければ既定の場所）で、`--record` の書き先と同じ（p0.4.8、判例 ST17）
 - 「VGDD Core に適合」とは名乗らない。名乗れるのは「この構成で、適合性テスト N 件に合格（実装と日時）」だけ。権限の表の promise と known_gaps は適合の主張に含めない
 
 ## 12. 保証できないこと
