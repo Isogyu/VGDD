@@ -356,6 +356,25 @@
       "tests_total": 443,
       "prev_failed": 3,
       "obs": []
+    },
+    {
+      "version": "p0.4.9a",
+      "date": "2026-11-08",
+      "title": "予算の窓口の子を端末を持たないセッションで動かし、Codex の司法が止まる不具合を直す",
+      "fixed": [
+        "p0.4.9 の窓口は子を job control で別のプロセス群にしていたため、端末の上で動く裁判所の下で Codex が終わるときに端末の設定を戻そうとして SIGTTOU で止まり、窓口が TERM を送って Codex の司法が3回続けて「使えない」になった（T-042・T-044 が blocked）"
+      ],
+      "found_by": [
+        "operation",
+        "executive_head",
+        "legislative"
+      ],
+      "precedents": [
+        "B29"
+      ],
+      "tests_total": 444,
+      "prev_failed": 1,
+      "obs": []
     }
   ]
 }
