@@ -33,11 +33,14 @@ const args = process.argv.slice(2);
 const opt = (k) => { const i = args.indexOf(k); return i === -1 ? null : args[i + 1]; };
 const impl = opt('--impl') || 'repo';
 const VG = path.resolve(HERE, '..');
-const Z3REAL = path.join(os.homedir(), 'tsubuyaki-z3');
+// p0.4.8：--impl z3 で試す写しの場所も、--record の書き先と同じく VGDD_Z3_DIR を優先する（既定と違う場所の導入で、別の写しを試さない）
+const Z3REAL = process.env.VGDD_Z3_DIR || path.join(os.homedir(), 'tsubuyaki-z3');
 const IMPL = impl === 'z3'
   ? { policy: path.join(Z3REAL, 'hooks/policy.mjs'), verify: path.join(Z3REAL, 'hooks/verify-chain.mjs'), bin: path.join(Z3REAL, 'bin'),
       agents: path.join(opt('--repo') || path.join(os.homedir(), 'tsubuyaki-worklog/app'), '.claude/agents') } // 起動で実際に使う定義
   : { policy: path.join(VG, 'hooks/policy.mjs'), verify: path.join(VG, 'hooks/verify-chain.mjs'), bin: path.join(VG, 'scripts'), agents: path.join(VG, 'agents') };
+// p0.4.8：試す実装の場所だけを出して終わる（ST17 が使う。中身は場所だけ）
+if (args.includes('--print-impl')) { console.log(JSON.stringify({ impl, ...IMPL })); process.exit(0); }
 const CAPS = JSON.parse(fs.readFileSync(path.join(VG, 'kernel/capabilities.json'), 'utf8'));
 const DECISION_SCHEMA = JSON.parse(fs.readFileSync(path.join(VG, 'schemas/kernel-decision.schema.json'), 'utf8'));
 const UTF8 = { LC_ALL: 'ja_JP.UTF-8', LANG: 'ja_JP.UTF-8' }; // OBS-043：本番と同じロケールで動かす
@@ -799,6 +802,21 @@ function groupST() {
   const v2 = JSON.parse(fs.readFileSync(path.join(VG, 'settings.v2.json'), 'utf8'));
   record('ST', 'ST15', '設定の原本 vgdd/settings.v2.json も docs/governance を保護する（Edit・Write の拒否4つと sandbox の denyWrite）',
     ['Edit(docs/governance/**)', 'Write(docs/governance/**)', 'Edit(**/docs/governance/**)', 'Write(**/docs/governance/**)'].every((x) => (v2.permissions?.deny || []).includes(x)) && (v2.sandbox?.filesystem?.denyWrite || []).includes('docs/governance'));
+  // p0.4.8：配置済みの設定（リポジトリの .claude/settings.json）は、原本の保護をすべて持つ（拒否の規則・sandbox の書き込みと読み取りの禁止・フック）。
+  //   11/7 まで、原本にある docs/governance の Edit・Write の拒否4つが、配置済みに欠けていた（フックと denyWrite では防いでいた）
+  const deployedPath = path.join(opt('--repo') || path.resolve(VG, '..'), '.claude/settings.json');
+  const dep = fs.existsSync(deployedPath) ? JSON.parse(fs.readFileSync(deployedPath, 'utf8')) : null;
+  const lack = (sel) => (sel(v2) || []).filter((x) => !(sel(dep || {}) || []).includes(x));
+  const lacks = dep ? [...lack((s) => s.permissions?.deny), ...lack((s) => s.sandbox?.filesystem?.denyWrite), ...lack((s) => s.sandbox?.filesystem?.denyRead)] : ['配置済みの設定がない'];
+  const hooksSame = !!dep && JSON.stringify(dep.hooks) === JSON.stringify(v2.hooks);
+  record('ST', 'ST16', '配置済みの設定（.claude/settings.json）は、原本 vgdd/settings.v2.json の拒否の規則・sandbox の書き込みと読み取りの禁止をすべて持ち、フックは同じ',
+    lacks.length === 0 && hooksSame, `欠け=${lacks.slice(0, 4).join(',') || 'なし'} hooks=${hooksSame ? '同じ' : '違う'}`);
+  // p0.4.8：--impl z3 は VGDD_Z3_DIR の場所の写しを試す（--record の書き先と同じ場所）
+  const pz = path.join(os.tmpdir(), 'vgdd-st17-z3');
+  const pr = sh('node', [path.join(HERE, 'run.mjs'), '--impl', 'z3', '--print-impl'], { env: { ...process.env, VGDD_Z3_DIR: pz } });
+  let pj = null; try { pj = JSON.parse(pr.stdout); } catch { pj = null; }
+  record('ST', 'ST17', '適合性テストの --impl z3 は、VGDD_Z3_DIR の場所の写し（hooks・bin）を試す（--record の書き先と同じ。既定と違う場所の導入で別の写しを試さない）',
+    pj !== null && pj.bin === path.join(pz, 'bin') && pj.policy === path.join(pz, 'hooks/policy.mjs'), pj ? `bin=${pj.bin === path.join(pz, 'bin') ? 'VGDD_Z3_DIR' : '別の場所'}` : `exit=${pr.status}`);
   // 作業員が差分に状態の写しを入れて申請すれば、保護パスとして司法の前に blocked
   g = runGate(gateFixture('st7', { change: { 'src/lib/a.ts': 'export const v = 2;\n', 'docs/governance/kernel-state.json': '{"approvals":[]}\n' } }), 'APPROVED');
   record('ST', 'ST7', '作業員の差分に状態の写しが含まれれば、司法の前に保護パスとして blocked',
