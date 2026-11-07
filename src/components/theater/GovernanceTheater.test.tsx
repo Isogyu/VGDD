@@ -84,4 +84,14 @@ describe("GovernanceTheater の初期の表示", () => {
     expect(wrapper).toBeGreaterThan(markup.indexOf("判断待ちと次の担当"));
     expect(markup.indexOf("Claude Code の使い分け")).toBeGreaterThan(wrapper);
   });
+
+  // T-037 A3・A5
+  it("初期の表示に「はじめて見る」ボタンを見出しの区画に出し、案内の欄は出さない", () => {
+    expect(markup).toMatch(/<button[^>]*>はじめて見る<\/button>/);
+    const headerEnd = markup.indexOf("</header>");
+    expect(headerEnd).toBeGreaterThan(-1);
+    expect(markup.indexOf("はじめて見る")).toBeLessThan(headerEnd);
+    expect(markup).not.toContain('aria-label="はじめて見る人への案内"');
+    expect(markup).not.toContain("案内の光は説明のための強調で、記録の出来事ではありません");
+  });
 });
