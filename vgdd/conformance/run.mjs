@@ -536,6 +536,12 @@ function groupG() {
   g = runGate(g23f3, 'APPROVED');
   record('G', 'G23f3', '§6 と Z3 の記録がどちらも3回で、取り消しが1回なら、残り2回で審査して統合される（取り消しは1回だけ引く）',
     g.code === 0 && g.inMain && g.status === 'merged', `exit=${g.code} status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
+  const g23f5 = gateFixture('g23f5', { afterApprove: withReturns(4) });
+  write(path.join(g23f5.z3, 'evidence/gate_events.jsonl'), rejEv(g23f5.id, 4).join('\n') + '\n');
+  write(path.join(g23f5.z3, 'evidence/annulments.jsonl'), JSON.stringify({ ts: '2026-11-03T21:00:00+0900', task: g23f5.id, reason: 'G23f5' }) + '\n');
+  g = runGate(g23f5, 'APPROVED');
+  record('G', 'G23f5', '§6 と Z3 の記録がどちらも4回で、取り消しが1回なら、残り3回で blocked（取り消しを二重に引かない。Codex の監査 p0.4.7d）',
+    g.code === 0 && !g.inMain && !g.judged && g.status === 'blocked', `exit=${g.code} status=${g.status} judged=${g.judged}`);
   const g23f4 = gateFixture('g23f4');
   write(path.join(g23f4.z3, 'evidence/gate_events.jsonl'), [...rejEv('T-999', 3), ...rejEv(g23f4.id, 3, { status: 'blocked' }), ...rejEv(g23f4.id, 3, { type: 'disagreement' })].join('\n') + '\n');
   g = runGate(g23f4, 'APPROVED');
