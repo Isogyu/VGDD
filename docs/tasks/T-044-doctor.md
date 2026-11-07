@@ -40,16 +40,16 @@ VGDD を別の環境に置く人（IT の担当者）が、置く前と後に「
 - A1. **診断の項目**（`node scripts/doctor.mjs [--repo <パス>] [--z3 <パス>] [--json]`。既定の `--repo` は今のフォルダ、`--z3` は環境変数 `VGDD_Z3_DIR`、なければ `~/tsubuyaki-z3`）。項目ごとに `ok`・`warn`・`fail`・`skip` と、決まった短い文を出す：
   1. Node.js の版（`process.versions.node`）：24 以上は `ok`、22〜23 は `warn`「適合性テストだけ動く」、22 未満は `fail`
   2. `git`・`jq`・`shasum`・`npm`・`python3` が `PATH` の上に実行できる通常のファイルとしてあるか（存在を調べるだけで、実行しない。`sha256sum` は `shasum` の代わりとして合格にしない）。1つでもなければ `fail`
-  3. OS（`process.platform`）と `sandbox-exec`：macOS で `/usr/bin/sandbox-exec` があれば `ok`、macOS でなければ `fail`。macOS 以外は `warn`「裁判所の監査の sandbox は macOS 専用。この OS では実稼働の安全制御は未検証」
+  3. OS（`process.platform`）と `sandbox-exec`：macOS で `/usr/bin/sandbox-exec` があれば `ok`、macOS で `/usr/bin/sandbox-exec` がなければ `fail`。macOS 以外の OS は `warn`「裁判所の監査の sandbox は macOS 専用。この OS では実稼働の安全制御は未検証」（`fail` にしない）
   4. `--repo` の `.claude/settings.json`：ない・JSON として読めない・`sandbox.enabled` が true でない、はどれも `fail`（値の中身は出さない）
   5. `--repo` の `vgdd/settings.v2.json`（設定の原本）：なければ `fail`
   6. `--z3` のフォルダ：なければ `warn`「Kernel の保護領域がない。clone で試すだけなら不要」で、7 は `skip`。あれば `bin/`・`hooks/`・`evidence/` の有無を見て、足りなければ `warn`
   7. `--z3` があるとき、許可リストのファイル（`vgdd/scripts/` の `gate-runner.sh`・`judge.sh`・`judge-codex.sh`・`release.sh`・`night-runner.sh`・`sandboxed-run.sh`・`kernel-state.mjs`・`spec-digest.mjs`・`approve-spec.sh` と `vgdd/hooks/policy.mjs`）について、`--z3` の `bin/`・`hooks/` の同じ名前のファイルと中身（`node:crypto` の SHA-256。値は出さない）が同じか。違う・ないは `warn`「配置済みの写しが原本と違う：<許可リストのファイル名>」
   8. `--repo` の `.env.local` は `lstat` で有無だけを見る（開かない・読まない・ハッシュしない）。有れば `ok`「API キーの設定ファイルがある（中身は読んでいない）」、なければ `ok`「API キーの設定ファイルはない（API なしで動く）」
   - 読めない対象のファイルは `fail`。内容を読むのはサイズの上限つきの通常のファイルだけ（設定の JSON は 1MiB、比べるファイルは 10MiB）。記号リンク・特殊なファイルはたどらず、固定の結果にする
-  - 出力の最後に固定の1行「この診断は導入の完了や実稼働の安全を保証しない」を出す
+  - 通常の形式では、出力の最後に固定の1行「この診断は導入の完了や実稼働の安全を保証しない」を出す。`--json` では、この文を A3 の形の `note` に入れる
 - A2. **読み取りだけ**（診断の本体）：ファイルを書かない・消さない・動かさない。ネットワークに出ない。終了コードは、`fail` が1つでもあれば 1、それ以外は 0
-- A3. **秘密を出さない**：標準出力と標準エラーに出してよいのは、固定の項目の ID・状態・固定の文と、A1-7 の許可リストのファイル名だけ。環境変数の値、ファイルの中身、パス（`HOME` を含む）、CLI の引数、例外の message と stack を出さない。`--json` は `{ "items": [{ "id", "status", "message" }] }` だけ
+- A3. **秘密を出さない**：標準出力と標準エラーに出してよいのは、固定の項目の ID・状態・固定の文と、A1-7 の許可リストのファイル名だけ。環境変数の値、ファイルの中身、パス（`HOME` を含む）、CLI の引数、例外の message と stack を出さない。`--json` は `{ "items": [{ "id", "status", "message" }], "note": "この診断は導入の完了や実稼働の安全を保証しない" }` だけ
 - A4. 試験：`node --test scripts/doctor.test.mjs` が終了コード 0 で通ること（vitest の対象外なので、`npm run -s test` とは別に動かす）。`doctor.mjs` を import しただけでは診断・出力・`process.exit` が起きないこと。判定の純粋関数（版の比較、各項目の状態、終了コード）を合成の入力で試す。試験が自分で作った一時フォルダの中だけで、合成の `--repo`・`--z3` を作り、写しが同じ・違う・ない場合、設定が不正な JSON・読めない場合、合成の秘密の文字列を入れた `.env.local` と改行を含むファイル名がある場合に、通常の形式と `--json` の両方の出力に、秘密の文字列・一時フォルダの絶対パス・`HOME` が出ないこと。本物の Z3 と本物の `.env.local` は使わない
 - A5. `npm run -s test`・`npm run -s typecheck`・`npm run -s lint` が通る（今の試験に影響しない）
 
