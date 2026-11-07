@@ -70,7 +70,7 @@ depends_on: [T-028, T-029]
 - A3. `src/components/theater/GovernanceStage.tsx`：props は `focus`（A2 の返り値、または `null`）と `stopped: boolean` だけ。データを取りに行かず、状態を持たない（`"use client"` を付けない）。
   - 1つの `<svg>`（`viewBox` を固定し、幅いっぱいに縮む。`role="img"` と、今の状態を言葉で表す `aria-label`）。6つの節と8本の線を、A1 の位置関係（人が上、立法・行政・司法が中段の左から順、Kernel が下、統合が Kernel の右か下）で描く
   - 節と線の色は `tokens.ts` の役割と状態に合わせ、SVG の `fill`・`stroke` を Tailwind のクラス（`fill-*`・`stroke-*`）で明示する。SVG の中の文字は、1440×900 で TheaterShell の主役の区画（幅の 2/3）に置いたとき、表示の大きさで 12px 以上になる `viewBox` と文字の大きさにする
-  - 節には T-029 の `tokens.ts` のラベルと形の印を書き、次の担い手の文字を添える：行政「Claude Code（作業員は worktree で並行）」、司法「Claude と Codex（別系統）」、立法「Claude（立法補佐）と人」、Kernel「自作：フック・裁判所・証拠ストア」。司法の節には `focus` の `judge`・`codex` を「Claude：合格／差し戻し／—」「Codex：…」の2つの小さな札で出す（`null` と `focus: null` のときは「—」）
+  - 節には T-029 の `tokens.ts` のラベルと形の印を書き、次の担い手の文字を添える：行政「Claude Code（作業員は worktree で並行）」、司法「Claude と Codex（記録の構成。運用では Claude の別セッションでも可）」（1行に収まらなければ、括弧の部分を2行目に折り返す）、立法「Claude（立法補佐）と人」、Kernel「自作：フック・裁判所・証拠ストア」。司法の節には `focus` の `judge`・`codex` を「Claude：合格／差し戻し／—」「Codex：…」の2つの小さな札で出す（`null` と `focus: null` のときは「—」）
   - `focus` の `nodes`・`edges` に入る節と線だけを強調する（太さと明るさ。色だけに頼らない）。ほかは暗くする。`focus` が `null` なら全体を同じ強さで描く
   - `tone` が `waiting` なら人の節に `tokens` の `waiting`（琥珀色・形の印・「判断待ち」）、`unknown` なら全体に `tokens` の `unknown`（灰色・破線・「確認できない」）を出す
   - `stopped` が true なら、`focus` にかかわらず Kernel の節に `tokens` の `stopped`（赤・形の印・「停止中」）を出し、線の強調をすべて止める
@@ -78,7 +78,7 @@ depends_on: [T-028, T-029]
 - A4. 記録にない経路を描かない：A1 の8本の線のほかの線を描かない
 - A5. 試験：
   - `theater-stage.test.ts`：A2 の表の行を、表でまとめた `reason` も1つずつ分けて、すべて確かめる（`nodes`・`edges` は集合として期待値と完全に一致）。`judge`・`codex` がそのまま返る
-  - `GovernanceStage.test.tsx`：`react-dom/server` の `renderToStaticMarkup` で描き、6つの節のラベルと4つの担い手の文字が出る。節に `data-node`、線に `data-edge` の ID を付け、`focus` を与えると `data-active="true"` の付いた節と線の ID の集合が `nodes`・`edges` と完全に一致する。`focus: null` で判定の札が両方「—」。`stopped` で「停止中」が出て、`data-active="true"` の線が0本になる。`tone: "unknown"` で「確認できない」が出る。線の要素（`data-edge`）がちょうど8つ
+  - `GovernanceStage.test.tsx`：`react-dom/server` の `renderToStaticMarkup` で描き、6つの節のラベルと4つの担い手の文字が出る（2行に折り返した文字は、行ごとの文字列がそれぞれ出ることを確かめてよい）。節に `data-node`、線に `data-edge` の ID を付け、`focus` を与えると `data-active="true"` の付いた節と線の ID の集合が `nodes`・`edges` と完全に一致する。`focus: null` で判定の札が両方「—」。`stopped` で「停止中」が出て、`data-active="true"` の線が0本になる。`tone: "unknown"` で「確認できない」が出る。線の要素（`data-edge`）がちょうど8つ
 - A6. `npm run -s test`・`npm run -s typecheck`・`npm run -s lint` が通る
 
 ## 3. 開発用テスト
@@ -103,5 +103,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 
 ## オーナーに聞くこと
 
-1. 節に添える担い手の文字（A3）は §2 なので、承認の前に決める。とくに Kernel の「自作：フック・裁判所・証拠ストア」と、司法の「Claude と Codex（別系統）」
+1. 節に添える担い手の文字（A3）は §2 なので、承認の前に決める。とくに Kernel の「自作：フック・裁判所・証拠ストア」と、司法の文字（11/7 オーナーが案A に決めた：構築の段階の記録は Codex を第2の司法にした構成で、本来の運用は1つの Claude アカウントで役割を分けたセッション）
 2. 司法のモデル名（Sonnet など）は書かない。判定の担い手のモデルは設定で変えられ、図が古くなるため
