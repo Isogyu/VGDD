@@ -1,5 +1,5 @@
 #!/bin/bash
-# VGDD Governance Kernel — 予算の上限を決める（オーナーの操作。法律 p0.5.0、SPEC §9）
+# VGDD Governance Kernel — 予算の上限を決める（オーナーの操作。法律 p0.4.9、SPEC §9）
 #
 # 使い方: budget-set.sh --period <ID> --until <ISO8601 タイムゾーン付き> --tokens-total <数> --tokens-ticket <数> \
 #                       --tokens-run <数> --judge <数> --workers <数> --attempts <数>

@@ -20,7 +20,7 @@
 //   G  裁判所の場面（本物の gate-runner に代わりの司法をつなぎ、承認・判定・停止・保護パスの組み合わせで動かす） … 成立条件②④
 //   K  停止と再開（STOP 中のフック、再開の前の安全確認）                                                   … ADR-010・ADR-027
 //   A  証跡（全判定の記録、スキーマ、改ざん・切り詰めの検出）                                               … 成立条件⑤
-//   B  予算の台帳（予約・精算・不明の扱い・同時の予約・重複・停止・期間・破損・超過。p0.5.0）               … SPEC §9
+//   B  予算の台帳（予約・精算・不明の扱い・同時の予約・重複・停止・期間・破損・超過。p0.4.9）               … SPEC §9
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -122,7 +122,7 @@ function fixture(name) {
   git(main, 'worktree', 'add', '-q', '-b', 'night/T-900', wt);
   const baseline = sha256hex(fs.readFileSync(path.join(main, '.git/config')));
   write(path.join(z3, 'evidence/git-config.baseline'), baseline + '\n');
-  // p0.5.0：偽の Z3 にも予算の上限を置く（十分に大きな値。予算の試験は群 B が自分の値で行う）。本物の Z3 の台帳には触れない
+  // p0.4.9：偽の Z3 にも予算の上限を置く（十分に大きな値。予算の試験は群 B が自分の値で行う）。本物の Z3 の台帳には触れない
   write(path.join(z3, 'budget/limits.json'), JSON.stringify(LIMITS_WIDE) + '\n');
   return { base, main, wt, z3, evidence: path.join(z3, 'evidence/tool_calls.jsonl') };
 }
@@ -302,7 +302,7 @@ function groupC3() {
   const realJudge = (script, extra, out, rc = 0) => {
     for (const f of fs.readdirSync(outDir)) fs.rmSync(path.join(outDir, f), { force: true });
     sh('bash', [path.join(IMPL.bin, script), ...extra, '--ticket', 'docs/tasks/T-921-probe.md', '--base', 'main', '--task', 'T-921', '--out', outDir],
-      { cwd: wj, env: { ...process.env, ...UTF8, PATH: `${fake}:${process.env.PATH}`, FAKE_OUT: out, FAKE_RC: String(rc), VGDD_AUDIT_WRAP: '', VGDD_Z3_DIR: fj.z3 }, timeout: 120000 }); // p0.5.0：台帳は偽の Z3 に書く（本物の Z3 に触れない）
+      { cwd: wj, env: { ...process.env, ...UTF8, PATH: `${fake}:${process.env.PATH}`, FAKE_OUT: out, FAKE_RC: String(rc), VGDD_AUDIT_WRAP: '', VGDD_Z3_DIR: fj.z3 }, timeout: 120000 }); // p0.4.9：台帳は偽の Z3 に書く（本物の Z3 に触れない）
     const f = fs.readdirSync(outDir).find((x) => x.endsWith('.json'));
     try { return JSON.parse(fs.readFileSync(path.join(outDir, f), 'utf8')); } catch { return null; }
   };
@@ -1065,7 +1065,7 @@ function groupL() {
   record('L', 'L9', 'セキュリティ審査が合格でない夜間の合格の記録は統合しない', r.status === 1 && /成り立った司法の判定がない/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
 }
 
-// ---- B 予算の台帳（p0.5.0。SPEC §9、D-66・D-67） -------------------------------------------------
+// ---- B 予算の台帳（p0.4.9。SPEC §9、D-66・D-67） -------------------------------------------------
 function groupB() {
   const ledger = path.join(IMPL.bin, 'ledger.mjs');
   const meter = path.join(IMPL.bin, 'metered.sh');

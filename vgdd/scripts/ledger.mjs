@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// VGDD Governance Kernel — 予算の台帳（法律 p0.5.0、D-66・D-67。SPEC §9）
+// VGDD Governance Kernel — 予算の台帳（法律 p0.4.9、D-66・D-67。SPEC §9）
 //
 // AI の呼び出し（作業員・司法・Codex の司法・憲法審査・要件の補助）を、起動の前に予約し、終わった後に精算する。
 // 台帳 Z3/budget/ledger.jsonl が唯一の正本（追記だけ、ハッシュチェーン）。実行の状態は台帳から毎回作り直す。
@@ -13,7 +13,7 @@
 //   node ledger.mjs status [--json]
 //   node ledger.mjs verify
 //
-// 守ること（SPEC §9、p0.5.0）:
+// 守ること（SPEC §9、p0.4.9）:
 //   - 追記は1つのロック（mkdir）の下で「台帳を読む → 鎖を確かめる → 遷移を確かめる → 追記 → fsync」を1回の処理にする
 //   - 各出来事は event_id を持ち、同じ event_id の二度目は効かない（何度送っても一度だけ効く）
 //   - 台帳の途中切れ・鎖の破損・上限の欠け・期間の外・停止中は、新しい予約をすべて拒む（fail-closed）
@@ -79,7 +79,7 @@ export function readLedger() {
     if (body.prev !== prev || hash !== sha(JSON.stringify(body))) throw new Refused('ledger_broken');
     out.push(e); prev = hash;
   }
-  // p0.5.0（Codex の監査 #5）：末尾の行を消した切り詰め・台帳の差し替えは、最後の番号とハッシュの記録と食い違う
+  // p0.4.9（Codex の監査 #5）：末尾の行を消した切り詰め・台帳の差し替えは、最後の番号とハッシュの記録と食い違う
   if (out.length && !head) throw new Refused('ledger_broken');
   if (head && (out.length !== head.seq || (out.length ? out[out.length - 1].hash : 'genesis') !== head.hash)) throw new Refused('ledger_broken');
   return out;
@@ -201,7 +201,7 @@ export function begin({ kind, task, req, tokens }) {
     if (s.overrun) throw new Refused('overrun');
     const want = tokens === 'auto' ? limits.tokens_per_run : Number(tokens);
     if (!isCount(want) || want === 0) throw new Refused('bad_args');
-    // p0.5.0（Codex の監査 #6）：1回の予約は tokens_per_run を超えられない（数で指定しても同じ）
+    // p0.4.9（Codex の監査 #6）：1回の予約は tokens_per_run を超えられない（数で指定しても同じ）
     if (want > limits.tokens_per_run) throw new Refused('tokens_run');
     // 前の期間で動いている実行の予約も、今の期間の残りから引く（期間を変えても予約は消えない）
     if (s.settled + s.reserved + s.reserved_other_periods + want > limits.tokens_total) throw new Refused('tokens_total');
@@ -247,7 +247,7 @@ export function finish({ run, code, usageText, format }) {
     const id = `finish:${run}`;
     if (events.some((e) => e.event_id === id)) return 'duplicate'; // 精算の二度目は効かない
     if (events.some((e) => e.type === 'cancel' && e.run_id === run)) throw new Refused('bad_transition');
-    // p0.5.0（Codex の監査 #3）：起動の記録のプロセスがまだ生きていれば精算しない（終わりを確かめてから枠を解く）
+    // p0.4.9（Codex の監査 #3）：起動の記録のプロセスがまだ生きていれば精算しない（終わりを確かめてから枠を解く）
     const st = events.find((e) => e.type === 'started' && e.run_id === run);
     if (st && alive(st.pid)) throw new Refused('still_running');
     const counted = format === 'claude' && usageText != null ? claudeTokens(usageText) : null;

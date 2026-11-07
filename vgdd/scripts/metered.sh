@@ -1,5 +1,5 @@
 #!/bin/bash
-# VGDD Governance Kernel — AI の呼び出しを予算の台帳に通す窓口（法律 p0.5.0、SPEC §9）
+# VGDD Governance Kernel — AI の呼び出しを予算の台帳に通す窓口（法律 p0.4.9、SPEC §9）
 #
 # 使い方: metered.sh <kind> <task|-> <tokens|auto> <claude|none> -- <コマンド> [引数...]
 #   起動の前に ledger.mjs begin で予約し、拒まれたら起動せずに終了 75（理由の符号を標準エラーに1行）。

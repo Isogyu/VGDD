@@ -62,14 +62,14 @@ EOF
 if [ "$DRY" -eq 1 ]; then printf '%s\n' "$INPUT"; exit 0; fi
 command -v claude >/dev/null || { echo "claude CLI が見つからない" >&2; exit 69; }
 mkdir -p "$OUT_DIR"
-# p0.5.0：呼び出しは予算の台帳の窓口（metered.sh）を通す（票のない「法律」の呼び出し）。拒まれたら出力なし＝VIOLATES（fail-closed）
+# p0.4.9：呼び出しは予算の台帳の窓口（metered.sh）を通す（票のない「法律」の呼び出し）。拒まれたら出力なし＝VIOLATES（fail-closed）
 METER="$(cd "$(dirname "$0")" && pwd)/metered.sh"
 CLI_RC=0; RAW="$(printf '%s' "$INPUT" | "$METER" constitution - "${VGDD_CONSTITUTION_TOKENS:-300000}" claude -- claude -p --agent constitutional-review --output-format json --max-turns 1 2>/dev/null)" || CLI_RC=$?
 OUT_FILE="$OUT_DIR/constitution-$(date +%Y%m%d-%H%M%S).json"
 export RAW REASON CLI_RC
 node - > "$OUT_FILE" <<'NODE'
 const raw = process.env.RAW || ''; let text = raw;
-// p0.5.0（Codex の監査 #8）：CLI が 0 で終わらなかった（予算の窓口の拒否を含む）ときは、本文によらず審査できなかったものとして扱う
+// p0.4.9（Codex の監査 #8）：CLI が 0 で終わらなかった（予算の窓口の拒否を含む）ときは、本文によらず審査できなかったものとして扱う
 const unavailable = process.env.CLI_RC !== '0';
 try { const o = JSON.parse(raw); if (o && typeof o.result === 'string') text = o.result; } catch {}
 let v = null; if (!unavailable) { const m = text.match(/\{[\s\S]*\}/); if (m) { try { v = JSON.parse(m[0]); } catch {} } }
