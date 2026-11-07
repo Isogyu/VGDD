@@ -1,9 +1,9 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-07T21:49:21.382+09:00",
+  "generated_at": "2026-11-07T22:08:45.151+09:00",
   "totals": {
-    "tickets": 38,
-    "merged": 36,
+    "tickets": 40,
+    "merged": 37,
     "rejected": 35,
     "blocked": 0,
     "disagreements": 17
@@ -336,10 +336,10 @@
     {
       "id": "T-036",
       "title": "統治シアターの下に「Claude Code の使い分け」の欄を足す（役割ごとの機能・モデル・道具の制限と、フックの集計）",
-      "status": "ready",
+      "status": "merged",
       "estimate_h": 2,
       "returns": 0,
-      "merged_at": null,
+      "merged_at": "2026-11-07T22:08:37+0900",
       "disagreements": 0
     },
     {
@@ -347,6 +347,24 @@
       "title": "統治シアターに「はじめて見る」の案内を足す（5つの手順で図の見方を説明し、該当する場所を光らせる）",
       "status": "ready",
       "estimate_h": 2,
+      "returns": 0,
+      "merged_at": null,
+      "disagreements": 0
+    },
+    {
+      "id": "T-038",
+      "title": "統治シアターの見出しに「停止の帯」と「判断待ちの件数」を出す",
+      "status": "ready",
+      "estimate_h": 1.5,
+      "returns": 0,
+      "merged_at": null,
+      "disagreements": 0
+    },
+    {
+      "id": "T-039",
+      "title": "統治シアターの開始の状態（見る記録と再生の票）を URL で決められるようにする",
+      "status": "ready",
+      "estimate_h": 1.5,
       "returns": 0,
       "merged_at": null,
       "disagreements": 0
