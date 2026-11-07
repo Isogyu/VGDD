@@ -1279,21 +1279,24 @@ function groupB() {
   const ptyOut = (ptyRun.stdout || '').replace(/\r/g, '');
   record('B', 'B29', '端末（pty）の上の窓口でも、端末の設定を変えようとする子が止まらずに終わり、精算される（子は端末を持たない新しいセッション）', /done/.test(ptyOut) && /RC 0/.test(ptyOut) && st(z)?.runs.finished === 1, `${ptyOut.trim().split('\n').slice(-2).join(' / ')} rc=${ptyRun.status}`);
 
-  // B30 子が自分で終わった後に同じプロセス群の子孫が残っても、中断にしない（p0.4.10a、OBS-062。Codex の notify の処理が残り、司法が毎回「使えない」になった不具合の再現）
-  //   子孫は片付け（生きていない）、精算と終了コードは子のもの（0 と 3 の両方）、出力は渡す
-  const b30 = (code) => {
+  // B30 Codex の呼び出しで、子が自分で終わった後に同じプロセス群の子孫が残っても、中断にしない（p0.4.10a、OBS-062。Codex の notify の処理が残り、司法が毎回「使えない」になった不具合の再現）
+  //   子孫は片付け（TERM を無視する子孫も KILL で）、精算と終了コードは子のもの（0 と 3）、出力は渡す。作業員（kind=worker）は従来どおり中断（陰性の対照。Codex の監査 major）
+  const b30 = (kind, code, ignoreTerm = false) => {
     const zz = mk({ workers: 2, tokens_total: 100000, tokens_per_ticket: 100000 });
     const pidf = path.join(zz, 'grandchild.pid');
-    const r = sh('bash', [meter, 'codex', 'T-977', '10', 'none', '--', 'sh', '-c', `sleep 30 >/dev/null 2>&1 & echo $! > '${pidf}'; echo done; exit ${code}`], { env: env(zz), input: '', timeout: 60000 });
+    const gc = ignoreTerm ? `sh -c 'trap "" TERM; sleep 30' >/dev/null 2>&1 &` : 'sleep 30 >/dev/null 2>&1 &';
+    const r = sh('bash', [meter, kind, 'T-977', '10', 'none', '--', 'sh', '-c', `${gc} echo $! > '${pidf}'; echo done; exit ${code}`], { env: env(zz), input: '', timeout: 60000 });
     let gpid = 0; try { gpid = Number(fs.readFileSync(pidf, 'utf8').trim()); } catch {}
     let alive = false; if (gpid > 0) { try { process.kill(gpid, 0); alive = true; } catch { alive = false; } }
     const fin = (() => { try { return fs.readFileSync(path.join(zz, 'budget/ledger.jsonl'), 'utf8').split('\n').filter((l) => l.includes('"type":"finish"')).map((l) => JSON.parse(l)); } catch { return []; } })();
     return { r, gpid, alive, fin, s: st(zz) };
   };
-  const b30a = b30(0); const b30b = b30(3);
-  record('B', 'B30', '子が終わった後に同じプロセス群の子孫が残っても中断にせず、子孫を片付けてから子の終了コード（0・3）で精算し、出力を渡す',
-    [[b30a, 0], [b30b, 3]].every(([x, c]) => x.r.status === c && /done/.test(x.r.stdout) && !/interrupted/.test(x.r.stderr) && x.gpid > 0 && !x.alive && x.fin.length === 1 && x.fin[0].exit_code === c && x.s?.runs.finished === 1 && x.s?.workers.active === 0),
-    [b30a, b30b].map((x) => `rc=${x.r.status} err=${(x.r.stderr || '').trim().replace(/\n/g, ' ')} alive=${x.alive} fin=${x.fin.map((f) => f.exit_code).join(',')}`).join(' / '));
+  const okRun = (x, c) => x.r.status === c && /done/.test(x.r.stdout) && !/interrupted/.test(x.r.stderr) && /descendants_reaped/.test(x.r.stderr) && x.gpid > 0 && !x.alive && x.fin.length === 1 && x.fin[0].exit_code === c && x.s?.runs.finished === 1;
+  const b30a = b30('codex', 0); const b30b = b30('codex', 3); const b30c = b30('codex', 0, true); const b30w = b30('worker', 0);
+  const fmt = (x) => `rc=${x.r.status} err=${(x.r.stderr || '').trim().replace(/\n/g, ' ')} alive=${x.alive} fin=${x.fin.map((f) => f.exit_code).join(',')} active=${x.s?.workers.active}`;
+  record('B', 'B30', 'Codex の呼び出しで子が終わった後に同じプロセス群の子孫が残っても中断にせず、子孫を片付けてから子の終了コード（0・3）で精算し、出力を渡す（TERM を無視する子孫も KILL で片付ける）',
+    okRun(b30a, 0) && okRun(b30b, 3) && okRun(b30c, 0), [b30a, b30b, b30c].map(fmt).join(' / '));
+  record('B', 'B31', '作業員（kind=worker）の呼び出しで子孫が残れば、従来どおり中断（終了 75・精算 143・出力を渡さない・作業員の枠を返す）', b30w.r.status === 75 && /interrupted/.test(b30w.r.stderr) && !/done/.test(b30w.r.stdout) && !b30w.alive && b30w.fin.length === 1 && b30w.fin[0].exit_code === 143 && b30w.s?.workers.active === 0, fmt(b30w));
 
   // B24 本物の judge.sh：予算で拒まれたら CLI を起動せず判定は成り立たない。上限の中なら成り立つ（陽性の対照）
   const fx = fixture('b24'); commitTicket(fx, 'T-971', {});
