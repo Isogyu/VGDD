@@ -1,7 +1,7 @@
 ---
 id: T-029
 title: 統治シアターの画面の骨格（区画・色・余白）を作り、/governance/theater で見られるようにする（統治シアター U1）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -102,3 +102,5 @@ depends_on: []
 - 2026-11-07T09:48:23+0900 gate-runner: judge と Codex が分かれたが、オーナーの裁定（統合）により進める：Codex の指摘は、司法の入力にない §6 を A1 が確かめる先にした票の書き方の誤り（立法補佐の起草の誤り）。Codex も実装の欠陥ではないとした。コントラストは held の候補で立法補佐が画面で確かめる
 
 - 2026-11-07T09:48:23+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=CHANGES_REQUIRED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T09:57:07+0900 release: status → merged（main=3b8526e93bbf。夜間の判定に合格した候補 e31c18739535 を、オーナーが朝に承認して統合）
