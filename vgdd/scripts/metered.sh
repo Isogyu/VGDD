@@ -43,7 +43,7 @@ trap stop_child TERM INT HUP ALRM
 #   裁判所が端末の上で動くと、子（Codex）が終わるときに端末の設定を戻そうとして SIGTTOU で止まり、窓口がそれを「生きている」と見て TERM を送っていた。
 #   新しいセッションの子は端末を持たないので止まらない。プロセス群の ID は子の pid と同じ（群ごとの停止と生死の判定はそのまま）
 exec 3<&0
-perl -MPOSIX -e 'POSIX::setsid() or exit 126; exec @ARGV or exit 127' "$@" <&3 > "$OUT" &
+perl -MPOSIX -e 'my $s = POSIX::setsid(); defined($s) && $s > 0 or exit 126; exec @ARGV or exit 127' "$@" <&3 > "$OUT" &
 PID=$!
 if ! node "$LEDGER" started --run "$RUN" --pid "$PID" >/dev/null 2>&1; then
   echo "started_failed" >&2; stop_child
