@@ -1,7 +1,7 @@
 ---
 id: T-037
 title: 統治シアターに「はじめて見る」の案内を足す（5つの手順で図の見方を説明し、該当する場所を光らせる）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 2
 time_limit_min: 150
 security_review: false         # 固定の文と図の強調だけ。データの取得と API は変えない
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-ad3d16cbc52b24dd6
+worker: W33
 files_allowed:
   - src/lib/theater-guide.ts                          # 新設：案内の手順（固定の文と図の強調）
   - src/lib/theater-guide.test.ts                     # 新設
@@ -109,6 +109,13 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 決定論的な監査＋ judge ＋ Codex judge。T-035・T-036 の統合の後に作業員を起動する（同じ `GovernanceTheater.tsx` を触る）。
 
 ## 6. 記録
+
+- 22:11 行政の長が W33 を起動（worktree `agent-ad3d16cbc52b24dd6`、モデルは Opus）。仕様はオーナーが 21:37:51 に approve-spec で承認済み（22:10:31 の Kernel の写しの `approvals[].current` で確かめた）。依存の T-031・T-034・T-035・T-036 は統合済み。起動の前に、A1 の表の節と線の ID がどれも `theater-stage.ts` の `STAGE_NODE_IDS`・`STAGE_EDGE_IDS` にあり、`StageFocus` の形と `tone: "normal"` が型に合うことを確かめた
+- W33 の報告：基点は main 91a5735（T-036 の統合 78dc6d5 と、その後の盤・README の文書のコミットを含む）。HEAD `3b7e0f8e009e9ec6009ade5bdb778b4cbcd5b49a`、91a5735 の上に1コミット。test 892 件（46 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:875` の `stopsDir` で差分の外）。§2 から外れる解釈はない
+- 行政の長の確認（試験は再実行していない）：差分は A0 の6つだけ（+276 / -1）。A1 の5つの title・body と `GUIDE_NOTE` を、票の表から切り出した文字列と機械で照らし合わせ、どれも一字一句同じ。節と線は表の順で、「（なし）」は空の配列。`GovernanceTheater.tsx` の変更は、`guideStep` の state、「はじめて見る」ボタン、主役の区画に渡す `focus` の切り替え、選んだ票の区画（`side`）の中身の切り替えだけ。`controls` の `TicketReplay`（位置・`key={source}`・`onEventChange={setCurrentEvent}`）、`selectSource`、T-035 の取り直し、T-033・T-036 の区画は変わっていない
+- 読み方が割れる所（W33 の選んだ読み方）：(1) `aria-live="polite"` は、「n / 5」・`h3` の title・body をまとめた入れ物に付ける（ボタンと `GUIDE_NOTE` はその外） (2) 「/ 5」の 5 は `GUIDE_STEPS.length` から作り、1つの文字列にする (3) 「はじめて見る」は、見出しの区画の右側、source の切り替えの前に置く
+- 補った解釈（文面の範囲内）：(1) ボタンの見た目は source のボタンと同じ class。「戻る」の `disabled` に `disabled:opacity-50 disabled:cursor-not-allowed` を足す（transition はない） (2) `TheaterGuide` は `step` が 0〜4 にあると前提し、範囲に収めるのは `GovernanceTheater` の更新関数 (3) 最後の手順でも「案内を終える」は出したまま（「終える」と同じ `onClose`。A2 の「ボタンは3つ」に合わせた） (4) 案内中は `judge`・`codex` が `null` なので、図の判定のバッジは「Claude —、Codex —」になる。手順 1 は線がすべて暗くなる（`GovernanceStage` の既存の振る舞い。画面では未確認）
+- **確かめていない**：クリックによる手順の移動と図の光る場所、終えた後の図の戻り（一時停止中・再生中の両方）、キーボード操作（案内を始めると「はじめて見る」が消え、終えると案内の欄が消えるので、そのときのフォーカスの行き先を見ていない）、1440×900 と 375px の実際の収まり（案内の文があふれたときの縦のスクロールを含む）、`npm run build`。§3 で立法補佐が held の候補で確かめる
 
 ## オーナーに聞くこと
 
