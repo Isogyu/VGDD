@@ -199,9 +199,12 @@ process_request() {
   local actual; actual="$(git -C "$REPO" rev-parse "$branch")"
   # p0.3.0：以後の検査・判定・統合は、この完全な SHA（${actual}）に固定する。ブランチ名は使わない（OBS-023②）
   [[ "$actual" == "$sha"* ]] || { fail "$task" "申請の HEAD（${sha}）とブランチの HEAD（${actual:0:12}）が違う" && mv "$req" "$DONE_DIR/"; return; }
-  local returns; returns="$(grep -c 'gate-runner: status → in_progress' "$t" || true)"
+  # p0.4.7：数えるのは「## 6. 記録」の見出しから後ろの、裁判所の記録の行の形（- <時刻> gate-runner: status → in_progress）だけ。
+  #   票の説明や引用の中の同じ文字列は数えない（Codex の監査 p0.4.7 #2）。見出しから後ろを全部見るのは、裁判所が票の末尾に書き足すため
+  local returns; returns="$(awk '/^## 6\. 記録[ \t]*$/{s=1;next} s && /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9][+-][0-9][0-9][0-9][0-9] gate-runner: status → in_progress/{n++} END{print n+0}' "$t")"
   # p0.2.4：オーナーが取り消した差し戻し（法律の不具合・鎖の連鎖によるもの）は数えない。取り消しの記録は Z3 にあり、行政は書けない（OBS-020）
-  local annulled; annulled="$(grep -c "\"task\":\"$task\"" "$Z3/evidence/annulments.jsonl" 2>/dev/null || true)"; annulled="${annulled:-0}"
+  #   p0.4.7：取り消しの記録は JSON として読む（空白の有無で数が変わらない。読めない行は数えない。Codex の監査 p0.4.7 #1）。1行＝1回の取り消し
+  local annulled=0; [ -f "$Z3/evidence/annulments.jsonl" ] && annulled="$(jq -R --arg t "$task" 'fromjson? | objects | select(.task == $t)' "$Z3/evidence/annulments.jsonl" 2>/dev/null | jq -s 'length' 2>/dev/null || echo 0)"; annulled="${annulled:-0}"
   returns=$(( returns - annulled )); [ "$returns" -ge 0 ] || returns=0
   [ "$returns" -lt "$MAX_RETURNS" ] || { fail "$task" "差し戻しが $MAX_RETURNS 回に達した。オーナーの判断へ" "blocked" && mv "$req" "$DONE_DIR/"; return; }
 

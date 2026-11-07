@@ -506,20 +506,43 @@ function groupG() {
   };
   g = runGate(gateFixture('g23', { afterApprove: withReturns(3) }), 'APPROVED');
   record('G', 'G23', '差し戻しが3回に達した票の申請は、司法を呼ばずに blocked にしてオーナーの判断へ（司法が APPROVED でも統合しない。自動の再試行を有限にする）',
-    !g.inMain && !g.judged && !g.pending && g.status === 'blocked' && g.events.some((e) => e.type === 'rejected' && /差し戻しが 3 回に達した/.test(e.reason || '')),
-    `status=${g.status} judged=${g.judged} pending=${g.pending} inMain=${g.inMain}`);
+    g.code === 0 && !g.inMain && !g.judged && !g.pending && g.status === 'blocked' && g.events.some((e) => e.type === 'rejected' && /差し戻しが 3 回に達した/.test(e.reason || '')),
+    `exit=${g.code} status=${g.status} judged=${g.judged} pending=${g.pending} inMain=${g.inMain}`);
   g = runGate(gateFixture('g23b', { afterApprove: withReturns(2) }), 'APPROVED');
-  record('G', 'G23b', '差し戻しが2回なら上限の前なので、普通に審査して統合される（陽性の対照）', g.inMain && g.judged && g.status === 'merged', `status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
+  record('G', 'G23b', '差し戻しが2回なら上限の前なので、普通に審査して統合される（陽性の対照）', g.code === 0 && g.inMain && g.judged && g.status === 'merged', `exit=${g.code} status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
+  // 取り消しの記録は JSON として読む：空白を入れた表記でも数える（p0.4.6 までは "task":"T-930" の文字列を数えていたので見逃した。Codex の監査 p0.4.7 #1）
   const g23c = gateFixture('g23c', { afterApprove: withReturns(3) });
-  write(path.join(g23c.z3, 'evidence/annulments.jsonl'), JSON.stringify({ ts: '2026-11-03T21:00:00+0900', task: g23c.id, reason: '法律の不具合による差し戻しの取り消し G23c' }) + '\n');
+  write(path.join(g23c.z3, 'evidence/annulments.jsonl'), JSON.stringify({ ts: '2026-11-03T21:00:00+0900', task: g23c.id, reason: '法律の不具合による差し戻しの取り消し G23c' }, null, 1).replace(/\n/g, ' ') + '\nこれは JSON でない行\n');
   g = runGate(g23c, 'APPROVED');
-  record('G', 'G23c', 'オーナーが取り消した差し戻しは上限に数えない（3回のうち1回を取り消せば、審査して統合される）', g.inMain && g.status === 'merged', `status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
+  record('G', 'G23c', 'オーナーが取り消した差し戻しは上限に数えない（3回のうち1回を取り消せば、審査して統合される）。取り消しの記録は JSON として読み、空白の有無で数が変わらず、読めない行は数えない',
+    g.code === 0 && g.inMain && g.status === 'merged', `exit=${g.code} status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
+  // 数えるのは §6 の後ろの、裁判所の記録の行の形だけ（票の説明や引用の中の同じ文字列は数えない。Codex の監査 p0.4.7 #2）
+  const g23d = gateFixture('g23d', { afterApprove: (fx, id) => {
+    const tp = path.join(fx.main, `docs/tasks/${id}-probe.md`);
+    const quote = ['gate-runner: status → in_progress（説明 1）', '> gate-runner: status → in_progress（引用 2）', '- 立法補佐の記録：gate-runner: status → in_progress が3回あった'].join('\n');
+    fs.appendFileSync(tp, `\n## 5b. 補足\n\n${quote}\n\n## 6. 記録\n\n- 2026-11-03T20:00:00+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/x.ts）\n- 11:00 行政の長：gate-runner: status → in_progress の後に直した\n`);
+    git(fx.main, 'add', '-A'); git(fx.main, 'commit', '-q', '-m', `${id} の説明と引用`);
+  } });
+  g = runGate(g23d, 'APPROVED');
+  record('G', 'G23d', '差し戻しの回数は §6 の後ろの裁判所の記録の行（- <時刻> gate-runner: status → in_progress）だけを数え、説明・引用・人の記録の中の同じ文字列は数えない（1回なので審査して統合される）',
+    g.code === 0 && g.inMain && g.status === 'merged', `exit=${g.code} status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
   // ---- p0.4.7（OBS-060）：共有の .git/config が基準値と違えば止まる。止まる前に証拠ストアに記録を残す ----
+  // 記録の行は種類だけ：ts・type・task・kind の4つで、kind は決めた値。設定の本文・ハッシュを含まない（Codex の監査 p0.4.7 #3）
+  const cfgEventOk = (events, kind) => {
+    const es = events.filter((e) => e.type === 'git_config_changed');
+    return es.length === 1 && es[0].kind === kind && Object.keys(es[0]).sort().join(',') === 'kind,task,ts,type' && !/[0-9a-f]{40,64}|vscode|origin/.test(JSON.stringify(es[0]));
+  };
   const g24 = gateFixture('g24');
   git(g24.main, 'config', 'branch.main.vscode-merge-base', 'origin/main');
   g = runGate(g24, 'APPROVED');
-  record('G', 'G24', '共有の .git/config が基準値と違えば、申請を処理せずに止まり、止まる前に git_config_changed を証拠ストアに残す（黙って終わらない。OBS-060）',
-    g.code !== 0 && !g.judged && g.pending && g.status === 'review' && !g.inMain && g.events.some((e) => e.type === 'git_config_changed'),
+  record('G', 'G24', '共有の .git/config が基準値と違えば、申請を処理せずに終了コード 70 で止まり、止まる前に git_config_changed（kind: mismatch。種類だけ）を証拠ストアに残す（黙って終わらない。OBS-060）',
+    g.code === 70 && !g.judged && g.pending && g.status === 'review' && !g.inMain && cfgEventOk(g.events, 'mismatch'),
+    `exit=${g.code} judged=${g.judged} pending=${g.pending} events=${g.events.map((e) => e.type).join(',')}`);
+  const g24b = gateFixture('g24b');
+  fs.rmSync(path.join(g24b.z3, 'evidence/git-config.baseline'));
+  g = runGate(g24b, 'APPROVED');
+  record('G', 'G24b', 'git の設定の基準値がなければ、申請を処理せずに終了コード 70 で止まり、止まる前に git_config_changed（kind: baseline_missing）を残す',
+    g.code === 70 && !g.judged && g.pending && g.status === 'review' && !g.inMain && cfgEventOk(g.events, 'baseline_missing'),
     `exit=${g.code} judged=${g.judged} pending=${g.pending} events=${g.events.map((e) => e.type).join(',')}`);
 }
 
