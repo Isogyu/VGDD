@@ -274,6 +274,9 @@ export function cancel({ run }) {
 }
 
 export function status() {
+  return withLock(() => statusUnlocked());   // 追記と同じロックで読む（古い head と新しい台帳を組み合わせて破損と誤報しない）
+}
+function statusUnlocked() {
   const events = readLedger();
   let limits = null; try { limits = readLimits(); } catch { /* 上限がなければ null */ }
   const runs = deriveRuns(events);
@@ -310,7 +313,7 @@ if (isMain) {
       const s = status();
       console.log(rest.includes('--json') ? JSON.stringify(s) : `期間 ${s.period_id ?? '—'}（${s.until ?? '—'} まで）：トークン 消費 ${s.tokens.settled}・予約 ${s.tokens.reserved}（前の期間から ${s.tokens.reserved_other_periods}）／${s.tokens.limit ?? '—'}（不明 ${s.tokens.unknown_runs} 件）、司法 ${s.judge_calls.used}／${s.judge_calls.limit ?? '—'}、作業員 ${s.workers.active}／${s.workers.limit ?? '—'}${s.overrun ? '、超過あり（後続を止める）' : ''}`);
     } else if (cmd === 'verify') {
-      readLedger(); console.log('ok');
+      withLock(() => readLedger()); console.log('ok');
     } else { console.error('bad_args'); process.exit(64); }
   } catch (e) {
     if (e instanceof Refused) { console.error(e.code); process.exit(75); }

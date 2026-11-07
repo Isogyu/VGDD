@@ -20,6 +20,9 @@ PID=""
 cleanup() { rm -f "$OUT"; }
 trap cleanup EXIT
 stop_child() {
+  # bash は trap を「今のコマンドが終わった後」に動かす。子の起動（& の行）の途中で受けた中断は、& の後に動くので $! が子を指す。
+  # PID の代入の前でも $! で子を拾う（起動の前なら $! は空。Codex の3回目の監査 ①）
+  [ -n "$PID" ] || PID="${!:-}"
   if [ -z "$PID" ]; then   # まだ起動していない：予約を取り消して終わる
     node "$LEDGER" cancel --run "$RUN" >/dev/null 2>&1 || true
     echo "interrupted" >&2; exit 75

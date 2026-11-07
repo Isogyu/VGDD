@@ -1249,12 +1249,18 @@ function groupB() {
     const f = fs.existsSync(od) ? fs.readdirSync(od).find((x) => x.endsWith('.json')) : null;
     try { return JSON.parse(fs.readFileSync(path.join(od, f), 'utf8')); } catch { return null; }
   };
+  const okBody = JSON.stringify({ schema: 'vgdd.constitutional.v1', verdict: 'CONSISTENT', violations: [], notes: '' });
+  const outerErr = (() => { // 外側が is_error の応答で、本文は正しい判定
+    write(path.join(fk, 'claude'), `#!/bin/bash\nprintf '%s' '${JSON.stringify({ type: 'result', subtype: 'success', is_error: true, result: okBody })}'\n`); fs.chmodSync(path.join(fk, 'claude'), 0o755);
+    const od = path.join(fr.base, 'rev-outer'); sh('bash', [path.join(IMPL.bin, 'review-constitution.sh'), '--reason', '試験', '--out', od], { cwd: fr.main, env: { ...process.env, ...UTF8, PATH: `${fk}:${process.env.PATH}`, VGDD_Z3_DIR: fr.z3 }, timeout: 60000 });
+    const f = fs.existsSync(od) ? fs.readdirSync(od).find((x) => x.endsWith('.json')) : null; try { return JSON.parse(fs.readFileSync(path.join(od, f), 'utf8')); } catch { return null; } })();
+  const prose = runRev(`判定です。${okBody} 以上です`);
   const partial = runRev('{"verdict":"CONSISTENT"}');
   const failed = runRev(JSON.stringify({ schema: 'vgdd.constitutional.v1', verdict: 'CONSISTENT', violations: [], notes: '' }), 1);
   const goodRev = runRev(JSON.stringify({ schema: 'vgdd.constitutional.v1', verdict: 'CONSISTENT', violations: [], notes: '' }));
-  record('B', 'B27', '本物の review-constitution.sh：形の欠けた判定と CLI の失敗は採らず VIOLATES、形の合う判定は採る（陽性の対照）',
-    partial?.verdict === 'VIOLATES' && partial?.parse_ok === false && failed?.verdict === 'VIOLATES' && failed?.unavailable === true && goodRev?.verdict === 'CONSISTENT',
-    `partial=${partial?.verdict} failed=${failed?.verdict}/${failed?.unavailable} good=${goodRev?.verdict}`);
+  record('B', 'B27', '本物の review-constitution.sh：形の欠けた判定・CLI の失敗・外側の失敗の応答・説明の文の付いた判定は採らず VIOLATES、形の合う判定は採る（陽性の対照）',
+    partial?.verdict === 'VIOLATES' && partial?.parse_ok === false && failed?.verdict === 'VIOLATES' && failed?.unavailable === true && outerErr?.verdict === 'VIOLATES' && prose?.verdict === 'VIOLATES' && goodRev?.verdict === 'CONSISTENT',
+    `partial=${partial?.verdict} failed=${failed?.verdict}/${failed?.unavailable} outer=${outerErr?.verdict} prose=${prose?.verdict} good=${goodRev?.verdict}`);
 
   // B24 本物の judge.sh：予算で拒まれたら CLI を起動せず判定は成り立たない。上限の中なら成り立つ（陽性の対照）
   const fx = fixture('b24'); commitTicket(fx, 'T-971', {});

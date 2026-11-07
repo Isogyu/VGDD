@@ -6,7 +6,7 @@
 2. **止める**：`~/tsubuyaki-z3/bin/kernel-stop.sh "p0.4.9 の配置"`。裁判所（gate-runner）と夜間の代行を Ctrl-C で止める
 3. **旧い処理が終わったことを確かめる**：次のコマンドで何も出ないこと（出たら、終わるまで待つ）
    ```bash
-   pgrep -fl 'gate-runner.sh|night-runner.sh|judge.sh|judge-codex.sh|review-constitution.sh|claude -p --agent'
+   pgrep -fl 'gate-runner.sh|night-runner.sh|judge.sh|judge-codex.sh|review-constitution.sh|metered.sh|claude -p --agent|codex exec'
    ```
 4. **旧い消費の扱い**：p0.4.8 までの記録は台帳に入れない（台帳は空から始め、配置の後の呼び出しだけを数える）
 5. **予算の上限を先に置く**（これがないと、写した後の司法・憲法審査がすべて止まる）：
