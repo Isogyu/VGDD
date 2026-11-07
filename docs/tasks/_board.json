@@ -1,9 +1,9 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-07T22:50:54.284+09:00",
+  "generated_at": "2026-11-07T23:23:14.795+09:00",
   "totals": {
     "tickets": 42,
-    "merged": 40,
+    "merged": 41,
     "rejected": 36,
     "blocked": 0,
     "disagreements": 17
@@ -363,10 +363,10 @@
     {
       "id": "T-039",
       "title": "統治シアターの開始の状態（見る記録と再生の票）を URL で決められるようにする",
-      "status": "in_progress",
+      "status": "merged",
       "estimate_h": 1.5,
       "returns": 1,
-      "merged_at": null,
+      "merged_at": "2026-11-07T23:23:03+0900",
       "disagreements": 0
     },
     {
