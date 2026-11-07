@@ -81,6 +81,7 @@ fi
 #   ほかの引数（sandbox の変更・設定の上書き・承認の省略など）があれば Codex を呼ばずに終了 64（判定のファイルを書かない＝裁判所は「司法が使えない」として扱う）
 CODEX_ARGS=()
 if [ -n "${CODEX_EXTRA_ARGS:-}" ]; then
+  case "${CODEX_EXTRA_ARGS}" in *$'\n'*|*$'\r'*) echo "CODEX_EXTRA_ARGS に改行がある" >&2; exit 64 ;; esac   # read は1行目しか読まない（Codex の3回目の監査 minor）
   read -r -a _xa <<< "${CODEX_EXTRA_ARGS}"
   _i=0
   while [ "${_i}" -lt "${#_xa[@]}" ]; do

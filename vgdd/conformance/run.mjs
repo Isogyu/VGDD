@@ -300,10 +300,11 @@ function groupC3() {
   fs.chmodSync(path.join(fake, 'claude'), 0o755); fs.chmodSync(path.join(fake, 'codex'), 0o755);
   const outDir = path.join(fj.base, 'verdicts'); fs.mkdirSync(outDir, { recursive: true });
   const okVerdict = JSON.stringify({ schema: 'vgdd.verdict.v1', verdict: 'APPROVED', deterministic_audits_passed: true, requirements: [], findings: [], summary: 'x' });
+  let lastJudgeStatus = null;
   const realJudge = (script, extra, out, rc = 0, extraEnv = {}) => {
     for (const f of fs.readdirSync(outDir)) fs.rmSync(path.join(outDir, f), { force: true });
-    sh('bash', [path.join(IMPL.bin, script), ...extra, '--ticket', 'docs/tasks/T-921-probe.md', '--base', 'main', '--task', 'T-921', '--out', outDir],
-      { cwd: wj, env: { ...process.env, ...UTF8, PATH: `${fake}:${process.env.PATH}`, FAKE_OUT: out, FAKE_RC: String(rc), VGDD_AUDIT_WRAP: '', VGDD_Z3_DIR: fj.z3, ...extraEnv }, timeout: 120000 }); // p0.4.9：台帳は偽の Z3 に書く（本物の Z3 に触れない）
+    lastJudgeStatus = sh('bash', [path.join(IMPL.bin, script), ...extra, '--ticket', 'docs/tasks/T-921-probe.md', '--base', 'main', '--task', 'T-921', '--out', outDir],
+      { cwd: wj, env: { ...process.env, ...UTF8, PATH: `${fake}:${process.env.PATH}`, FAKE_OUT: out, FAKE_RC: String(rc), VGDD_AUDIT_WRAP: '', VGDD_Z3_DIR: fj.z3, ...extraEnv }, timeout: 120000 }).status; // p0.4.9：台帳は偽の Z3 に書く（本物の Z3 に触れない）
     const f = fs.readdirSync(outDir).find((x) => x.endsWith('.json'));
     try { return JSON.parse(fs.readFileSync(path.join(outDir, f), 'utf8')); } catch { return null; }
   };
@@ -349,13 +350,13 @@ function groupC3() {
   const si = a10.indexOf('-s');
   record('C3', 'X10', '本物の judge-codex.sh：Codex に必ず -s read-only を渡し、モデルの指定（--model 名前）は通す（陽性の対照）',
     !!modelOk && modelOk.parse_ok === true && si >= 0 && a10[si + 1] === 'read-only' && a10.includes('--model') && a10.includes('gpt-x.1'), `args=${a10.filter(Boolean).slice(1).join(' ')}`);
-  const bad = ['--sandbox danger-full-access', '-c sandbox_mode=danger-full-access', '--full-auto', '--dangerously-bypass-approvals-and-sandbox', '--model', '--model a;b'].map((x) => {
+  const bad = ['--sandbox danger-full-access', '-c sandbox_mode=danger-full-access', '--full-auto', '--dangerously-bypass-approvals-and-sandbox', '--model', '--model a;b', '--model gpt-x.1\n--sandbox danger-full-access'].map((x) => {
     fs.rmSync(argsLog, { force: true });
     const rec = realJudge('judge-codex.sh', [], okVerdict, 0, { FAKE_ARGS: argsLog, CODEX_EXTRA_ARGS: x });
-    return { x, rec, called: readArgs() !== null };
+    return { x, rec, called: readArgs() !== null, status: lastJudgeStatus };
   });
-  record('C3', 'X11', '本物の judge-codex.sh：CODEX_EXTRA_ARGS にモデルの指定以外（sandbox の変更など）があれば Codex を呼ばず、判定の記録を書かない（司法が使えない）',
-    bad.every((b) => !b.called && b.rec === null), bad.filter((b) => b.called || b.rec !== null).map((b) => b.x).join(' | ') || '');
+  record('C3', 'X11', '本物の judge-codex.sh：CODEX_EXTRA_ARGS にモデルの指定以外（sandbox の変更・改行の後の引数など）があれば Codex を呼ばず、判定の記録を書かず終了 64（司法が使えない）',
+    bad.every((b) => !b.called && b.rec === null && b.status === 64), bad.filter((b) => b.called || b.rec !== null || b.status !== 64).map((b) => `${JSON.stringify(b.x)} exit=${b.status}`).join(' | ') || '');
 }
 
 // ---- G 裁判所の場面 ---------------------------------------------------------------------------
