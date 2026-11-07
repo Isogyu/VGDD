@@ -1,7 +1,7 @@
 ---
 id: T-043
 title: 初心者向けの要件確認（/requirements）を足す。固定の質問・回答・未解決の事項・受け入れ条件の候補を LLM から独立したデータで持ち、票の下書きの文を出す
-status: review
+status: blocked
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -117,3 +117,5 @@ held の後、立法補佐が候補で確かめる（build は作業員の sandb
 - 行政の長の確認（試験は再実行していない）：`fb146da` から変わったのは `RequirementsGuide.tsx`（+32 / -6）と `RequirementsGuide.test.tsx`（+57 / -2。-2 は import の書き換えで、今ある試験の中身は同じ）だけ。`setApproval(null)` はすべて `resetApproval()` に置き換わり、ほかの部分は変わっていない
 - 補った解釈：(1) 表示を空に戻すたびに必ず取り直す (2) `create()` の後は票 ID が null なので、世代が進んでも取得しない (3) `save()` で票 ID が変わらないときは、空に戻さず取り直しもしない（元の動きのまま）
 - **確かめていない**：ブラウザでの実際の操作（3つの場面で表示が戻るか、React が effect を動かし直して abort するか、開発時の StrictMode での見え方）。3つの場面が `open()` を通ることは、コードの構造で保っているだけで、試験していない。ほかに、前の記録と同じもの（実サーバーでの API と `GET /api/governance/kernel`、375px、`npm run build`）。§3 で立法補佐が held の候補で確かめる
+
+- 2026-11-08T03:37:10+0900 gate-runner: status → blocked（司法（codex）が同じ申請で通算 3 回使えなかった。差し戻しではない。オーナーが司法の環境を確かめてから再申請する）
