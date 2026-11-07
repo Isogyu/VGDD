@@ -22,7 +22,8 @@ trap cleanup EXIT
 stop_child() {
   # bash は trap を「今のコマンドが終わった後」に動かす。子の起動（& の行）の途中で受けた中断は、& の後に動くので $! が子を指す。
   # PID の代入の前でも $! で子を拾う（起動の前なら $! は空。Codex の3回目の監査 ①）
-  [ -n "$PID" ] || PID="${!:-}"
+  # bash 3.2 は set -u のもとで、未設定の $! を ${!:-} でも未定義として止まるので、読む間だけ nounset を外す（Codex の4回目の監査）
+  if [ -z "$PID" ]; then set +u; PID="$!"; set -u; fi
   if [ -z "$PID" ]; then   # まだ起動していない：予約を取り消して終わる
     node "$LEDGER" cancel --run "$RUN" >/dev/null 2>&1 || true
     echo "interrupted" >&2; exit 75

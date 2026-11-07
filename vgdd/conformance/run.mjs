@@ -1232,6 +1232,15 @@ function groupB() {
   if (g2Alive) { try { process.kill(g2, 'SIGKILL'); } catch { /* 終わっている */ } }
   try { bg25.kill('SIGKILL'); } catch { /* 終わっている */ }
 
+  // B28 予約の後・子の起動の前の中断：予約を取り消して終わる（bash 3.2 の set -u でも止まらない）。窓口の写しの起動の直前に中断を入れて試す
+  z = mk({ workers: 1, tokens_total: 100000, tokens_per_ticket: 100000 });
+  const meterCopy = path.join(z, 'metered-probe.sh');
+  fs.copyFileSync(path.join(IMPL.bin, 'ledger.mjs'), path.join(z, 'ledger.mjs'));
+  write(meterCopy, fs.readFileSync(meter, 'utf8').replace(/^set -m$/m, () => 'kill -TERM $$\nset -m')); fs.chmodSync(meterCopy, 0o755);
+  const r28 = sh('bash', [meterCopy, 'worker', 'T-975', '100', 'none', '--', fakeCli(z)], { env: env(z) });
+  s = st(z);
+  record('B', 'B28', '予約の後・子の起動の前に中断されたら、子を起動せず予約を取り消す（作業員の枠を残さない）', r28.status === 75 && /interrupted/.test(r28.stderr) && calls(z) === 0 && s?.runs.cancelled === 1 && s?.workers.active === 0, `rc=${r28.status} ${r28.stderr.trim()} cancelled=${s?.runs.cancelled} active=${s?.workers.active}`);
+
   // B26 期間を変えた後も、前の期間の予約はその票の上限に入る
   z = mk({ workers: 5, tokens_total: 100000, tokens_per_ticket: 500 });
   L(z, 'begin', '--kind', 'worker', '--task', 'T-974', '--req', 'q26', '--tokens', '400');
