@@ -113,3 +113,5 @@ depends_on: []
 
 1. 票の題（`title`）は公開の応答に入れる。題は今も `/governance` の票の盤に出ているので、新しく公開するものではない
 2. 既存の `GET /api/governance` の `detail` は、この票では変えない（今の画面が使っている）。新しい画面に切り替える T-034 で、今の「票1枚の運命」の区画をどう扱うかを決める
+
+- 2026-11-07T09:40:57+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）

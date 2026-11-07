@@ -1,7 +1,7 @@
 ---
 id: T-029
 title: 統治シアターの画面の骨格（区画・色・余白）を作り、/governance/theater で見られるようにする（統治シアター U1）
-status: review
+status: blocked
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -95,3 +95,5 @@ depends_on: []
 1. A3 の1行の文（作品の要約）は §2 なので、承認の前に決める。直すなら承認の前に言ってほしい
 2. 画面の背景を、システムのライト／ダークにかかわらず濃い紺に固定する（録画で見た目をそろえるため）
 3. 入口は `/governance/theater`（試作）。今の `/governance` に組み込むのは T-034
+
+- 2026-11-07T09:42:37+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
