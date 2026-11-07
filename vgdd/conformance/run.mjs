@@ -1237,7 +1237,7 @@ function groupB() {
   z = mk({ workers: 1, tokens_total: 100000, tokens_per_ticket: 100000 });
   const meterCopy = path.join(z, 'metered-probe.sh');
   fs.copyFileSync(path.join(IMPL.bin, 'ledger.mjs'), path.join(z, 'ledger.mjs'));
-  write(meterCopy, fs.readFileSync(meter, 'utf8').replace(/^set -m$/m, () => 'kill -TERM $$\nset -m')); fs.chmodSync(meterCopy, 0o755);
+  write(meterCopy, fs.readFileSync(meter, 'utf8').replace(/^exec 3<&0$/m, () => 'kill -TERM $$\nexec 3<&0')); fs.chmodSync(meterCopy, 0o755);
   const r28 = sh('bash', [meterCopy, 'worker', 'T-975', '100', 'none', '--', fakeCli(z)], { env: env(z) });
   s = st(z);
   record('B', 'B28', '予約の後・子の起動の前に中断されたら、子を起動せず予約を取り消す（作業員の枠を残さない）', r28.status === 75 && /interrupted/.test(r28.stderr) && calls(z) === 0 && s?.runs.cancelled === 1 && s?.workers.active === 0, `rc=${r28.status} ${r28.stderr.trim()} cancelled=${s?.runs.cancelled} active=${s?.workers.active}`);
@@ -1271,6 +1271,13 @@ function groupB() {
   record('B', 'B27', '本物の review-constitution.sh：形の欠けた判定・CLI の失敗・外側の失敗の応答・説明の文の付いた判定は採らず VIOLATES、形の合う判定は採る（陽性の対照）',
     partial?.verdict === 'VIOLATES' && partial?.parse_ok === false && failed?.verdict === 'VIOLATES' && failed?.unavailable === true && outerErr?.verdict === 'VIOLATES' && prose?.verdict === 'VIOLATES' && goodRev?.verdict === 'CONSISTENT',
     `partial=${partial?.verdict} failed=${failed?.verdict}/${failed?.unavailable} outer=${outerErr?.verdict} prose=${prose?.verdict} good=${goodRev?.verdict}`);
+
+  // B29 端末（tty）の上で動く窓口でも、子が端末の設定を変えようとして止まらない（p0.4.9a。Codex が SIGTTOU で止まった不具合の再現）
+  z = mk({ workers: 2, tokens_total: 100000, tokens_per_ticket: 100000 });
+  const ptyRun = sh('perl', ['-e', 'alarm 30; exec @ARGV', 'python3', '-c', 'import pty,sys,os; st=pty.spawn(sys.argv[1:]); print("RC",os.waitstatus_to_exitcode(st))',
+    'bash', meter, 'judge', 'T-976', '10', 'none', '--', 'sh', '-c', 'stty sane </dev/tty >/dev/null 2>&1; echo done'], { env: env(z), input: '', timeout: 60000 });
+  const ptyOut = (ptyRun.stdout || '').replace(/\r/g, '');
+  record('B', 'B29', '端末（pty）の上の窓口でも、端末の設定を変えようとする子が止まらずに終わり、精算される（子は端末を持たない新しいセッション）', /done/.test(ptyOut) && /RC 0/.test(ptyOut) && st(z)?.runs.finished === 1, `${ptyOut.trim().split('\n').slice(-2).join(' / ')} rc=${ptyRun.status}`);
 
   // B24 本物の judge.sh：予算で拒まれたら CLI を起動せず判定は成り立たない。上限の中なら成り立つ（陽性の対照）
   const fx = fixture('b24'); commitTicket(fx, 'T-971', {});
