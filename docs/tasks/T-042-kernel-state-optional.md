@@ -1,7 +1,7 @@
 ---
 id: T-042
 title: Kernel の写しの読み取りを、予算・実行・受け入れの新しい項目（任意）にも対応させる（新旧の両方の写しを読める）
-status: review
+status: in_progress
 requirements: [A0, A1, A2, A3, A4]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -76,3 +76,5 @@ held の後、立法補佐が候補で `/governance` を開き、提出記録・
 ## オーナーに聞くこと
 
 1. 3項目の形（A1）を、法律の改正 L1・L3 で書く形として固定する
+
+- 2026-11-08T00:01:24+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
