@@ -17,11 +17,12 @@ while [ $# -gt 0 ]; do
   shift 2
 done
 for v in "$P" "$U" "$TT" "$TK" "$TR" "$J" "$W" "$A"; do [ -n "$v" ] || { echo "引数が足りない" >&2; exit 64; }; done
-for v in "$TT" "$TK" "$TR" "$J" "$W" "$A"; do [[ "$v" =~ ^[0-9]+$ ]] || { echo "数は 0 以上の整数" >&2; exit 64; }; done
+for v in "$TT" "$TK" "$TR" "$J" "$W" "$A"; do [[ "$v" =~ ^[0-9]{1,15}$ ]] || { echo "数は 0 以上の整数（15桁まで）" >&2; exit 64; }; done
 [[ "$P" =~ ^[A-Za-z0-9._:-]{1,120}$ ]] || { echo "--period の形が違う" >&2; exit 64; }
 node -e 'const s=process.argv[1]; if (Number.isNaN(Date.parse(s)) || !/([+-]\d{2}:\d{2}|Z)$/.test(s)) process.exit(1)' "$U" || { echo "--until はタイムゾーン付きの日時" >&2; exit 64; }
 mkdir -p "$Z3/budget"
 TMP="$(mktemp "$Z3/budget/.limits.XXXXXX")"
+trap 'rm -f "$TMP"' EXIT
 node -e '
 const [p,u,tt,tk,tr,j,w,a]=process.argv.slice(1);
 const at=new Date(Date.now()+9*3600e3).toISOString().replace(/\.\d+Z$/,"+09:00");

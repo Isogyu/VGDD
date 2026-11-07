@@ -172,7 +172,8 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
   ( cd "$wt" && run_with_timeout "$(( (limit + 10) * 60 ))" "$BIN_DIR/metered.sh" worker "$task" auto claude -- claude -p --agent worker --output-format json --max-turns 80 \
       --allowedTools "${allow[@]}" -- "$(worker_prompt "$task" "$trel" "$extra")" ) > "$out" 2> "$LOGS/${task}-${attempt}.err" || true
   # p0.5.0：利用量が読めなければ 0 にせず、1票の上限を使ったものとして数える（台帳の精算と同じ考え方）
-  local tok; tok="$(jq -r 'if (.usage.input_tokens|type)=="number" and (.usage.output_tokens|type)=="number" then .usage.input_tokens + .usage.output_tokens + (.usage.cache_creation_input_tokens // 0) + (.usage.cache_read_input_tokens // 0) else empty end' "$out" 2>/dev/null || true)"
+  # 各欄は 0 以上の整数だけを受け取る（負の数・小数・文字列は読めないものとして扱う。Codex の監査 #7）
+  local tok; tok="$(jq -r 'def ok: (type=="number") and (. >= 0) and (. == floor); def okn: (. == null) or ok; .usage as $u | if ($u|type)=="object" and ($u.input_tokens|ok) and ($u.output_tokens|ok) and ($u.cache_creation_input_tokens|okn) and ($u.cache_read_input_tokens|okn) then $u.input_tokens + $u.output_tokens + ($u.cache_creation_input_tokens // 0) + ($u.cache_read_input_tokens // 0) else empty end' "$out" 2>/dev/null || true)"
   if ! [[ "$tok" =~ ^[0-9]+$ ]]; then note "${task}: 作業員の利用量を読めない。1票の上限 ${MAX_TOK_TICKET} を使ったものとして数える"; tok="$MAX_TOK_TICKET"; fi
   lane_ev tokens "$tok"
   if grep -q -i -E 'usage limit|rate limit|利用上限' "$out" "$LOGS/${task}-${attempt}.err" 2>/dev/null; then

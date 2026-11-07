@@ -31,6 +31,7 @@ const DIR = path.join(Z3, 'budget');
 const LEDGER = path.join(DIR, 'ledger.jsonl');
 const LIMITS = path.join(DIR, 'limits.json');
 const LOCK = path.join(DIR, '.lock');
+const HEAD = path.join(DIR, 'ledger.head');   // 最後の出来事の番号とハッシュ（行ごとの切り詰め・台帳の消失を見つける）
 const KINDS = ['worker', 'judge', 'codex', 'constitution', 'assist'];
 const JUDGE_KINDS = ['judge', 'codex'];
 const TASK = /^T-[0-9]{3,4}$/;
@@ -60,7 +61,12 @@ function withLock(fn) {
 // ---- 台帳の読み書き ------------------------------------------------------------------------------
 /** 台帳を読み、鎖を確かめる。途中切れ・壊れた行・鎖の不一致は Refused('ledger_broken') */
 export function readLedger() {
-  if (!fs.existsSync(LEDGER)) return [];
+  let head = null;
+  if (fs.existsSync(HEAD)) {
+    try { head = JSON.parse(fs.readFileSync(HEAD, 'utf8')); } catch { throw new Refused('ledger_broken'); }
+    if (!head || !Number.isSafeInteger(head.seq) || typeof head.hash !== 'string') throw new Refused('ledger_broken');
+  }
+  if (!fs.existsSync(LEDGER)) { if (head) throw new Refused('ledger_broken'); return []; }
   const st = fs.lstatSync(LEDGER);
   if (!st.isFile()) throw new Refused('ledger_broken');
   const text = fs.readFileSync(LEDGER, 'utf8');
@@ -73,6 +79,9 @@ export function readLedger() {
     if (body.prev !== prev || hash !== sha(JSON.stringify(body))) throw new Refused('ledger_broken');
     out.push(e); prev = hash;
   }
+  // p0.5.0（Codex の監査 #5）：末尾の行を消した切り詰め・台帳の差し替えは、最後の番号とハッシュの記録と食い違う
+  if (out.length && !head) throw new Refused('ledger_broken');
+  if (head && (out.length !== head.seq || (out.length ? out[out.length - 1].hash : 'genesis') !== head.hash)) throw new Refused('ledger_broken');
   return out;
 }
 
@@ -83,6 +92,8 @@ function append(events, body) {
   const line = JSON.stringify({ ...full, hash }) + '\n';
   const fd = fs.openSync(LEDGER, 'a');
   try { fs.writeSync(fd, line); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+  const tmp = `${HEAD}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ seq: full.seq, hash }) + '\n'); fs.renameSync(tmp, HEAD);
   const e = { ...full, hash }; events.push(e); return e;
 }
 
@@ -112,12 +123,11 @@ function alive(pid) {
  * 台帳から実行の記録を作り直す。period_id が与えられれば、その期間の begin だけを数える。
  * 状態：launching（begin だけ。生死が不明）・started（pid が生きている）・ended_unrecorded（pid が死んでいるのに finish がない。利用量は不明）・finished・cancelled
  */
-export function deriveRuns(events, periodId = null) {
+export function deriveRuns(events) {
   const runs = new Map();
   for (const e of events) {
     if (e.type === 'begin') {
-      if (periodId && e.period_id !== periodId) continue;
-      runs.set(e.run_id, { run_id: e.run_id, req_id: e.req_id, kind: e.kind, task: e.task, reserve: e.reserve_tokens, state: 'launching', pid: null, tokens: null, usage_known: false, overrun: false });
+      runs.set(e.run_id, { run_id: e.run_id, req_id: e.req_id, kind: e.kind, task: e.task, period: e.period_id, reserve: e.reserve_tokens, state: 'launching', pid: null, tokens: null, usage_known: false, overrun: false });
     }
     const r = runs.get(e.run_id); if (!r) continue;
     if (e.type === 'started' && r.state === 'launching') { r.state = 'started'; r.pid = e.pid; }
@@ -132,8 +142,14 @@ export function deriveRuns(events, periodId = null) {
   return [...runs.values()];
 }
 
-/** 期間の集計。消費＝終わった実行の数えた量（不明は予約の全量）＋終わりを確かめられない実行の予約。予約中＝起動中・動いている実行の予約 */
-export function summarize(runs, limits) {
+/**
+ * 期間の集計。消費・予約・司法の回数・試行の数は今の期間（limits.period_id）の実行だけで数える。
+ * 作業員の同時の数・起動中（生死が不明）・同じ票の作業員の重複は、期間をまたいですべての実行で数える（期間を変えても、動いている作業員と予約は消えない。Codex の監査 #2）
+ */
+export function summarize(allRuns, limits) {
+  const pid = limits?.period_id ?? null;
+  const runs = allRuns.filter((r) => r.period === pid);
+  const activeAll = (r) => r.state === 'launching' || r.state === 'started';
   const consumedOf = (r) => (r.state === 'finished' ? r.tokens : r.state === 'ended_unrecorded' ? r.reserve : 0);
   const reservedOf = (r) => (r.state === 'launching' || r.state === 'started' ? r.reserve : 0);
   const live = (r) => r.state !== 'cancelled';
@@ -143,12 +159,13 @@ export function summarize(runs, limits) {
     unknown_runs: runs.filter((r) => r.state === 'ended_unrecorded' || (r.state === 'finished' && !r.usage_known)).length,
     overrun: runs.some((r) => r.overrun),
     judge_used: runs.filter((r) => live(r) && JUDGE_KINDS.includes(r.kind)).length,
-    workers_active: runs.filter((r) => r.kind === 'worker' && (r.state === 'launching' || r.state === 'started')).length,
-    liveness_unknown: runs.filter((r) => r.state === 'launching').length,
+    reserved_other_periods: allRuns.filter((r) => r.period !== pid && activeAll(r)).reduce((a, r) => a + r.reserve, 0),
+    workers_active: allRuns.filter((r) => r.kind === 'worker' && activeAll(r)).length,
+    liveness_unknown: allRuns.filter((r) => r.state === 'launching').length,
     ticket: (t) => ({
       used: sum((r) => consumedOf(r) + reservedOf(r), (r) => r.task === t),
       attempts: runs.filter((r) => live(r) && r.kind === 'worker' && r.task === t).length,
-      activeWorker: runs.some((r) => r.kind === 'worker' && r.task === t && (r.state === 'launching' || r.state === 'started')),
+      activeWorker: allRuns.some((r) => r.kind === 'worker' && r.task === t && activeAll(r)),
       overrun: runs.some((r) => r.task === t && r.overrun),
     }),
     limits,
@@ -180,12 +197,14 @@ export function begin({ kind, task, req, tokens }) {
     if (Date.now() >= Date.parse(limits.until)) throw new Refused('period_over');
     // 同じ要求の二度目：前の実行を返さず拒む（再試行は別の要求の ID で）
     if (events.some((e) => e.type === 'begin' && e.req_id === req)) throw new Refused('duplicate_request');
-    const runs = deriveRuns(events, limits.period_id);
-    const s = summarize(runs, limits);
+    const s = summarize(deriveRuns(events), limits);
     if (s.overrun) throw new Refused('overrun');
     const want = tokens === 'auto' ? limits.tokens_per_run : Number(tokens);
     if (!isCount(want) || want === 0) throw new Refused('bad_args');
-    if (s.settled + s.reserved + want > limits.tokens_total) throw new Refused('tokens_total');
+    // p0.5.0（Codex の監査 #6）：1回の予約は tokens_per_run を超えられない（数で指定しても同じ）
+    if (want > limits.tokens_per_run) throw new Refused('tokens_run');
+    // 前の期間で動いている実行の予約も、今の期間の残りから引く（期間を変えても予約は消えない）
+    if (s.settled + s.reserved + s.reserved_other_periods + want > limits.tokens_total) throw new Refused('tokens_total');
     if (task !== '-') {
       const t = s.ticket(task);
       if (t.overrun) throw new Refused('overrun');
@@ -228,6 +247,9 @@ export function finish({ run, code, usageText, format }) {
     const id = `finish:${run}`;
     if (events.some((e) => e.event_id === id)) return 'duplicate'; // 精算の二度目は効かない
     if (events.some((e) => e.type === 'cancel' && e.run_id === run)) throw new Refused('bad_transition');
+    // p0.5.0（Codex の監査 #3）：起動の記録のプロセスがまだ生きていれば精算しない（終わりを確かめてから枠を解く）
+    const st = events.find((e) => e.type === 'started' && e.run_id === run);
+    if (st && alive(st.pid)) throw new Refused('still_running');
     const counted = format === 'claude' && usageText != null ? claudeTokens(usageText) : null;
     append(events, { type: 'finish', event_id: id, run_id: run, exit_code: code, tokens_counted: counted, usage_format: format === 'claude' ? 'claude' : 'none' });
     return counted === null ? 'usage_unknown' : 'ok';
@@ -237,7 +259,7 @@ export function finish({ run, code, usageText, format }) {
 export function status() {
   const events = readLedger();
   let limits = null; try { limits = readLimits(); } catch { /* 上限がなければ null */ }
-  const runs = deriveRuns(events, limits?.period_id ?? null);
+  const runs = deriveRuns(events);
   const s = summarize(runs, limits);
   const count = (st) => runs.filter((r) => r.state === st).length;
   return {
