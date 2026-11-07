@@ -80,7 +80,9 @@ command -v codex >/dev/null || { echo "codex CLI が見つからない（オー�
 mkdir -p "$OUT_DIR"
 LAST="$(mktemp "$TMP_BASE/judge-codex-last.XXXXXX")"
 # shellcheck disable=SC2086
-printf '%s' "$INPUT" | codex exec - \
+# p0.4.9：呼び出しは予算の台帳の窓口（metered.sh）を通す。Codex の利用量はまだ読まないので、予約の全量で数える（0 にしない）。拒まれたら CLI の失敗として扱う
+METER="$(cd "$HERE" && pwd)/metered.sh"
+printf '%s' "$INPUT" | "$METER" codex "$TASK" "${VGDD_CODEX_TOKENS:-300000}" none -- codex exec - \
   --output-schema "$HERE/../schemas/verdict.schema.json" \
   -o "$LAST" --ephemeral --skip-git-repo-check ${CODEX_EXTRA_ARGS:-} >/dev/null 2>"$OUT_DIR/.codex-stderr.log" && CLI_RC=0 || CLI_RC=$?   # p0.4.3：終了状態を残す
 RAW="$(cat "$LAST" 2>/dev/null || true)"

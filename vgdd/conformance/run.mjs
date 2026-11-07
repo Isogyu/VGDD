@@ -20,6 +20,7 @@
 //   G  裁判所の場面（本物の gate-runner に代わりの司法をつなぎ、承認・判定・停止・保護パスの組み合わせで動かす） … 成立条件②④
 //   K  停止と再開（STOP 中のフック、再開の前の安全確認）                                                   … ADR-010・ADR-027
 //   A  証跡（全判定の記録、スキーマ、改ざん・切り詰めの検出）                                               … 成立条件⑤
+//   B  予算の台帳（予約・精算・不明の扱い・同時の予約・重複・停止・期間・破損・超過。p0.4.9）               … SPEC §9
 
 import fs from 'node:fs';
 import os from 'node:os';
@@ -121,8 +122,12 @@ function fixture(name) {
   git(main, 'worktree', 'add', '-q', '-b', 'night/T-900', wt);
   const baseline = sha256hex(fs.readFileSync(path.join(main, '.git/config')));
   write(path.join(z3, 'evidence/git-config.baseline'), baseline + '\n');
+  // p0.4.9：偽の Z3 にも予算の上限を置く（十分に大きな値。予算の試験は群 B が自分の値で行う）。本物の Z3 の台帳には触れない
+  write(path.join(z3, 'budget/limits.json'), JSON.stringify(LIMITS_WIDE) + '\n');
   return { base, main, wt, z3, evidence: path.join(z3, 'evidence/tool_calls.jsonl') };
 }
+
+const LIMITS_WIDE = { schema: 'vgdd.budget-limits.v1', period_id: 'conformance', until: '2099-01-01T00:00:00+09:00', tokens_total: 1e12, tokens_per_ticket: 1e12, tokens_per_run: 1e6, judge_calls: 1e6, workers: 100, attempts_per_ticket: 100, set_at: '2026-11-08T00:00:00+09:00' };
 
 let seq = 0;
 /** フックに1回入力する。返り値 { decision, reason, code } */
@@ -297,7 +302,7 @@ function groupC3() {
   const realJudge = (script, extra, out, rc = 0) => {
     for (const f of fs.readdirSync(outDir)) fs.rmSync(path.join(outDir, f), { force: true });
     sh('bash', [path.join(IMPL.bin, script), ...extra, '--ticket', 'docs/tasks/T-921-probe.md', '--base', 'main', '--task', 'T-921', '--out', outDir],
-      { cwd: wj, env: { ...process.env, ...UTF8, PATH: `${fake}:${process.env.PATH}`, FAKE_OUT: out, FAKE_RC: String(rc), VGDD_AUDIT_WRAP: '' }, timeout: 120000 });
+      { cwd: wj, env: { ...process.env, ...UTF8, PATH: `${fake}:${process.env.PATH}`, FAKE_OUT: out, FAKE_RC: String(rc), VGDD_AUDIT_WRAP: '', VGDD_Z3_DIR: fj.z3 }, timeout: 120000 }); // p0.4.9：台帳は偽の Z3 に書く（本物の Z3 に触れない）
     const f = fs.readdirSync(outDir).find((x) => x.endsWith('.json'));
     try { return JSON.parse(fs.readFileSync(path.join(outDir, f), 'utf8')); } catch { return null; }
   };
@@ -354,7 +359,7 @@ if [ "$mode" = security ]; then [ -z "\${STUB_SECURITY_NOFILE:-}" ] || exit 69; 
 printf '{"final_verdict":"%s","parse_ok":true,"codex":{"findings":[]}}\\n' "\${STUB_CODEX_VERDICT:-\${STUB_VERDICT:-CHANGES_REQUIRED}}" > "$out/$task-$(git rev-parse HEAD | cut -c1-12)-codex-$mode.json"
 `;
 // 実装の指紋（kernel-state.mjs の implSha と同じ並び）。run.mjs --record が残し、状態の写しが稼働中の Z3 と照合する
-const IMPL_FILES = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh'];
+const IMPL_FILES = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh', 'ledger.mjs', 'metered.sh', 'budget-set.sh', 'night-runner.sh', 'review-constitution.sh', 'approve-spec.sh', 'kernel-stop.sh', 'kernel-resume.sh'];
 const implShaFor = (bin, policy) => sha256hex(IMPL_FILES.map((f) => path.join(bin, f)).concat([policy, path.join(path.dirname(policy), 'verify-chain.mjs')]).map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return '<なし>'; } }).join('\n--\n'));
 const POLICY_LINE = (/^(p\d+\.\d+)\./.exec(CAPS.kernel_version) || [])[1] || null;
 function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export const v = 2;\n' }, stop = false, afterApprove = null, ticket = {}, approveExtra = { policy_line: POLICY_LINE } } = {}) {
@@ -1060,6 +1065,237 @@ function groupL() {
   record('L', 'L9', 'セキュリティ審査が合格でない夜間の合格の記録は統合しない', r.status === 1 && /成り立った司法の判定がない/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
 }
 
+// ---- B 予算の台帳（p0.4.9。SPEC §9、D-66・D-67） -------------------------------------------------
+function groupB() {
+  const ledger = path.join(IMPL.bin, 'ledger.mjs');
+  const meter = path.join(IMPL.bin, 'metered.sh');
+  if (!fs.existsSync(ledger) || !fs.existsSync(meter)) { record('B', 'B0', '予算の台帳（ledger.mjs・metered.sh）が実装にある', false, 'ない'); return; }
+  record('B', 'B0', '予算の台帳（ledger.mjs・metered.sh）が実装にある', true);
+  const mk = (limits = {}) => {
+    const z3 = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'vgdd-conf-b-')));
+    write(path.join(z3, 'budget/limits.json'), JSON.stringify({ schema: 'vgdd.budget-limits.v1', period_id: 'pB', until: '2099-01-01T00:00:00+09:00', tokens_total: 1000, tokens_per_ticket: 600, tokens_per_run: 400, judge_calls: 2, workers: 1, attempts_per_ticket: 2, set_at: '2026-11-08T00:00:00+09:00', ...limits }) + '\n');
+    return z3;
+  };
+  const env = (z3, extra = {}) => ({ ...process.env, ...UTF8, VGDD_Z3_DIR: z3, ...extra });
+  const L = (z3, ...a) => sh('node', [ledger, ...a], { env: env(z3) });
+  // 偽の CLI：呼ばれた回数をファイルに残し、引数1のファイルの中身を出し、引数2の終了コードで終わる
+  const fakeCli = (z3) => { const f = path.join(z3, 'fake-cli.sh'); write(f, `#!/bin/bash\necho called >> '${path.join(z3, 'called.log')}'\nstdin="$(cat)"; [ -n "$stdin" ] && printf '%s' "$stdin" > '${path.join(z3, 'stdin.txt')}'\n[ -n "\${1:-}" ] && cat "$1"\nexit "\${2:-0}"\n`); fs.chmodSync(f, 0o755); return f; };
+  const calls = (z3) => { try { return fs.readFileSync(path.join(z3, 'called.log'), 'utf8').split('\n').filter(Boolean).length; } catch { return 0; } };
+  const M = (z3, req, a, args = [], input = '') => sh('bash', [meter, ...a, '--', fakeCli(z3), ...args], { env: env(z3, req ? { VGDD_REQ_ID: req } : {}), input });
+  const st = (z3) => { const r = L(z3, 'status', '--json'); try { return JSON.parse(r.stdout); } catch { return null; } };
+  const usageFile = (z3, obj, name = 'u.json') => { const f = path.join(z3, name); write(f, typeof obj === 'string' ? obj : JSON.stringify(obj)); return f; };
+  const begins = (z3) => { try { return fs.readFileSync(path.join(z3, 'budget/ledger.jsonl'), 'utf8').split('\n').filter((l) => l.includes('"type":"begin"')).length; } catch { return 0; } };
+
+  // B1 上限の中の起動・利用量の精算・標準入力と終了コードの受け渡し（陽性の対照）
+  let z = mk();
+  let r = M(z, 'b1', ['worker', 'T-950', 'auto', 'claude'], [usageFile(z, { usage: { input_tokens: 10, output_tokens: 5, cache_creation_input_tokens: 2, cache_read_input_tokens: 3 } }), '3'], '標準入力の中身');
+  let s = st(z);
+  const stdinOk = (() => { try { return fs.readFileSync(path.join(z, 'stdin.txt'), 'utf8') === '標準入力の中身'; } catch { return false; } })();
+  record('B', 'B1', '上限の中の起動は通り、読めた利用量（キャッシュの欄を含む）で精算する。標準入力と終了コードを受け渡す', r.status === 3 && calls(z) === 1 && stdinOk && s?.tokens.settled === 20 && s?.tokens.reserved === 0, `rc=${r.status} calls=${calls(z)} stdin=${stdinOk} settled=${s?.tokens.settled}`);
+
+  // B2 全体の残りの不足（拒んだら CLI を起動しない）
+  M(z, null, ['worker', 'T-951', 'auto', 'none']); M(z, null, ['worker', 'T-952', 'auto', 'none']); // 20＋400＋400＝820
+  const before2 = calls(z);
+  const r2 = M(z, null, ['worker', 'T-953', 'auto', 'none']);
+  record('B', 'B2', '全体の残りが足りない起動は拒み、CLI を起動しない（終了 75、tokens_total）', r2.status === 75 && /tokens_total/.test(r2.stderr) && calls(z) === before2, `rc=${r2.status} ${r2.stderr.trim()} calls+${calls(z) - before2}`);
+
+  // B3 利用量が読めない・不正な値は 0 にしない
+  z = mk();
+  M(z, null, ['judge', 'T-953', '100', 'claude'], [usageFile(z, 'not json', 'a.txt')]);
+  M(z, null, ['judge', 'T-953', '100', 'claude'], [usageFile(z, { usage: { input_tokens: -1, output_tokens: 1 } }, 'b.json')]);
+  s = st(z);
+  record('B', 'B3', '利用量が読めない・負の数などの不正な値の呼び出しは、予約の全量を使ったものとして数える（0 にしない）', s?.tokens.settled === 200 && s?.tokens.unknown_runs === 2, `settled=${s?.tokens.settled} unknown=${s?.tokens.unknown_runs}`);
+
+  // B4 同じ要求の二度目
+  const z4a = mk();
+  M(z4a, 'dup', ['judge', 'T-953', '100', 'none']);
+  const rd = M(z4a, 'dup', ['judge', 'T-953', '100', 'none']);
+  record('B', 'B4', '同じ要求の ID の二度目の起動は拒み、CLI を起動しない（duplicate_request）', rd.status === 75 && /duplicate_request/.test(rd.stderr) && calls(z4a) === 1, `rc=${rd.status} calls=${calls(z4a)}`);
+
+  // B5 精算の二度目
+  const z4 = mk();
+  const run4 = L(z4, 'begin', '--kind', 'judge', '--task', 'T-954', '--req', 'q4', '--tokens', '100').stdout.trim();
+  L(z4, 'finish', '--run', run4, '--code', '0', '--format', 'none');
+  const again = L(z4, 'finish', '--run', run4, '--code', '0', '--usage-file', usageFile(z4, { usage: { input_tokens: 1, output_tokens: 1 } }), '--format', 'claude');
+  s = st(z4);
+  record('B', 'B5', '精算の二度目は効かない（数え直しで戻さない）', again.stdout.trim() === 'duplicate' && s?.tokens.settled === 100, `${again.stdout.trim()} settled=${s?.tokens.settled}`);
+
+  // B6 同時の予約
+  z = mk({ tokens_total: 100000, tokens_per_ticket: 100000 });
+  const res6 = path.join(z, 'b6.txt');
+  const cmds = ['T-955', 'T-956', 'T-957'].map((t) => `( VGDD_Z3_DIR='${z}' node '${ledger}' begin --kind worker --task ${t} --req c-${t} --tokens 100 >/dev/null 2>&1; echo $? >> '${res6}' ) & `).join('');
+  sh('bash', ['-c', `${cmds} wait`], { env: env(z) });
+  const codes = fs.readFileSync(res6, 'utf8').split('\n').filter(Boolean).sort();
+  s = st(z);
+  record('B', 'B6', '同時の予約でも作業員の枠（1）を超えない（3つ同時に申し込み、成功1・拒否2、台帳の予約も1件）', codes.join(',') === '0,75,75' && begins(z) === 1 && s?.workers.active === 1, `codes=${codes.join(',')} begins=${begins(z)}`);
+
+  // B7 起動中のまま記録が止まった実行（生死が不明）は、枠と予約を保つ
+  const r7 = L(z, 'begin', '--kind', 'worker', '--task', 'T-958', '--req', 'after-crash', '--tokens', '100');
+  record('B', 'B7', '起動中のまま記録が止まった実行は、生死が不明として枠と予約を保つ', r7.status === 75 && /workers/.test(r7.stderr) && st(z)?.tokens.reserved === 100, `rc=${r7.status} ${r7.stderr.trim()}`);
+
+  // B8 起動の記録の後：生きていれば枠を保ち精算させない。終わっていれば予約の全量を消費として数え、枠を解く
+  z = mk({ tokens_total: 100000, tokens_per_ticket: 100000 });
+  // 試験のプロセスの子にしない（子だと終わった後もゾンビとして残り、生きていると見える）。bash が終わると sleep は init に引き取られる
+  const sleeperPid = Number(sh('bash', ['-c', 'sleep 30 >/dev/null 2>&1 & echo $!']).stdout.trim());
+  const run8 = L(z, 'begin', '--kind', 'worker', '--task', 'T-959', '--req', 'alive', '--tokens', '100').stdout.trim();
+  L(z, 'started', '--run', run8, '--pid', String(sleeperPid));
+  const f8 = L(z, 'finish', '--run', run8, '--code', '0', '--format', 'none');
+  const blocked8 = L(z, 'begin', '--kind', 'worker', '--task', 'T-960', '--req', 'next', '--tokens', '100');
+  record('B', 'B8', '起動の記録のプロセスが生きている間は、精算を拒み（still_running）、作業員の枠を保つ', f8.status === 75 && /still_running/.test(f8.stderr) && blocked8.status === 75 && /workers/.test(blocked8.stderr), `${f8.stderr.trim()} / ${blocked8.stderr.trim()}`);
+  try { process.kill(sleeperPid, 'SIGKILL'); } catch { /* 終わっている */ }
+  sh('bash', ['-c', 'sleep 0.5']);
+  s = st(z);
+  const after8 = L(z, 'begin', '--kind', 'worker', '--task', 'T-960', '--req', 'next2', '--tokens', '100');
+  record('B', 'B9', '起動の記録のプロセスが終わったのに精算がない実行は、予約の全量を消費として数え、枠を解く', s?.runs.ended_unrecorded === 1 && s?.tokens.settled === 100 && after8.status === 0, `ended=${s?.runs.ended_unrecorded} settled=${s?.tokens.settled} next=${after8.status}`);
+
+  // B10 同じ票の作業員の重複と、試行の上限
+  z = mk({ workers: 5, tokens_total: 100000, tokens_per_ticket: 100000 });
+  const dupRun = L(z, 'begin', '--kind', 'worker', '--task', 'T-961', '--req', 'w1', '--tokens', '100');
+  const dup2 = L(z, 'begin', '--kind', 'worker', '--task', 'T-961', '--req', 'w2', '--tokens', '100');
+  record('B', 'B10', '同じ票の作業員が動いている間は、その票の次の作業員を起動しない（worker_running）', dupRun.status === 0 && dup2.status === 75 && /worker_running/.test(dup2.stderr), dup2.stderr.trim());
+  const z11 = mk({ workers: 5, tokens_total: 100000, tokens_per_ticket: 100000 });
+  for (const q of ['a1', 'a2']) M(z11, q, ['worker', 'T-962', '100', 'none']);
+  const r11 = M(z11, 'a3', ['worker', 'T-962', '100', 'none']);
+  record('B', 'B11', '同じ票の作業員の試行は上限（attempts_per_ticket）で止め、CLI を起動しない', r11.status === 75 && /attempts/.test(r11.stderr) && calls(z11) === 2, `rc=${r11.status} calls=${calls(z11)}`);
+
+  // B12 司法の回数・1回の予約の上限・1票の上限
+  z = mk();
+  for (const q of ['j1', 'j2']) M(z, q, ['codex', 'T-963', '10', 'none']);
+  const r12 = M(z, 'j3', ['judge', 'T-963', '10', 'claude']);
+  record('B', 'B12', '司法の呼び出しは期間の上限（judge_calls）で止める（judge と Codex を合わせて数える）。CLI を起動しない', r12.status === 75 && /judge_calls/.test(r12.stderr) && calls(z) === 2, `rc=${r12.status} calls=${calls(z)}`);
+  const zr = mk();
+  const r13 = M(zr, null, ['judge', 'T-963', '401', 'none']);
+  const zt = mk({ tokens_per_ticket: 500, workers: 5 });
+  M(zt, null, ['judge', 'T-964', '400', 'none']);
+  const r14 = M(zt, null, ['codex', 'T-964', '200', 'none']);
+  record('B', 'B13', '1回の予約は tokens_per_run を超えられない（数で指定しても。tokens_run）', r13.status === 75 && /tokens_run/.test(r13.stderr) && calls(zr) === 0, r13.stderr.trim());
+  record('B', 'B14', '1票の使用量と予約の合計は tokens_per_ticket を超えられない（tokens_ticket）', r14.status === 75 && /tokens_ticket/.test(r14.stderr), r14.stderr.trim());
+
+  // B15〜B20 停止中・期間の外・上限の欠けと形の違い・台帳の改ざん・途中切れ・行の切り詰め（どれも CLI を起動しない）
+  const refuse = (z3, re) => { const before = calls(z3); const x = M(z3, null, ['judge', 'T-965', '10', 'none']); return { ok: x.status === 75 && re.test(x.stderr) && calls(z3) === before, d: x.stderr.trim() }; };
+  z = mk(); write(path.join(z, 'STOP'), '試験\n');
+  let t = refuse(z, /stopped/); record('B', 'B15', '停止中は起動を拒む（stopped）', t.ok, t.d);
+  t = refuse(mk({ until: '2000-01-01T00:00:00+09:00' }), /period_over/); record('B', 'B16', '期間の外は起動を拒む（period_over）', t.ok, t.d);
+  const zc = mk(); fs.rmSync(path.join(zc, 'budget/limits.json'));
+  const zi = mk({ tokens_total: -1 });
+  const tc = refuse(zc, /limits_missing/); const ti = refuse(zi, /limits_invalid/);
+  record('B', 'B17', '上限のファイルがない・形が違うときは起動を拒む（fail-closed）', tc.ok && ti.ok, `${tc.d} / ${ti.d}`);
+  const zd = mk(); M(zd, 'x1', ['judge', 'T-965', '10', 'none']);
+  const lf = path.join(zd, 'budget/ledger.jsonl');
+  fs.writeFileSync(lf, fs.readFileSync(lf, 'utf8').replace('"reserve_tokens":10', '"reserve_tokens":1'));
+  t = refuse(zd, /ledger_broken/); record('B', 'B18', '台帳の書き換え（鎖の不一致）を見つけたら起動を拒む', t.ok, t.d);
+  const ze = mk(); M(ze, 'x2', ['judge', 'T-965', '10', 'none']);
+  fs.appendFileSync(path.join(ze, 'budget/ledger.jsonl'), '{"broken"');
+  t = refuse(ze, /ledger_broken/); record('B', 'B19', '台帳の途中切れ（改行のない行）を見つけたら起動を拒む', t.ok, t.d);
+  const zf = mk(); M(zf, 'x3', ['judge', 'T-965', '10', 'none']); M(zf, 'x4', ['judge', 'T-966', '10', 'none']);
+  const lines = fs.readFileSync(path.join(zf, 'budget/ledger.jsonl'), 'utf8').split('\n').filter(Boolean);
+  fs.writeFileSync(path.join(zf, 'budget/ledger.jsonl'), lines.slice(0, -2).join('\n') + '\n');
+  const tf = refuse(zf, /ledger_broken/);
+  const zg = mk(); M(zg, 'x5', ['judge', 'T-965', '10', 'none']); fs.rmSync(path.join(zg, 'budget/ledger.jsonl'));
+  const tg = refuse(zg, /ledger_broken/);
+  record('B', 'B20', '行ごとの切り詰め・台帳の消失を、最後の番号とハッシュの記録で見つけて拒む', tf.ok && tg.ok, `${tf.d} / ${tg.d}`);
+
+  // B21 実際の消費が予約を超えたら、後続を止める
+  z = mk({ tokens_total: 100000, tokens_per_ticket: 100000, workers: 5, attempts_per_ticket: 5 });
+  M(z, 'o1', ['judge', 'T-967', '10', 'claude'], [usageFile(z, { usage: { input_tokens: 50, output_tokens: 5 } })]);
+  t = refuse(z, /overrun/); record('B', 'B21', '実際の消費が予約を超えたら超過として記録し、後続の起動を止める（overrun）', t.ok, t.d);
+
+  // B22 期間を変えても、動いている作業員と予約は消えない
+  z = mk({ workers: 1, tokens_total: 100000, tokens_per_ticket: 100000 });
+  L(z, 'begin', '--kind', 'worker', '--task', 'T-968', '--req', 'p1', '--tokens', '100');
+  write(path.join(z, 'budget/limits.json'), JSON.stringify({ schema: 'vgdd.budget-limits.v1', period_id: 'pB2', until: '2099-01-01T00:00:00+09:00', tokens_total: 100000, tokens_per_ticket: 100000, tokens_per_run: 400, judge_calls: 2, workers: 1, attempts_per_ticket: 2, set_at: '2026-11-08T01:00:00+09:00' }) + '\n');
+  const r22 = L(z, 'begin', '--kind', 'worker', '--task', 'T-969', '--req', 'p2', '--tokens', '100');
+  record('B', 'B22', '期間を変えても、前の期間の起動中の作業員の枠と予約は消えない', r22.status === 75 && /workers/.test(r22.stderr), r22.stderr.trim());
+
+  // B23 窓口が時間切れ（ALRM）を受けたら、子をプロセス群ごと終わらせてから精算する
+  z = mk({ workers: 2, tokens_total: 100000, tokens_per_ticket: 100000 });
+  const longCli = path.join(z, 'long.sh'); write(longCli, `#!/bin/bash\n( sleep 60 ) &\necho $! > '${path.join(z, 'grandchild.pid')}'\nsleep 60\n`); fs.chmodSync(longCli, 0o755);
+  const r23 = sh('perl', ['-e', 'alarm shift; exec @ARGV or exit 127', '2', 'bash', meter, 'worker', 'T-970', '100', 'none', '--', longCli], { env: env(z), timeout: 30000 });
+  sh('bash', ['-c', 'sleep 0.5']);
+  let gpid = 0; try { gpid = Number(fs.readFileSync(path.join(z, 'grandchild.pid'), 'utf8').trim()); } catch { /* ない */ }
+  let gAlive = false; try { process.kill(gpid, 0); gAlive = true; } catch { gAlive = false; }
+  s = st(z);
+  record('B', 'B23', '窓口が時間切れ（ALRM）を受けたら、子と孫をプロセス群ごと終わらせ、終わりを確かめてから精算する（終了 75）', r23.status === 75 && gpid > 0 && !gAlive && s?.runs.finished === 1 && s?.workers.active === 0, `rc=${r23.status} grandchild_alive=${gAlive} finished=${s?.runs.finished}`);
+  if (gAlive) { try { process.kill(gpid, 'SIGKILL'); } catch { /* 終わっている */ } }
+
+  // B25 孫だけが TERM を無視して残る：親が先に終わっても、プロセス群が残る間は枠を解かない。KILL まで待って終わりを確かめる
+  z = mk({ workers: 1, tokens_total: 100000, tokens_per_ticket: 100000 });
+  const stubborn = path.join(z, 'stubborn.sh'); write(stubborn, `#!/bin/bash\n( trap '' TERM; sleep 60 ) &\necho $! > '${path.join(z, 'g2.pid')}'\nsleep 60\n`); fs.chmodSync(stubborn, 0o755);
+  const bg25 = spawn('perl', ['-e', 'alarm shift; exec @ARGV or exit 127', '2', 'bash', meter, 'worker', 'T-972', '100', 'none', '--', stubborn], { env: env(z), stdio: 'ignore' });
+  sh('bash', ['-c', 'sleep 3.5']);   // ALRM の後、TERM で親は終わり、孫は残っている時間
+  const mid = L(z, 'begin', '--kind', 'worker', '--task', 'T-973', '--req', 'mid', '--tokens', '100');
+  sh('bash', ['-c', 'sleep 6']);     // KILL の後
+  let g2 = 0; try { g2 = Number(fs.readFileSync(path.join(z, 'g2.pid'), 'utf8').trim()); } catch { /* ない */ }
+  let g2Alive = false; try { process.kill(g2, 0); g2Alive = true; } catch { g2Alive = false; }
+  s = st(z);
+  record('B', 'B25', '孫が TERM を無視して残る間は作業員の枠を解かず、KILL で終わりを確かめてから精算する', mid.status === 75 && /workers/.test(mid.stderr) && !g2Alive && s?.workers.active === 0 && s?.runs.finished === 1, `mid=${mid.stderr.trim()} g2_alive=${g2Alive} active=${s?.workers.active}`);
+  if (g2Alive) { try { process.kill(g2, 'SIGKILL'); } catch { /* 終わっている */ } }
+  try { bg25.kill('SIGKILL'); } catch { /* 終わっている */ }
+
+  // B28 予約の後・子の起動の前の中断：予約を取り消して終わる（bash 3.2 の set -u でも止まらない）。窓口の写しの起動の直前に中断を入れて試す
+  z = mk({ workers: 1, tokens_total: 100000, tokens_per_ticket: 100000 });
+  const meterCopy = path.join(z, 'metered-probe.sh');
+  fs.copyFileSync(path.join(IMPL.bin, 'ledger.mjs'), path.join(z, 'ledger.mjs'));
+  write(meterCopy, fs.readFileSync(meter, 'utf8').replace(/^set -m$/m, () => 'kill -TERM $$\nset -m')); fs.chmodSync(meterCopy, 0o755);
+  const r28 = sh('bash', [meterCopy, 'worker', 'T-975', '100', 'none', '--', fakeCli(z)], { env: env(z) });
+  s = st(z);
+  record('B', 'B28', '予約の後・子の起動の前に中断されたら、子を起動せず予約を取り消す（作業員の枠を残さない）', r28.status === 75 && /interrupted/.test(r28.stderr) && calls(z) === 0 && s?.runs.cancelled === 1 && s?.workers.active === 0, `rc=${r28.status} ${r28.stderr.trim()} cancelled=${s?.runs.cancelled} active=${s?.workers.active}`);
+
+  // B26 期間を変えた後も、前の期間の予約はその票の上限に入る
+  z = mk({ workers: 5, tokens_total: 100000, tokens_per_ticket: 500 });
+  L(z, 'begin', '--kind', 'worker', '--task', 'T-974', '--req', 'q26', '--tokens', '400');
+  write(path.join(z, 'budget/limits.json'), JSON.stringify({ schema: 'vgdd.budget-limits.v1', period_id: 'pB3', until: '2099-01-01T00:00:00+09:00', tokens_total: 100000, tokens_per_ticket: 500, tokens_per_run: 400, judge_calls: 5, workers: 5, attempts_per_ticket: 5, set_at: '2026-11-08T01:00:00+09:00' }) + '\n');
+  const r26 = L(z, 'begin', '--kind', 'judge', '--task', 'T-974', '--req', 'q26b', '--tokens', '200');
+  record('B', 'B26', '期間を変えた後も、前の期間で動いている予約はその票の上限（tokens_per_ticket）に入る', r26.status === 75 && /tokens_ticket/.test(r26.stderr), r26.stderr.trim());
+
+  // B27 本物の review-constitution.sh：形の合わない判定・CLI の失敗は採らない（VIOLATES）。形の合う判定は採る（陽性の対照）
+  const fr = fixture('b27');
+  const fk = path.join(fr.base, 'fakebin');
+  const runRev = (body, rc = 0) => {
+    write(path.join(fk, 'claude'), `#!/bin/bash\nprintf '%s' '${JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: body })}'\nexit ${rc}\n`); fs.chmodSync(path.join(fk, 'claude'), 0o755);
+    const od = path.join(fr.base, `rev-${crypto.randomBytes(3).toString('hex')}`);
+    sh('bash', [path.join(IMPL.bin, 'review-constitution.sh'), '--reason', '試験', '--out', od], { cwd: fr.main, env: { ...process.env, ...UTF8, PATH: `${fk}:${process.env.PATH}`, VGDD_Z3_DIR: fr.z3 }, timeout: 60000 });
+    const f = fs.existsSync(od) ? fs.readdirSync(od).find((x) => x.endsWith('.json')) : null;
+    try { return JSON.parse(fs.readFileSync(path.join(od, f), 'utf8')); } catch { return null; }
+  };
+  const okBody = JSON.stringify({ schema: 'vgdd.constitutional.v1', verdict: 'CONSISTENT', violations: [], notes: '' });
+  const outerErr = (() => { // 外側が is_error の応答で、本文は正しい判定
+    write(path.join(fk, 'claude'), `#!/bin/bash\nprintf '%s' '${JSON.stringify({ type: 'result', subtype: 'success', is_error: true, result: okBody })}'\n`); fs.chmodSync(path.join(fk, 'claude'), 0o755);
+    const od = path.join(fr.base, 'rev-outer'); sh('bash', [path.join(IMPL.bin, 'review-constitution.sh'), '--reason', '試験', '--out', od], { cwd: fr.main, env: { ...process.env, ...UTF8, PATH: `${fk}:${process.env.PATH}`, VGDD_Z3_DIR: fr.z3 }, timeout: 60000 });
+    const f = fs.existsSync(od) ? fs.readdirSync(od).find((x) => x.endsWith('.json')) : null; try { return JSON.parse(fs.readFileSync(path.join(od, f), 'utf8')); } catch { return null; } })();
+  const prose = runRev(`判定です。${okBody} 以上です`);
+  const partial = runRev('{"verdict":"CONSISTENT"}');
+  const failed = runRev(JSON.stringify({ schema: 'vgdd.constitutional.v1', verdict: 'CONSISTENT', violations: [], notes: '' }), 1);
+  const goodRev = runRev(JSON.stringify({ schema: 'vgdd.constitutional.v1', verdict: 'CONSISTENT', violations: [], notes: '' }));
+  record('B', 'B27', '本物の review-constitution.sh：形の欠けた判定・CLI の失敗・外側の失敗の応答・説明の文の付いた判定は採らず VIOLATES、形の合う判定は採る（陽性の対照）',
+    partial?.verdict === 'VIOLATES' && partial?.parse_ok === false && failed?.verdict === 'VIOLATES' && failed?.unavailable === true && outerErr?.verdict === 'VIOLATES' && prose?.verdict === 'VIOLATES' && goodRev?.verdict === 'CONSISTENT',
+    `partial=${partial?.verdict} failed=${failed?.verdict}/${failed?.unavailable} outer=${outerErr?.verdict} prose=${prose?.verdict} good=${goodRev?.verdict}`);
+
+  // B24 本物の judge.sh：予算で拒まれたら CLI を起動せず判定は成り立たない。上限の中なら成り立つ（陽性の対照）
+  const fx = fixture('b24'); commitTicket(fx, 'T-971', {});
+  const wj = path.join(fx.base, 'wt-971'); git(fx.main, 'worktree', 'add', '-q', '-b', 'task/T-971', wj, 'main');
+  write(path.join(wj, 'src/lib/a.ts'), 'export const v = 2;\n'); git(wj, 'add', '-A'); git(wj, 'commit', '-q', '-m', '実装');
+  const fake = path.join(fx.base, 'fakebin');
+  const okV = JSON.stringify({ schema: 'vgdd.verdict.v1', verdict: 'APPROVED', deterministic_audits_passed: true, requirements: [], findings: [], summary: 'x' });
+  write(path.join(fake, 'claude'), `#!/bin/bash\necho called >> '${path.join(fx.base, 'claude-called.log')}'\nprintf '%s' '${JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: okV, usage: { input_tokens: 5, output_tokens: 5 } })}'\n`); fs.chmodSync(path.join(fake, 'claude'), 0o755);
+  const outDir = path.join(fx.base, 'verdicts'); fs.mkdirSync(outDir, { recursive: true });
+  const runJudge = (limits) => {
+    write(path.join(fx.z3, 'budget/limits.json'), JSON.stringify({ ...LIMITS_WIDE, ...limits }) + '\n');
+    for (const f of fs.readdirSync(outDir)) fs.rmSync(path.join(outDir, f), { force: true });
+    sh('bash', [path.join(IMPL.bin, 'judge.sh'), '--ticket', 'docs/tasks/T-971-probe.md', '--base', 'main', '--task', 'T-971', '--out', outDir],
+      { cwd: wj, env: { ...process.env, ...UTF8, PATH: `${fake}:${process.env.PATH}`, VGDD_AUDIT_WRAP: '', VGDD_Z3_DIR: fx.z3 }, timeout: 120000 });
+    const vf = fs.readdirSync(outDir).find((x) => x.endsWith('.json'));
+    try { return JSON.parse(fs.readFileSync(path.join(outDir, vf), 'utf8')); } catch { return null; }
+  };
+  const denied = runJudge({ judge_calls: 0 });
+  const calledDenied = fs.existsSync(path.join(fx.base, 'claude-called.log'));
+  const allowed = runJudge({ judge_calls: 10 });
+  const calledAllowed = fs.existsSync(path.join(fx.base, 'claude-called.log'));
+  record('B', 'B24', '本物の judge.sh：司法の回数の上限で拒まれたら CLI を起動せず判定は成り立たない。上限の中なら起動して成り立つ（陽性の対照）',
+    !!denied && denied.judge_parse_ok === false && !calledDenied && !!allowed && allowed.judge_parse_ok === true && calledAllowed,
+    `denied=${denied?.judge_parse_ok} calledDenied=${calledDenied} allowed=${allowed?.judge_parse_ok}`);
+}
+
 // ---- 権限の表の自己検査（どの権限にも確かめ方がある） ------------------------------------------
 function groupMeta() {
   const ids = new Set(results.map((r) => r.id));
@@ -1191,6 +1427,7 @@ try {
   groupH();
   groupN();
   groupL();
+  groupB();
   groupINV();
   groupMeta();
   groupInvMeta();

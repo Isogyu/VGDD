@@ -62,13 +62,28 @@ EOF
 if [ "$DRY" -eq 1 ]; then printf '%s\n' "$INPUT"; exit 0; fi
 command -v claude >/dev/null || { echo "claude CLI が見つからない" >&2; exit 69; }
 mkdir -p "$OUT_DIR"
-RAW="$(printf '%s' "$INPUT" | claude -p --agent constitutional-review --output-format json --max-turns 1 2>/dev/null || true)"
+# p0.4.9：呼び出しは予算の台帳の窓口（metered.sh）を通す（票のない「法律」の呼び出し）。拒まれたら出力なし＝VIOLATES（fail-closed）
+METER="$(cd "$(dirname "$0")" && pwd)/metered.sh"
+CLI_RC=0; RAW="$(printf '%s' "$INPUT" | "$METER" constitution - "${VGDD_CONSTITUTION_TOKENS:-300000}" claude -- claude -p --agent constitutional-review --output-format json --max-turns 1 2>/dev/null)" || CLI_RC=$?
 OUT_FILE="$OUT_DIR/constitution-$(date +%Y%m%d-%H%M%S).json"
-export RAW REASON
+export RAW REASON CLI_RC
 node - > "$OUT_FILE" <<'NODE'
 const raw = process.env.RAW || ''; let text = raw;
-try { const o = JSON.parse(raw); if (o && typeof o.result === 'string') text = o.result; } catch {}
-let v = null; const m = text.match(/\{[\s\S]*\}/); if (m) { try { v = JSON.parse(m[0]); } catch {} }
-process.stdout.write(JSON.stringify({ type: 'constitutional_review', reason: process.env.REASON, review: v, parse_ok: !!v, verdict: v?.verdict ?? 'VIOLATES', note: v ? null : '出力を JSON として解釈できない（fail-closed）' }, null, 2) + '\n');
+// p0.4.9（Codex の監査 #8）：CLI が 0 で終わらなかった（予算の窓口の拒否を含む）ときは、本文によらず審査できなかったものとして扱う
+const unavailable = process.env.CLI_RC !== '0';
+// p0.4.9（Codex の3回目の監査 ⑤）：外側は成功の形（type: result・subtype: success・is_error: false・result が文字列）のときだけ。
+//   本文は全体が1つの JSON（全体を ```json で囲むのは許す）のときだけ採る。前後に説明の文があれば採らない
+let outerOk = false;
+try { const o = JSON.parse(raw); if (o && typeof o === 'object' && o.type === 'result' && o.subtype === 'success' && o.is_error === false && typeof o.result === 'string') { text = o.result; outerOk = true; } } catch {}
+let v = null;
+if (!unavailable && outerOk) {
+  const body = text.trim().replace(/^```(?:json)?\s*\n([\s\S]*)\n```$/, '$1').trim();
+  try { v = JSON.parse(body); } catch { v = null; }
+}
+// p0.4.9（Codex の再監査 ⑤）：vgdd.constitutional.v1 の形（欄・型・判定の値）に完全に合うときだけ判定として採る
+const exact = (o, keys) => !!o && typeof o === 'object' && !Array.isArray(o) && Object.keys(o).length === keys.length && keys.every((k) => k in o);
+if (v && !(exact(v, ['schema', 'verdict', 'violations', 'notes']) && v.schema === 'vgdd.constitutional.v1' && (v.verdict === 'CONSISTENT' || v.verdict === 'VIOLATES')
+  && typeof v.notes === 'string' && Array.isArray(v.violations) && v.violations.every((x) => exact(x, ['clause', 'diff_location', 'reason']) && ['clause', 'diff_location', 'reason'].every((k) => typeof x[k] === 'string')))) v = null;
+process.stdout.write(JSON.stringify({ type: 'constitutional_review', reason: process.env.REASON, review: v, parse_ok: !!v, unavailable, verdict: v?.verdict ?? 'VIOLATES', note: unavailable ? '審査を実行できなかった（予算の窓口の拒否か CLI の失敗。fail-closed で VIOLATES と記録する）' : v ? null : '出力を JSON として解釈できない（fail-closed）' }, null, 2) + '\n');
 NODE
 echo "憲法審査: $(node -e "console.log(require('$OUT_FILE').verdict)")  （保存: ${OUT_FILE}）"

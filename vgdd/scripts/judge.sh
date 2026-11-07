@@ -199,7 +199,9 @@ fi
 
 # ---- judge を起動（ヘッドレス。ツールなしの判定だけ） -----------------------------
 command -v claude >/dev/null || { echo "claude CLI が見つからない" >&2; exit 69; }
-CLI_RC=0; RAW="$(printf '%s' "$INPUT" | claude -p --agent judge --output-format json --max-turns 1 2>/dev/null)" || CLI_RC=$?   # p0.4.3：CLI の終了状態を残す
+# p0.4.9：呼び出しは予算の台帳の窓口（metered.sh）を通す。予算・停止・期間で拒まれたら起動せず、CLI の失敗（司法が使えない）として扱う
+METER="$(cd "$(dirname "$0")" && pwd)/metered.sh"
+CLI_RC=0; RAW="$(printf '%s' "$INPUT" | "$METER" judge "$TASK" "${VGDD_JUDGE_TOKENS:-300000}" claude -- claude -p --agent judge --output-format json --max-turns 1 2>/dev/null)" || CLI_RC=$?   # p0.4.3：CLI の終了状態を残す
 
 # ---- 出力の取り出しと、決定論的監査による上書き -------------------------------
 mkdir -p "$OUT_DIR"
