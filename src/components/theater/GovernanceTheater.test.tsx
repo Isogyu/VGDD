@@ -68,4 +68,11 @@ describe("GovernanceTheater の初期の表示", () => {
   it("取得前の判断待ちの欄は、見ている source の表示名と「読み込み中…」", () => {
     expect(markup).toContain("提出記録・—の写しから");
   });
+
+  // T-035 A5：提出記録では取り直しの項目を出さない
+  it("初期の表示（提出記録）に「今すぐ取得」と「最後の取得」と取得の失敗の文を出さない", () => {
+    expect(markup).not.toContain("今すぐ取得");
+    expect(markup).not.toContain("最後の取得");
+    expect(markup).not.toContain("最新の取得で一部または全部を取得できませんでした");
+  });
 });
