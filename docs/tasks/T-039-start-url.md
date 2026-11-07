@@ -1,7 +1,7 @@
 ---
 id: T-039
 title: 統治シアターの開始の状態（見る記録と再生の票）を URL で決められるようにする
-status: in_progress
+status: review
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1.5
 time_limit_min: 120
 security_review: false         # URL の値は決まった値の中から選ぶだけ。外へ送らない
 unattended: false
-branch: worktree-agent-a03e7c91133b5a54d
-worker: W35
+branch: worktree-agent-a3d1c57c14eee089f
+worker: W35（積み直しは W37）
 files_allowed:
   - src/lib/theater-start.ts                          # 新設：URL の値を検証する純粋関数
   - src/lib/theater-start.test.ts                     # 新設
@@ -112,3 +112,6 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 1. 選べる票は、再生の並び（T-014・T-026・T-013）の中だけにする（並びを広げるのは別の票）
 
 - 2026-11-07T22:48:27+0900 gate-runner: status → in_progress（judge=CHANGES_REQUIRED, codex=CHANGES_REQUIRED（両方が差し戻し））
+- 差し戻しの理由（オーナーが Z3 の判定から読んで共有した。行政の長は Z3 を読めない）：judge・Codex とも A0〜A4 は met。A5 の `npm run -s build` が「入力に結果がなく unverified」だったことだけが理由で、実装の問題ではない（§6 の「立法補佐が確かめた」は司法の入力に入らない）
+- 票の直しと承認し直し：立法補佐が A5 を直し（build が通ることは §3 で立法補佐が held の候補で確かめ、司法は差分が `src/app/governance/page.tsx` の Suspense の境界を変えていないこと、`useSearchParams` を使う部品がその境界の中にあることで判断する）、main b04de5a でコミットした。オーナーが 23:02:47 に承認し直した（23:05:06 の Kernel の写しの `approvals[].current` で確かめた）。コードは直さない
+- 積み直し：W35 の worktree で `git rebase b04de5a` を試したが、作業ツリーの `docs/tasks/_board.json` の上書きが sandbox に拒まれて途中で止まった（`error: unable to unlink old 'docs/tasks/_board.json': Operation not permitted` / `error: could not detach HEAD`。HEAD は ec47ffb のまま、作業ツリーは b04de5a のファイルが一部書き出されたまま残っている。戻すには変更の破棄と未追跡ファイルの削除が要るので、手を付けていない）。代わりに、行政の長が b04de5a から新しい worktree（`agent-a3d1c57c14eee089f`）で W37 を起動し、`git cherry-pick ec47ffb` で積み直した（衝突・拒否なし）。HEAD `955e8568fcbe53e3240e8d498e9f999d7a2224a9`、b04de5a の上に1コミット。T-039 の6ファイルの中身は ec47ffb と同じ（`git diff ec47ffb 955e856 --` 6ファイルが空。行政の長が確かめた）。コミットメッセージも同じ。test 953 件（49 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:875` の `stopsDir` で差分の外）。build は動かしていない（§3 で立法補佐が候補で確かめる）
