@@ -1,7 +1,7 @@
 ---
 id: T-028
 title: 票の記録を、自由な文を含まない公開用のイベント（列挙値だけ）に変える API を作る（統治シアター U0）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -115,3 +115,5 @@ depends_on: []
 2. 既存の `GET /api/governance` の `detail` は、この票では変えない（今の画面が使っている）。新しい画面に切り替える T-034 で、今の「票1枚の運命」の区画をどう扱うかを決める
 
 - 2026-11-07T09:40:57+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T09:44:14+0900 release: status → merged（main=59f82b08895f。夜間の判定に合格した候補 90da0849a2b9 を、オーナーが朝に承認して統合）
