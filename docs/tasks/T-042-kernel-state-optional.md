@@ -1,7 +1,7 @@
 ---
 id: T-042
 title: Kernel の写しの読み取りを、予算・実行・受け入れの新しい項目（任意）にも対応させる（新旧の両方の写しを読める）
-status: review
+status: blocked
 requirements: [A0, A1, A2, A3, A4]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -86,3 +86,5 @@ held の後、立法補佐が候補で `/governance` を開き、提出記録・
 - 行政の長の確認（試験は再実行していない）：差分は A0 の2つだけ。`af6dc79` からの差は、直した1行と試験の値の2件だけ。今の試験（T-042 より前からあるもの）の中身は変わっていない（`kernel-state.test.ts` の import の1行に `expectTypeOf` を足しただけ）。Node で `setUTCFullYear` が 0 年の2月を29日、1 年の2月を28日にすることを確かめた
 - 補った解釈（文面の範囲内）：(1) `until` の長さの上限を 40 字にした。§2 の形で一番長いのは 35 字なので、40 字の境目は形に合わない文字列にしか当たらない (2) `period_id` の文字の種類は制限しない (3) 3つの型 `KernelBudget`・`KernelRuns`・`KernelAcceptance` を export した
 - **確かめていない**：画面（`/governance`）で、提出記録と稼働中の観測の両方が今までどおり出ること、`npm run build`、0〜99 年のほかの値（0004・0100 など）、書く側（L1・L3）がこの形で `until` を出すか。§3 で立法補佐が held の候補で確かめる
+
+- 2026-11-08T02:25:37+0900 gate-runner: status → blocked（司法（codex）が同じ申請で通算 3 回使えなかった。差し戻しではない。オーナーが司法の環境を確かめてから再申請する）
