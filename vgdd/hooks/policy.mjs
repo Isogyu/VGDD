@@ -640,7 +640,7 @@ function judge(input, projectDir, git) {
     case 'Bash': {
       const cmd = String(ti.command || '');
       // p0.4.10：作業員・テスト担当を CLI で直接起動すること（claude … --agent worker|tester）も、起動の窓口を通らないので拒む（どの役割からも）
-      if (/(^|[\s;&|(`$])claude\b[^;&|\n]*\s--agent(\s+|=)\s*['"]?\s*(worker|tester)\b/i.test(cmd)) {
+      if (/(^|[\s;&|(`$/'"])claude\b[^;&|\n]*\s--agent(\s+|=)\s*['"]?\s*(worker|tester)\b/i.test(cmd)) {
         return { target: cmd.slice(0, 200), decision: 'deny', reason: '作業員（worker・tester）を claude の CLI で直接起動できない。起動の窓口（merge-requests/launch/T-NNN.json）を使う' };
       }
       const r = judgeBash(cmd, git, agentType, cwd, projectDir, confine);

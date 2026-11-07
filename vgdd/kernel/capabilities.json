@@ -722,17 +722,18 @@
     },
     {
       "id": "CAP-WORKER-START-AFTER-APPROVAL",
-      "title": "昼の作業員の起動は、main の票の仕様がオーナーに承認された後だけ",
+      "title": "作業員の起動は、main の票の仕様がオーナーに承認された後だけ（p0.4.10 で昼も起動の窓口から）",
       "allowed": [
         "executive_head"
       ],
       "enforced_by": [
-        "promise"
+        "hook",
+        "gate"
       ],
-      "verified_by": "約束（promise）。強制していない。OBS-051（T-015・T-016 で承認の前に起動）。行政の長は docs/governance/kernel-state.json の approvals[].current で承認の有無を読める（自己申告の助けで、根拠ではない）",
+      "verified_by": "W6（起動の窓口の night-runner --launch は承認のない票を作業員に渡さない）と CAP-LAUNCH-WORKER（Agent ツール・claude の CLI での起動の拒否）。未承認の票は裁判所が司法の前に blocked にする（G1・G4）",
       "known_gaps": [
-        "起動は止めない。未承認の票は裁判所が司法の前に blocked にする（G1・G4）ので main には入らず、無駄になるのは作業員の時間だけ",
-        "Agent ツールの入力から票を特定できないため、フックでは強制できない"
+        "行政の長が作業員を使わずに自分で書くこと、worker・tester 以外のサブエージェント（汎用の補助など）に実装を頼むことは止めない（どちらも main に入るには裁判所と release を通る）",
+        "CLI での起動の拒否は Bash の文字列の照合で、変数や別名で組み立てたコマンドは見分けきれない"
       ]
     },
     {
@@ -774,6 +775,10 @@
         {
           "tool": "Bash",
           "command": "cd x && claude --agent=tester -p 'y'"
+        },
+        {
+          "tool": "Bash",
+          "command": "/opt/homebrew/bin/claude -p --agent worker -- x"
         }
       ],
       "expect": {

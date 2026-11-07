@@ -26,14 +26,14 @@ QDIR="$Z3/launch"; mkdir -p "$QDIR"
 INTAKE=(node "$HERE/launch-intake.mjs" --repo "$REPO" --z3 "$Z3")
 log() { echo "[$(date +%H:%M:%S)] $*"; }
 # ---- 1つだけ動く --------------------------------------------------------------------------------------
+# ロックは pid を中身に持つ記号リンク（作るのと pid を書くのが1回の操作。作りかけのロックを「持ち主なし」と見ない）
 LOCK="$QDIR/.lock"
-if ! mkdir "$LOCK" 2>/dev/null; then
-  owner="$(cat "$LOCK/pid" 2>/dev/null || true)"
+if ! ln -s "$$" "$LOCK" 2>/dev/null; then
+  owner="$(readlink "$LOCK" 2>/dev/null || true)"
   if [[ "$owner" =~ ^[0-9]+$ ]] && kill -0 "$owner" 2>/dev/null; then echo "launcher はもう動いている（pid ${owner}）" >&2; exit 75; fi
-  rm -rf "$LOCK"; mkdir "$LOCK"   # 持ち主のいないロック（前の launcher が落ちた）
+  echo "持ち主のいないロック（pid ${owner:-不明}）がある。前の launcher が落ちた。オーナーが確かめて $LOCK を消してから起動する" >&2; exit 75
 fi
-echo "$$" > "$LOCK/pid"
-trap 'rm -rf "$LOCK"' EXIT
+trap '[ "$(readlink "$LOCK" 2>/dev/null)" = "$$" ] && rm -f "$LOCK"' EXIT
 cycle() {
   "${INTAKE[@]}" --sweep
   "${INTAKE[@]}" >/dev/null || true          # 新しい申請を確かめて受け取る（受け取った票は state.jsonl に received）

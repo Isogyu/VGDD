@@ -72,6 +72,8 @@ MAX_TICKETS="$(lim max_tickets 6)"; MAX_JUDGE="$(lim max_judge_calls 20)"
 if [ -n "$LAUNCH" ]; then
   [[ "$LAUNCH" =~ ^T-[0-9]{3,4}$ ]] || { echo "--launch の票の ID の形が違う" >&2; exit 64; }
   MAX_TICKETS=1; PARALLEL=1; MAX_ATTEMPTS=4
+  # 自分の pid を起動の窓口の状態に書く（窓口が起動の直後に落ちても、動いていることが分かる。同じ票の二度目の起動を防ぐ）
+  [ -f "$(dirname "$0")/launch-intake.mjs" ] && node "$(dirname "$0")/launch-intake.mjs" --repo "$REPO" --z3 "$Z3" --started "$LAUNCH" --pid "$$" >/dev/null 2>&1 || true
 else
   MAX_ATTEMPTS=2
 fi
@@ -163,7 +165,7 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
   local task="$1" wt="$2" attempt="$3" extra="$4"
   local t; t="$(ticket_path "$task")"; local trel="docs/tasks/$(basename "$t")"
   local limit; limit="$(front "$t" time_limit_min)"; limit="${limit:-45}"
-  [[ "$limit" =~ ^[0-9]+$ ]] || limit=45; [ "$limit" -le 45 ] || limit=45   # p0.4.10：1回の作業員の実行は 45 分まで（D-67）
+  [[ "$limit" =~ ^[0-9]+$ ]] || limit=45; { [ "$limit" -ge 1 ] && [ "$limit" -le 45 ]; } || limit=45   # p0.4.10：1回の作業員の実行は 1〜45 分（0 は alarm の解除になるので 45 にする。D-67）
   local out="$LOGS/${task}-${attempt}.json"
   # p0.3.2：headless では許可の確認に答える人がおらず、確認待ちは拒否になる（V8 で Edit・Write が拒否された。OBS-042）。
   # 票の files_allowed の Edit・Write と、コミットに要る git add・git commit だけを、この起動に限って許可する。
@@ -178,7 +180,7 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
   [ "${#allow[@]}" -gt 0 ] || { note "${task}: files_allowed が空のため作業員を起動しない"; return 1; }
   # settings.json の allow は信頼されていない workspace では無視されるため、同じものをここで渡す（広げない）
   allow+=("Bash(git add *)" "Bash(git commit *)" "Bash(npx --no-install *)")
-  log "▶ ${task} 作業員を起動（試行 ${attempt}、上限 ${limit}+10 分、worktree ${wt}、許可 ${#allow[@]} 件）"
+  log "▶ ${task} 作業員を起動（試行 ${attempt}、上限 ${limit} 分、worktree ${wt}、許可 ${#allow[@]} 件）"
   # p0.4.9：作業員の起動は予算の台帳の窓口（metered.sh）を通す（予約・同時の数・票ごとの試行の数・停止・期間）。拒まれたら起動しない
   local wrc=0
   ( cd "$wt" && run_with_timeout "$(( limit * 60 ))" "$BIN_DIR/metered.sh" worker "$task" auto claude -- claude -p --agent worker --output-format json --max-turns 80 \
@@ -226,11 +228,17 @@ precheck() { # task, wt → 0 なら申請へ。stdout に理由
 
 # ---- 票を review にして main にコミット（§2 は触らない） --------------------------------------------------
 mark_review() { # task, head, note
+  # p0.4.10：複数の runner（起動の窓口からの票）が同じ main の checkout を書くので、票の書き換えとコミットを1つのロックで1つずつ行い、コミットは票のパスだけに限る
+  local lk="$Z3/launch/.main-commit.lock" i
+  mkdir -p "$Z3/launch"
+  for i in $(seq 1 120); do mkdir "$lk" 2>/dev/null && break; sleep 1; done
+  [ -d "$lk" ] || { note "${1}: main のコミットのロックを取れない"; return 1; }
   local t; t="$(ticket_path "$1")"
   sed -i '' -E "2,/^---\$/ s/^status: .*/status: review/" "$t"   # p0.3.1c：front matter の中だけを書き換える（本文の status: に触れない。OBS-041）
   printf '\n- %s night-runner: 作業員の実装を前検査で確認（HEAD %s）。status → review で再申請（%s）\n' "$(ts)" "${2:0:7}" "$3" >> "$t"
   git -C "$REPO" add "docs/tasks/$(basename "$t")"
-  git -C "$REPO" -c user.name=night-runner -c user.email=night-runner@local commit -q -m "night-runner: ${1} を review に（§2 は変えない）"
+  git -C "$REPO" -c user.name=night-runner -c user.email=night-runner@local commit -q -m "night-runner: ${1} を review に（§2 は変えない）" -- "docs/tasks/$(basename "$t")" || { rmdir "$lk"; return 1; }
+  rmdir "$lk"
 }
 
 # ---- 申請と、gate-runner の結果待ち（1件ずつ） ----------------------------------------------------------------
@@ -264,6 +272,8 @@ run_lane() { # task
   local prev_sig="" req_at=""
   while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
     if [ -f "$Z3/STOP" ]; then lane_ev fail "$task"; note "${task}: Kernel の停止中。次の試行をしない"; return; fi   # p0.4.10：試行ごとに停止を見る
+    # p0.4.10：差し戻しの上限（3回。裁判所と同じ数え方の票の §6 の行）に達していれば、次の作業員を起動しない
+    if [ "$(returns_of "$(ticket_path "$task")")" -ge 3 ]; then lane_ev fail "$task"; note "${task}: 差し戻しが上限 3 回に達した。次の作業員を起動しない（人の判断へ）"; return; fi
     local rc=0; run_worker "$task" "$wt" "$attempt" "$extra" || rc=$?   # p0.3.1c：set -e のもとで非0を受け取る（以前は非0でレーンが黙って終わった。OBS-040）
     [ "$rc" -eq 2 ] && return
     [ "$rc" -eq 3 ] && { lane_ev fail "$task"; return; }
@@ -271,7 +281,7 @@ run_lane() { # task
     why="$(precheck "$task" "$wt")" || { note "${task}: 前検査で落ちた（${why}）"; extra="前回の問題：${why}。直してからコミットしてください。"; attempt=$((attempt+1)); continue; }
     git -C "$wt" rebase main >/dev/null 2>&1 || { git -C "$wt" rebase --abort >/dev/null 2>&1 || true; note "${task}: rebase の衝突"; extra="main との衝突を直してください（git rebase main）。"; attempt=$((attempt+1)); continue; }
     head="$(git -C "$REPO" rev-parse "$(br "$task")")"
-    mark_review "$task" "$head" "試行 ${attempt}"
+    mark_review "$task" "$head" "試行 ${attempt}" || { lane_ev fail "$task"; note "${task}: 票を review にできない。申請しない"; return; }
     git -C "$wt" rebase main >/dev/null 2>&1 || { git -C "$wt" rebase --abort >/dev/null 2>&1 || true; note "${task}: status のコミットの取り込みで衝突。申請しない"; lane_ev fail "$task"; return; }   # p0.3.1c：以前は失敗を無視して申請した（OBS-041）
     head="$(git -C "$REPO" rev-parse "$(br "$task")")"
     req_at="$(node -e 'console.log(new Date().toISOString())')"   # ミリ秒まで（同じ秒の前の判定を混ぜない）
@@ -289,7 +299,8 @@ run_lane() { # task
           lane_ev fail "$task"; note "${task}: 同じ重い指摘で続けて差し戻された。自動修正を止めて人へ戻す"; return
         fi
         prev_sig="$(printf '%s' "$pr" | jq -r '.signature // ""' 2>/dev/null || true)"
-        extra="差し戻しの理由（gate-runner）：${why}。これを直してからコミットしてください。
+        # 差し戻しの行は票（行政も書ける）から読むので、伏せ字を通し、引用の囲みの中の記録（prior-record）にだけ頼る
+        extra="前の試行は差し戻された。次の記録を読み、直してからコミットしてください。
 $(printf '%s' "$pr" | jq -r '.text // ""' 2>/dev/null || true)"
         attempt=$((attempt+1));;
       blocked) lane_ev blocked "$task"; note "${task}: blocked（朝にオーナーの裁定）"; lane_ev fail "$task"; return;;

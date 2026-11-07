@@ -50,7 +50,7 @@ export function collectFindings(dir, task, sinceMs) {
   if (!TASK.test(task)) return [];
   let names = [];
   try { names = fs.readdirSync(dir).filter((n) => n.startsWith(`${task}-`) && n.endsWith('.json')); } catch { return []; }
-  const out = [];
+  const out = []; let latest = null;
   for (const n of names) {
     const f = path.join(dir, n);
     let st; try { st = fs.lstatSync(f); } catch { continue; }
@@ -59,10 +59,13 @@ export function collectFindings(dir, task, sinceMs) {
     let v; try { v = JSON.parse(text); } catch { continue; }
     if (!v || v.task_id !== task) continue;
     // 判定として成り立った記録だけ（judge.sh は judge_parse_ok、judge-codex.sh は parse_ok）。Codex の記録は judge: "codex" の文字列を持つので、本文は型で選ぶ
-    if (v.judge_parse_ok === false || v.parse_ok === false) continue;
     const isObj = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
+    // 判定として成り立った記録だけ：judge.sh の記録は judge_parse_ok が true、judge-codex.sh の記録は parse_ok が true（欠けていれば使わない）
+    const ok = isObj(v.judge) ? v.judge_parse_ok === true : isObj(v.codex) ? v.parse_ok === true : false;
     const body = isObj(v.judge) ? v.judge : isObj(v.codex) ? v.codex : null;
-    if (!body) continue;
+    if (!body || !ok) continue;
+    const headOf = typeof v.head === 'string' ? v.head : '';
+    if (!latest || st.mtimeMs > latest.mtime) latest = { mtime: st.mtimeMs, head: headOf };   // 指摘の有無によらず、いちばん新しい候補を決める
     const source = isObj(v.judge) ? 'judge' : v.mode === 'security' ? 'Codex security' : 'Codex judge';
     const head = typeof v.head === 'string' ? v.head : '';
     const fs0 = body && Array.isArray(body.findings) ? body.findings : [];
@@ -82,8 +85,8 @@ export function collectFindings(dir, task, sinceMs) {
     }
   }
   // 同じ票の古い候補の判定を混ぜない：いちばん新しい判定の候補（head）の記録だけを使う
-  const newest = out.reduce((m, f) => (f.mtime > m.mtime ? f : m), { mtime: -1, head: null });
-  const sel = out.filter((f) => f.head === newest.head);
+  if (!latest) return [];
+  const sel = out.filter((f) => f.head === latest.head);
   const rank = { critical: 0, major: 1, minor: 2 };
   sel.sort((a, b) => rank[a.severity] - rank[b.severity] || String(a.file).localeCompare(String(b.file)));
   return sel;

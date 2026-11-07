@@ -1356,9 +1356,13 @@ function groupW() {
     fs.symlinkSync(path.join(fx.base, 'nowhere.json'), path.join(rq, 'T-986.json'));
     const env = { ...process.env, ...UTF8, VGDD_Z3_DIR: fx.z3 };
     // 2つ目の launcher は、1つ目が動いている間は止まる（ロック）
-    fs.mkdirSync(path.join(fx.z3, 'launch/.lock'), { recursive: true }); write(path.join(fx.z3, 'launch/.lock/pid'), String(bg.pid));
+    fs.mkdirSync(path.join(fx.z3, 'launch'), { recursive: true }); fs.symlinkSync(String(bg.pid), path.join(fx.z3, 'launch/.lock'));
     const second = sh('bash', [la, '--repo', fx.main, '--once', '--dry-run'], { cwd: fx.main, env, timeout: 60000 });
-    fs.rmSync(path.join(fx.z3, 'launch/.lock'), { recursive: true, force: true });
+    fs.unlinkSync(path.join(fx.z3, 'launch/.lock'));
+    // 持ち主のいないロック（pid が死んでいる）は自動では外さない
+    fs.symlinkSync('999999', path.join(fx.z3, 'launch/.lock'));
+    const stale = sh('bash', [la, '--repo', fx.main, '--once', '--dry-run'], { cwd: fx.main, env, timeout: 60000 });
+    fs.unlinkSync(path.join(fx.z3, 'launch/.lock'));
     const r = sh('bash', [la, '--repo', fx.main, '--once', '--dry-run'], { cwd: fx.main, env, timeout: 120000 });
     const rc = fs.readdirSync(path.join(fx.z3, 'launch/receipts'));
     const verdictOf = (prefix) => rc.filter((n) => n.startsWith(prefix)).map((n) => n.split('.').slice(-2, -1)[0]).join(',');
@@ -1366,9 +1370,9 @@ function groupW() {
     record('W', 'W4', '起動の窓口は、形の合わない申請（余分な項目・名前と中身の違い・JSON が2つ・名前の形・記号リンク）を起動せずに拒み、控えは Z3 に置く',
       ['T-984', 'T-985', 'T-987', 'evil', 'T-986'].every((x) => verdictOf(x) === 'rejected') && !fs.existsSync(path.join(rq, 'done')), `receipts=${rc.length} ${verdictOf('T-987')}`);
     const state = (() => { try { return fs.readFileSync(path.join(fx.z3, 'launch/state.jsonl'), 'utf8'); } catch { return ''; } })();
-    record('W', 'W5', '起動の窓口は、形の合う申請を Z3 の状態に「受け取った」と書いてから消し、起動を記録する。2つ目の窓口はロックで止まる',
-      verdictOf('T-982') === 'accepted' && verdictOf('T-983') === 'accepted' && left.length === 0 && /"task":"T-982","state":"received"/.test(state) && /"task":"T-982","state":"started"/.test(state) && second.status === 75,
-      `left=${left.join(',')} second=${second.status}`);
+    record('W', 'W5', '起動の窓口は、形の合う申請を Z3 の状態に「受け取った」と書いてから消し、起動を記録する。2つ目の窓口はロックで止まり、持ち主のいないロックも自動では外さない',
+      verdictOf('T-982') === 'accepted' && verdictOf('T-983') === 'accepted' && left.length === 0 && /"task":"T-982","state":"received"/.test(state) && /"task":"T-982","state":"started"/.test(state) && second.status === 75 && stale.status === 75 && /持ち主のいないロック/.test(stale.stderr),
+      `left=${left.join(',')} second=${second.status} stale=${stale.status}`);
     const log982 = (() => { try { return fs.readFileSync(path.join(fx.z3, 'launch/T-982.log'), 'utf8'); } catch { return ''; } })();
     const log983 = (() => { try { return fs.readFileSync(path.join(fx.z3, 'launch/T-983.log'), 'utf8'); } catch { return ''; } })();
     record('W', 'W6', 'night-runner --launch：承認済みの票は1票・並行1でレーンに割り当て、仕様が未承認の票は作業員に渡さない',

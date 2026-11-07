@@ -39,8 +39,14 @@ function alive(pid) { try { process.kill(-pid, 0); return true; } catch { try { 
 /** 票ごとの最後の状態。received（まだ起動の記録がない）・started（pid）・ended */
 function lastStates() {
   const m = new Map();
-  let text = ''; try { text = fs.readFileSync(STATE, 'utf8'); } catch { return m; }
-  for (const line of text.split('\n')) { if (!line) continue; try { const o = JSON.parse(line); if (o && typeof o.task === 'string') m.set(o.task, o); } catch { /* 壊れた行は飛ばす */ } }
+  let text = '';
+  try { text = fs.readFileSync(STATE, 'utf8'); } catch (e) { if (e.code === 'ENOENT') return m; console.error('状態を読めない。止める'); process.exit(70); }
+  if (text.length && !text.endsWith('\n')) { console.error('状態の途中切れ。止める'); process.exit(70); }
+  for (const line of text.split('\n')) {
+    if (!line) continue;
+    let o; try { o = JSON.parse(line); } catch { console.error('状態の壊れた行。止める'); process.exit(70); }   // 重複の防止の根拠を失ったまま受け付けない
+    if (o && typeof o.task === 'string') m.set(o.task, o);
+  }
   return m;
 }
 export function busy(st) {
@@ -61,12 +67,17 @@ if (args.includes('--sweep')) { for (const [t, st] of lastStates()) if (st.state
 
 const mr = path.join(REPO, 'merge-requests'); const dir = path.join(mr, 'launch');
 if (!noLink(mr) || !noLink(dir)) { console.error('申請のフォルダが記号リンク。何も読まない'); process.exit(70); }
+// 親のフォルダの同一性（dev・ino）を覚え、申請ごとの操作の前に確かめ直す（途中で差し替えられたら止める。競合を狭めるだけで、無くすわけではない。SPEC §12）
+const idOf = (p) => { try { const s = fs.lstatSync(p); return s.isDirectory() ? `${s.dev}:${s.ino}` : null; } catch { return null; } };
+const ID0 = [idOf(mr), idOf(dir)].join('|');
+const sameDirs = () => [idOf(mr), idOf(dir)].join('|') === ID0 && noLink(mr) && noLink(dir);
 let names = []; try { names = fs.readdirSync(dir); } catch { process.exit(0); }
 const states = lastStates();
 for (const name of names) {
   if (name === 'done') continue;   // 旧い控えの場所（使わない）
   const p = path.join(dir, name);
   let fd = null;
+  if (!sameDirs()) { console.error('申請のフォルダが途中で差し替えられた。止める'); process.exit(70); }
   try {
     if (!NAME.test(name)) { receipt(name, 'rejected', '名前の形が違う'); fs.rmSync(p, { force: true, recursive: false }); console.error(`${name.slice(0, 40)}: 名前の形が違う`); continue; }
     try { fd = fs.openSync(p, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK); } catch { receipt(name, 'rejected', '開けない（記号リンクなど）'); fs.rmSync(p, { force: true }); console.error(`${name}: 開けない`); continue; }
@@ -78,6 +89,7 @@ for (const name of names) {
     if (!o || typeof o !== 'object' || Array.isArray(o) || Object.keys(o).length !== 1 || o.task !== task) { receipt(name, 'rejected', '中身の形が違う'); fs.rmSync(p, { force: true }); console.error(`${name}: 中身の形が違う`); continue; }
     if (busy(states.get(task))) { console.error(`${task}: 同じ票の作業がまだある。次の周回で見る`); continue; }   // 申請は置いたまま
     const id = `${task}-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+    if (!sameDirs()) { console.error('申請のフォルダが途中で差し替えられた。止める'); process.exit(70); }
     appendState({ task, state: 'received', id });
     fs.rmSync(p, { force: true });
     receipt(name, 'accepted', `受け取った（${id}）`);
