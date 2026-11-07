@@ -10,8 +10,8 @@ estimate_h: 1
 time_limit_min: 90
 security_review: true          # 写しの検証（公開の項目）を変える
 unattended: false
-branch: worktree-agent-ae7854a6b38ec3d46
-worker: W42
+branch: worktree-agent-ae281dd538eefffc0
+worker: W43
 files_allowed:
   - src/lib/kernel-state-schema.ts                    # 任意の3項目の検証と型を足すだけ
   - src/lib/kernel-state.test.ts                      # 試験を足す
@@ -88,3 +88,10 @@ held の後、立法補佐が候補で `/governance` を開き、提出記録・
 - **確かめていない**：画面（`/governance`）で、提出記録と稼働中の観測の両方が今までどおり出ること、`npm run build`、0〜99 年のほかの値（0004・0100 など）、書く側（L1・L3）がこの形で `until` を出すか。§3 で立法補佐が held の候補で確かめる
 
 - 2026-11-08T02:25:37+0900 gate-runner: status → blocked（司法（codex）が同じ申請で通算 3 回使えなかった。差し戻しではない。オーナーが司法の環境を確かめてから再申請する）
+- 03:1x 止まった原因は、法律 p0.4.9 の予算の窓口の不具合（端末の上で Codex が一時停止させられていた）。p0.4.9a で直り、配置された（オーナーが知らせた）。実装の差し戻しではないので、コードは変えずに今の main の上に積み直して申請し直す。承認は 01:56:51 のまま（03:14:20 の Kernel の写しの `approvals[].current` で確かめた）
+- 03:15 行政の長が W43 を起動（worktree `agent-ae281dd538eefffc0`、main 7e255de から、モデルは Opus。T-044 の W44・T-043 の W45 と並行）。`d39d51f` を cherry-pick させた。作業員の起動は台帳の外（昼の作業員は次の改正 L2 で窓口に寄せる）
+- W43 の報告：HEAD `7570579e21c2c7a200d333e85ed3aaa8646c805f`、7e255de の上に1コミット。衝突はない。test は 992 件（49 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:880` の `stopsDir` で差分の外）
+- 行政の長の確認（試験は再実行していない）：`git diff d39d51f 7570579 -- src/lib` は空。差分は A0 の2つだけ（+352 / -2）
+- **確かめていない**：前の記録と同じ（画面、`npm run build`、0〜99 年のほかの値、書く側の形）。§3 で立法補佐が held の候補で確かめる
+
+- 2026-11-08T03:30:17+0900 gate-runner: status → blocked（司法（codex）が同じ申請で通算 3 回使えなかった。差し戻しではない。オーナーが司法の環境を確かめてから再申請する）

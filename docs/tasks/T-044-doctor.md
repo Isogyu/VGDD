@@ -10,8 +10,8 @@ estimate_h: 1.5
 time_limit_min: 120
 security_review: true          # 環境を読むスクリプト。秘密を出さないことを確かめる
 unattended: false
-branch: worktree-agent-a28dbed9640c20221
-worker: W41
+branch: worktree-agent-adc14f6c46adfd541
+worker: W44
 files_allowed:
   - scripts/doctor.mjs                                # 新設：読み取りだけの診断
   - scripts/doctor.test.mjs                           # 新設：純粋関数の試験（node:test）
@@ -80,3 +80,10 @@ held の後、立法補佐が候補で `node scripts/doctor.mjs` と `--json` �
 1. 診断は `vgdd/` の外（`scripts/`）に置く（Kernel の一部ではなく、導入の補助。法律の改正にしない）
 
 - 2026-11-08T02:05:06+0900 gate-runner: status → blocked（司法（codex）が同じ申請で通算 3 回使えなかった。差し戻しではない。オーナーが司法の環境を確かめてから再申請する）
+- 03:1x 止まった原因は、法律 p0.4.9 の予算の窓口の不具合（端末の上で Codex が一時停止させられていた）。p0.4.9a で直り、配置された（オーナーが知らせた）。実装の差し戻しではないので、コードは変えずに今の main の上に積み直して申請し直す。承認は 01:33:53 のまま（03:14:20 の Kernel の写しの `approvals[].current` で確かめた）
+- 03:15 行政の長が W44 を起動（worktree `agent-adc14f6c46adfd541`、main 7e255de から、モデルは Opus。T-042 の W43・T-043 の W45 と並行）。`085b534` を cherry-pick させた。作業員の起動は台帳の外（昼の作業員は次の改正 L2 で窓口に寄せる）
+- W44 の報告：HEAD `a61c0c087bee953295b62f9b2b2177cda64724c7`、7e255de の上に1コミット。衝突はない。`node --test scripts/doctor.test.mjs` は 21 件合格、test は 977 件（49 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:880` の `stopsDir` で差分の外）
+- 行政の長の確認（試験は再実行していない）：`git diff 085b534 a61c0c0 -- scripts` は空。差分は A0 の2つだけ（+956）
+- **確かめていない**：前の記録と同じ（macOS 以外の OS、本物の Z3 と `.env.local`、Node 22・23）。§3 で立法補佐が held の候補で確かめる
+
+- 2026-11-08T03:34:42+0900 gate-runner: status → blocked（司法（codex）が同じ申請で通算 3 回使えなかった。差し戻しではない。オーナーが司法の環境を確かめてから再申請する）
