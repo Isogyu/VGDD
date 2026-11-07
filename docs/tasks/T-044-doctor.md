@@ -1,7 +1,7 @@
 ---
 id: T-044
 title: 読み取りだけの導入診断（scripts/doctor.mjs）を足す。必要なコマンド・版・設定・保護・写しの一致を、秘密を出さずに確かめる
-status: review
+status: blocked
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -78,3 +78,5 @@ held の後、立法補佐が候補で `node scripts/doctor.mjs` と `--json` �
 ## オーナーに聞くこと
 
 1. 診断は `vgdd/` の外（`scripts/`）に置く（Kernel の一部ではなく、導入の補助。法律の改正にしない）
+
+- 2026-11-08T02:05:06+0900 gate-runner: status → blocked（司法（codex）が同じ申請で通算 3 回使えなかった。差し戻しではない。オーナーが司法の環境を確かめてから再申請する）
