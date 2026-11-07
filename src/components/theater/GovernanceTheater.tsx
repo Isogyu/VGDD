@@ -3,11 +3,18 @@
 // 統治シアター（T-034）。T-029〜T-032 の部品をつなぎ、データの取得・今の出来事・見る source の切り替えを持つ。
 // 出すのは、票の ID と題、整形した時刻、決まった文、判定の結論、source と書き出しの時刻だけ。
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Replay } from "@/lib/governance-replay-schema";
 // 写しの generated_at は +09:00 の形なので、写し用の formatJst で整形する（null は「—」）
 import { formatJst as formatSnapshotJst } from "@/lib/kernel-state-schema";
 import { loadTheaterData, type TheaterData, type TheaterSource } from "@/lib/theater-data";
+import {
+  formatFetchTime,
+  hasFailedSection,
+  LIVE_REFRESH_MS,
+  mergeRefresh,
+  shouldRecordFetch,
+} from "@/lib/theater-refresh";
 // 記録の出来事の ts は +0900 の形なので、再生用の formatJst で整形する
 import { formatJst, labelFor, verdictLabels } from "@/lib/theater-replay";
 import { focusFor } from "@/lib/theater-stage";
@@ -55,23 +62,84 @@ export default function GovernanceTheater() {
   // null のあいだは取得中
   const [data, setData] = useState<TheaterData | null>(null);
   const [currentEvent, setCurrentEvent] = useState<ReplayEvent | null>(null);
+  // 最後の取得の時刻（HH:MM:SS、日本時間）と、最新の取得の失敗。source を変えたら初めに戻す（T-035 A3）
+  const [lastFetchedAt, setLastFetchedAt] = useState<string | null>(null);
+  const [fetchFailed, setFetchFailed] = useState(false);
+
+  // 「source を選んでいる期間」の番号。effect のたびと部品が外れたときに進める。
+  // 要求は始めたときの番号を持ち、応答の時点で今の番号と違えば何も反映しない（T-035 A2）
+  const periodRef = useRef(0);
+  // 最初の取得が終わった期間の番号。これと今の番号が同じときだけ取り直す
+  const readyPeriodRef = useRef<number | null>(null);
+  // 走っている取得（最初の取得と取り直し）の期間の番号。自動と手動で共通の排他に使う
+  const runningPeriodRef = useRef<number | null>(null);
+  // 合わせる元の、今表示している data
+  const dataRef = useRef<TheaterData | null>(null);
+
+  const showData = useCallback((next: TheaterData | null) => {
+    dataRef.current = next;
+    setData(next);
+  }, []);
+
+  const recordFetch = useCallback((loaded: TheaterData, failed: boolean) => {
+    setFetchFailed(failed);
+    if (shouldRecordFetch(loaded)) setLastFetchedAt(formatFetchTime(Date.now()));
+  }, []);
+
+  // 稼働中の観測の取り直し。自動（タイマー）と手動（今すぐ取得）の両方がここを通る
+  const refresh = useCallback(
+    (period: number) => {
+      if (period !== periodRef.current) return;
+      if (readyPeriodRef.current !== period) return;
+      if (runningPeriodRef.current === period) return;
+      runningPeriodRef.current = period;
+      void loadTheaterData("live", fetch)
+        .then((next) => {
+          if (period !== periodRef.current) return;
+          const current = dataRef.current;
+          if (current === null) return;
+          const merged = mergeRefresh(current, next);
+          showData(merged.data);
+          recordFetch(next, merged.failed);
+        })
+        .finally(() => {
+          // 前の期間の要求は、今の期間の「走っている」状態を変えない
+          if (runningPeriodRef.current === period) runningPeriodRef.current = null;
+        });
+    },
+    [showData, recordFetch],
+  );
 
   useEffect(() => {
-    // source が変わった後と部品が外れた後の応答は反映しない
-    let stale = false;
-    void loadTheaterData(source, fetch).then((loaded) => {
-      if (!stale) setData(loaded);
-    });
+    const period = ++periodRef.current;
+    // 最初の取得も排他の対象にする（最初の取得が終わる前は取り直さない）
+    runningPeriodRef.current = period;
+    void loadTheaterData(source, fetch)
+      .then((loaded) => {
+        // source が変わった後と部品が外れた後の応答は反映しない
+        if (period !== periodRef.current) return;
+        showData(loaded);
+        recordFetch(loaded, hasFailedSection(loaded));
+        // 失敗でも最初の取得は終わったとみなす
+        readyPeriodRef.current = period;
+      })
+      .finally(() => {
+        if (runningPeriodRef.current === period) runningPeriodRef.current = null;
+      });
+    const timer = source === "live" ? setInterval(() => refresh(period), LIVE_REFRESH_MS) : null;
     return () => {
-      stale = true;
+      periodRef.current += 1;
+      if (timer !== null) clearInterval(timer);
     };
-  }, [source]);
+  }, [source, refresh, showData, recordFetch]);
 
   const selectSource = (next: TheaterSource) => {
     if (next === source) return;
     setSource(next);
-    setData(null);
+    showData(null);
     setCurrentEvent(null);
+    setLastFetchedAt(null);
+    setFetchFailed(false);
   };
 
   const stopped = data?.state.kind === "ok" && data.state.value.stopped.active;
@@ -89,27 +157,45 @@ export default function GovernanceTheater() {
                 AI が作る。別系統の AI が独立して確かめる。統合の条件は Kernel が強制し、承認と停止は人が持つ。
               </p>
             </div>
-            <div role="group" aria-label="見る記録" className="flex shrink-0 gap-1">
-              {SOURCES.map(({ value, label }) => (
+            <div className="flex shrink-0 flex-wrap gap-1">
+              <div role="group" aria-label="見る記録" className="flex gap-1">
+                {SOURCES.map(({ value, label }) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={source === value}
+                    onClick={() => selectSource(value)}
+                    className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100 hover:bg-slate-700 aria-pressed:border-slate-300 aria-pressed:bg-slate-700 aria-pressed:font-semibold"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {source === "live" && (
+                // 最初の取得が終わる前と、取得が走っている間は、押しても要求を出さない（refresh の中で確かめる）
                 <button
-                  key={value}
                   type="button"
-                  aria-pressed={source === value}
-                  onClick={() => selectSource(value)}
-                  className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100 hover:bg-slate-700 aria-pressed:border-slate-300 aria-pressed:bg-slate-700 aria-pressed:font-semibold"
+                  onClick={() => refresh(periodRef.current)}
+                  className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100 hover:bg-slate-700"
                 >
-                  {label}
+                  今すぐ取得
                 </button>
-              ))}
+              )}
             </div>
           </div>
           <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-200">
             <Fact label="見ている記録" value={sourceLabel(source)} />
             <Fact label="Kernel の写しの書き出し" value={formatSnapshotJst(data?.generated_at ?? null)} />
+            {source === "live" && <Fact label="最後の取得" value={lastFetchedAt ?? "—"} />}
             <Fact label="公開イベント" value={sectionStatus(data?.replay)} />
             <Fact label="Kernel の写し" value={sectionStatus(data?.state)} />
             <Fact label="不変条件の写し" value={sectionStatus(data?.invariants)} />
           </dl>
+          {source === "live" && fetchFailed && (
+            <p className="text-xs text-slate-200">
+              最新の取得で一部または全部を取得できませんでした。取得できなかった項目は前の表示のままです
+            </p>
+          )}
         </div>
       }
       stage={
