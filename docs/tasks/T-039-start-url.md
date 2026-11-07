@@ -76,7 +76,7 @@ depends_on: [T-032, T-035, T-038]
   - `TicketReplay.test.tsx`：今の試験はそのまま。`renderToStaticMarkup` で、`initialTicketId` が並びにある票（例：並びの2番目）ならその票が選ばれた表示になり、並びにない票や `null` なら並びの先頭になること
   - `GovernanceTheater.test.tsx`：今の試験はそのまま（`useSearchParams` を使うので、試験では `next/navigation` を `vi.mock` で差し替えてよい）。URL に何もないとき最初の source は「提出記録」で、`source=live` のときは「稼働中の観測」が `aria-pressed="true"` になること
   - `npm run -s test`・`npm run -s typecheck`・`npm run -s lint` が通る
-  - `npm run -s build` が通る。今のページの外側の Suspense の境界を保ち、`useSearchParams` を足したことによるプリレンダリングのエラーを出さない（`next/navigation` を差し替えた試験は、この確かめの代わりにしない。静的なシェルで今の境界の fallback が出ることは許す）
+  - 今のページの外側の Suspense の境界を保ち、`useSearchParams` を足したことによるプリレンダリングのエラーを出さない（静的なシェルで今の境界の fallback が出ることは許す）。`npm run build` は作業員の sandbox の中では動かず、結果は司法の入力にも入らないので、build が通ることは §3 で立法補佐が held の候補で確かめる。司法は、差分が `src/app/governance/page.tsx` の Suspense の境界を変えていないこと、`useSearchParams` を使う部品がその境界の中にあることで判断する
 
 ## 3. 開発用テスト
 
@@ -85,7 +85,7 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 - `/governance?source=live&ticket=T-026` で、稼働中の観測が選ばれ、再生の票が T-026 になる
 - `/governance?ticket=T-999` や `/governance?source=x` で、今の既定（提出記録・並びの先頭）になる
 - 開いた後に source や票を切り替えても、URL は変わらない
-- `npm run build` が通る（`useSearchParams` と Suspense の組み合わせ）
+- `npm run build` が通り、経路の一覧で `/governance` がプリレンダリングのエラーなしに出る（`useSearchParams` と Suspense の組み合わせ）。立法補佐は申請の前の作業員のコミット ec47ffb で一度確かめた（11/7 22:4x、`/governance` は Static）。held の候補でもう一度確かめる
 
 ## 4. 手順の案
 
