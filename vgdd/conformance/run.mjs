@@ -296,14 +296,14 @@ function groupC3() {
   write(path.join(wj, 'src/lib/a.ts'), 'export const v = 2;\n'); git(wj, 'add', '-A'); git(wj, 'commit', '-q', '-m', '実装');
   const fake = path.join(fj.base, 'fakebin');
   write(path.join(fake, 'claude'), '#!/bin/bash\nprintf "%s" "$FAKE_OUT"; exit "${FAKE_RC:-0}"\n');
-  write(path.join(fake, 'codex'), '#!/bin/bash\nwhile [ $# -gt 0 ]; do [ "$1" = "-o" ] && { printf "%s" "$FAKE_OUT" > "$2"; shift; }; shift; done; exit "${FAKE_RC:-0}"\n');
+  write(path.join(fake, 'codex'), '#!/bin/bash\n[ -n "${FAKE_ARGS:-}" ] && printf "%s\\n" "$@" > "$FAKE_ARGS"\nwhile [ $# -gt 0 ]; do [ "$1" = "-o" ] && { printf "%s" "$FAKE_OUT" > "$2"; shift; }; shift; done; exit "${FAKE_RC:-0}"\n');
   fs.chmodSync(path.join(fake, 'claude'), 0o755); fs.chmodSync(path.join(fake, 'codex'), 0o755);
   const outDir = path.join(fj.base, 'verdicts'); fs.mkdirSync(outDir, { recursive: true });
   const okVerdict = JSON.stringify({ schema: 'vgdd.verdict.v1', verdict: 'APPROVED', deterministic_audits_passed: true, requirements: [], findings: [], summary: 'x' });
-  const realJudge = (script, extra, out, rc = 0) => {
+  const realJudge = (script, extra, out, rc = 0, extraEnv = {}) => {
     for (const f of fs.readdirSync(outDir)) fs.rmSync(path.join(outDir, f), { force: true });
     sh('bash', [path.join(IMPL.bin, script), ...extra, '--ticket', 'docs/tasks/T-921-probe.md', '--base', 'main', '--task', 'T-921', '--out', outDir],
-      { cwd: wj, env: { ...process.env, ...UTF8, PATH: `${fake}:${process.env.PATH}`, FAKE_OUT: out, FAKE_RC: String(rc), VGDD_AUDIT_WRAP: '', VGDD_Z3_DIR: fj.z3 }, timeout: 120000 }); // p0.4.9：台帳は偽の Z3 に書く（本物の Z3 に触れない）
+      { cwd: wj, env: { ...process.env, ...UTF8, PATH: `${fake}:${process.env.PATH}`, FAKE_OUT: out, FAKE_RC: String(rc), VGDD_AUDIT_WRAP: '', VGDD_Z3_DIR: fj.z3, ...extraEnv }, timeout: 120000 }); // p0.4.9：台帳は偽の Z3 に書く（本物の Z3 に触れない）
     const f = fs.readdirSync(outDir).find((x) => x.endsWith('.json'));
     try { return JSON.parse(fs.readFileSync(path.join(outDir, f), 'utf8')); } catch { return null; }
   };
@@ -340,6 +340,22 @@ function groupC3() {
   record('C3', 'J12', '本物の judge.sh：全体を ```json で囲んだだけの正しい判定は成り立つ（陽性の対照）', !!fenced && fenced.judge_parse_ok === true, fenced ? '' : '記録がない');
   const goodC = realJudge('judge-codex.sh', [], okVerdict, 0);
   record('C3', 'X6', '本物の judge-codex.sh：形の正しい判定は成り立つ（陽性の対照）', !!goodC && goodC.parse_ok === true, goodC ? '' : '記録がない');
+  // X10・X11（p0.4.10a、Codex の2回目の監査 major）：Codex の司法は読み取り専用で固定する。窓口が kind=codex の子孫を片付けて成功にする前提
+  const argsLog = path.join(fj.base, 'codex-args.txt');
+  const readArgs = () => { try { return fs.readFileSync(argsLog, 'utf8').split('\n'); } catch { return null; } };
+  fs.rmSync(argsLog, { force: true });
+  const modelOk = realJudge('judge-codex.sh', [], okVerdict, 0, { FAKE_ARGS: argsLog, CODEX_EXTRA_ARGS: '--model gpt-x.1' });
+  const a10 = readArgs() || [];
+  const si = a10.indexOf('-s');
+  record('C3', 'X10', '本物の judge-codex.sh：Codex に必ず -s read-only を渡し、モデルの指定（--model 名前）は通す（陽性の対照）',
+    !!modelOk && modelOk.parse_ok === true && si >= 0 && a10[si + 1] === 'read-only' && a10.includes('--model') && a10.includes('gpt-x.1'), `args=${a10.filter(Boolean).slice(1).join(' ')}`);
+  const bad = ['--sandbox danger-full-access', '-c sandbox_mode=danger-full-access', '--full-auto', '--dangerously-bypass-approvals-and-sandbox', '--model', '--model a;b'].map((x) => {
+    fs.rmSync(argsLog, { force: true });
+    const rec = realJudge('judge-codex.sh', [], okVerdict, 0, { FAKE_ARGS: argsLog, CODEX_EXTRA_ARGS: x });
+    return { x, rec, called: readArgs() !== null };
+  });
+  record('C3', 'X11', '本物の judge-codex.sh：CODEX_EXTRA_ARGS にモデルの指定以外（sandbox の変更など）があれば Codex を呼ばず、判定の記録を書かない（司法が使えない）',
+    bad.every((b) => !b.called && b.rec === null), bad.filter((b) => b.called || b.rec !== null).map((b) => b.x).join(' | ') || '');
 }
 
 // ---- G 裁判所の場面 ---------------------------------------------------------------------------
@@ -1284,8 +1300,9 @@ function groupB() {
   const b30 = (kind, code, ignoreTerm = false) => {
     const zz = mk({ workers: 2, tokens_total: 100000, tokens_per_ticket: 100000 });
     const pidf = path.join(zz, 'grandchild.pid');
-    const gc = ignoreTerm ? `sh -c 'trap "" TERM; sleep 30' >/dev/null 2>&1 &` : 'sleep 30 >/dev/null 2>&1 &';
-    const r = sh('bash', [meter, kind, 'T-977', '10', 'none', '--', 'sh', '-c', `${gc} echo $! > '${pidf}'; echo done; exit ${code}`], { env: env(zz), input: '', timeout: 60000 });
+    // TERM を無視する孫は、trap を置いた後に自分の pid を書き（合図）、親はそれを待ってから終わる（Codex の2回目の監査 minor：競合で KILL の経路を通らないことを防ぐ）
+    const gc = ignoreTerm ? `sh -c 'trap "" TERM; echo $$ > "$0"; exec sleep 30' '${pidf}' >/dev/null 2>&1 & while [ ! -s '${pidf}' ]; do sleep 0.05; done;` : `sleep 30 >/dev/null 2>&1 & echo $! > '${pidf}';`;
+    const r = sh('bash', [meter, kind, 'T-977', '10', 'none', '--', 'sh', '-c', `${gc} echo done; exit ${code}`], { env: env(zz), input: '', timeout: 60000 });
     let gpid = 0; try { gpid = Number(fs.readFileSync(pidf, 'utf8').trim()); } catch {}
     let alive = false; if (gpid > 0) { try { process.kill(gpid, 0); alive = true; } catch { alive = false; } }
     const fin = (() => { try { return fs.readFileSync(path.join(zz, 'budget/ledger.jsonl'), 'utf8').split('\n').filter((l) => l.includes('"type":"finish"')).map((l) => JSON.parse(l)); } catch { return []; } })();
