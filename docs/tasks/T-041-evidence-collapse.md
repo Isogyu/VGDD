@@ -1,7 +1,7 @@
 ---
 id: T-041
 title: 統治シアターの下の「証拠」の7つの区画を、見出しで開閉できるようにする（最初は「統治の数字」だけ開く）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -103,3 +103,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 1. 最初に開いておくのは「統治の数字」だけにする（実運用の集計がひと目で分かるため）
 
 - 2026-11-07T22:42:10+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T22:50:51+0900 release: status → merged（main=8e1333e71fdc。夜間の判定に合格した候補 14237515803d を、オーナーが朝に承認して統合）
