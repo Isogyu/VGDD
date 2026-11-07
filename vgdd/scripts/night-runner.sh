@@ -321,7 +321,7 @@ for task in $QUEUE_TASKS; do
   t="$(ticket_path "$task")"
   if [ -z "$t" ]; then note "${task}: 票がない"; SKIPPED=$((SKIPPED+1)); continue; fi
   st="$(front "$t" status)"
-  if ! { [ "$st" = "ready" ] || { [ "$st" = "in_progress" ] && [ "$(returns_of "$t")" -lt 3 ]; }; }; then note "${task}: status=${st} のため飛ばす"; SKIPPED=$((SKIPPED+1)); continue; fi
+  if ! { [ "$st" = "ready" ] || { [ "$st" = "in_progress" ] && [ "$(gate_returns_of "$t")" -lt 3 ]; }; }; then note "${task}: status=${st} のため飛ばす"; SKIPPED=$((SKIPPED+1)); continue; fi
   [ "$(front "$t" requirements_source)" = "ticket" ] || { note "${task}: requirements_source が ticket ではない"; SKIPPED=$((SKIPPED+1)); continue; }
   [ -n "$LAUNCH" ] || [ "$(front "$t" unattended)" = "true" ] || { note "${task}: unattended: true ではない（オーナーの判断が要る票）"; SKIPPED=$((SKIPPED+1)); continue; }   # p0.4.10：起動の窓口の票はオーナーが昼に承認した票なので、unattended を求めない
   depends_merged "$t" || { note "${task}: depends_on が未統合。後に回す"; SKIPPED=$((SKIPPED+1)); continue; }
