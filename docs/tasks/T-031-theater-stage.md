@@ -1,7 +1,7 @@
 ---
 id: T-031
 title: 統治シアターの主役の図（人・三権・Kernel・統合の SVG）を作り、記録の出来事ごとに光る場所を変える（統治シアター U3）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -113,3 +113,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 2. 司法のモデル名（Sonnet など）は書かない。判定の担い手のモデルは設定で変えられ、図が古くなるため
 
 - 2026-11-07T12:41:05+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T14:56:48+0900 release: status → merged（main=59d125d1a5ee。夜間の判定に合格した候補 9f5f2b95b501 を、オーナーが朝に承認して統合）
