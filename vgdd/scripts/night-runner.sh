@@ -36,7 +36,7 @@ check_git_config() {
   if [ ! -f "$base" ]; then echo "git の設定の基準値がない（${base}）。オーナーが vgdd/scripts/git-baseline.sh で作る（fail-closed）" >&2; exit 70; fi
   [ "$cur" = "$(cat "$base")" ] || { echo "共有の .git/config が基準値から変わっている。オーナーが確かめるまで止める（fail-closed。OBS-033）" >&2; exit 70; }
 }
-QUEUE="$Z3/night/queue.json"; DRY=0; PARALLEL=""; UNTIL=""
+QUEUE="$Z3/night/queue.json"; DRY=0; PARALLEL=""; UNTIL=""; LAUNCH=""   # p0.4.10：LAUNCH は起動の窓口からの1票（昼夜共通）
 BIN_DIR="$(cd "$(dirname "$0")" && pwd)"   # p0.4.9：予算の台帳の窓口（metered.sh・ledger.mjs）は自分と同じ場所に置く
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -45,6 +45,7 @@ while [ $# -gt 0 ]; do
     --dry-run) DRY=1; shift;;
     --parallel) PARALLEL="$2"; shift 2;;
     --until) UNTIL="$2"; shift 2;;
+    --launch) LAUNCH="$2"; shift 2;;
     -h|--help) sed -n '2,20p' "$0"; exit 0;;
     *) echo "不明な引数: $1" >&2; exit 64;;
   esac
@@ -66,6 +67,16 @@ lim() { jq -r --arg k "$1" --arg d "$2" '.limits[$k] // $d' "$QUEUE"; }
 PARALLEL="${PARALLEL:-$(lim parallel 1)}"   # p0.4.0：既定は逐次（ADR-020。MVP は単一の作業員で逐次。並行はキューで明示したときだけ）
 UNTIL="${UNTIL:-$(lim until 06:30)}"
 MAX_TICKETS="$(lim max_tickets 6)"; MAX_JUDGE="$(lim max_judge_calls 20)"
+# p0.4.10：起動の窓口からの1票（--launch T-NNN）。時刻の窓（until）と unattended の条件を使わず、試行は初回＋自動修正3回（D-67）。
+#   承認・依存・停止・予算（台帳）・同時の数・保護パス・前検査は夜と同じ。ブランチは launch/<run_id>/T-NNN（前の起動のブランチと重ならない）
+if [ -n "$LAUNCH" ]; then
+  [[ "$LAUNCH" =~ ^T-[0-9]{3,4}$ ]] || { echo "--launch の票の ID の形が違う" >&2; exit 64; }
+  MAX_TICKETS=1; PARALLEL=1; MAX_ATTEMPTS=4
+  # 自分の pid を起動の窓口の状態に書く（窓口が起動の直後に落ちても、動いていることが分かる。同じ票の二度目の起動を防ぐ）
+  [ -f "$(dirname "$0")/launch-intake.mjs" ] && node "$(dirname "$0")/launch-intake.mjs" --repo "$REPO" --z3 "$Z3" --started "$LAUNCH" --pid "$$" >/dev/null 2>&1 || true
+else
+  MAX_ATTEMPTS=2
+fi
 MAX_TOK_TICKET="$(lim max_tokens_per_ticket 2000000)"; MAX_TOK_TOTAL="$(lim max_tokens_total 12000000)"
 MIN_FREE_GB="$(lim min_free_gb 3)"
 [ "$PARALLEL" -le 4 ] || PARALLEL=4   # D-45：同時最大4
@@ -87,6 +98,7 @@ note() { lane_ev note "$1"; log "$1"; }
 
 # ---- 票の読み取り（gate-runner と同じ関数） ------------------------------------------------------------
 ticket_path() { ls "$REPO"/docs/tasks/"$1"-*.md 2>/dev/null | head -n 1; }
+br() { if [ -n "$LAUNCH" ]; then echo "launch/${RUN_ID}/$1"; else echo "night/$1"; fi; }   # p0.4.10：作業員のブランチの名前
 # p0.4.0：統治の項目（files_allowed）は main にコミットされた票（承認した仕様）から読む。作業ツリーの票は使わない
 main_ticket() { local f="${TMPDIR:-/tmp}/night-ticket-$$-$(basename "$1")"; git -C "$REPO" show "main:docs/tasks/$(basename "$1")" > "$f"; echo "$f"; }
 front() { sed -n '/^---$/,/^---$/p' "$1" | sed -n "s/^$2: *//p" | head -n 1 | sed 's/ *#.*$//'; }
@@ -108,6 +120,8 @@ depends_merged() { # ticket → 0 なら depends_on がすべて merged
   return 0
 }
 returns_of() { grep -c 'gate-runner: status → in_progress' "$1" 2>/dev/null || true; }
+# p0.4.10：裁判所と同じ数え方（§6 の決まった形の行）。取り消し・Z3 の出来事との照合は裁判所が行う（ここは「起動しない」側に倒すための目安）
+gate_returns_of() { awk '/^## 6\. 記録[ \t]*$/{s=1;next} s && /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9][+-][0-9][0-9][0-9][0-9] gate-runner: status → in_progress/{n++} END{print n+0}' "$1" 2>/dev/null || echo 99; }
 
 # ---- 止める条件（1つでも当たれば新しい票を取らない） ---------------------------------------------------
 free_gb() { df -g "$REPO" | awk 'NR==2 {print $4}'; }
@@ -121,7 +135,7 @@ outside_gate() { # p0.3.1b：この夜の運転の開始より後の記録だけ
   [ -f "$EVENTS" ] && grep -q '"type":"main_advanced_outside_gate"' "$EVENTS" && \
   tail -n 200 "$EVENTS" | jq -r --arg s "$RUN_START" 'select(.type=="main_advanced_outside_gate" and (.ts // "") >= $s) | .author // ""' | grep -v -q 'night-runner'; }
 judge_calls_tonight() { find "$VERDICTS" -name '*.json' -newer "$QUEUE" 2>/dev/null | wc -l | tr -d ' '; }
-past_until() { [ "$(date +%H:%M)" \> "$UNTIL" ] && [ "$(date +%H)" -lt 12 ]; }
+past_until() { [ -z "$LAUNCH" ] && [ "$(date +%H:%M)" \> "$UNTIL" ] && [ "$(date +%H)" -lt 12 ]; }
 should_stop() {
   if [ -f "$STOP_FILE" ]; then STOP_REASON="オーナーの停止（STOP ファイル）"; return 0; fi
   if [ -f "$Z3/STOP" ]; then STOP_REASON="Kernel の停止中（$(head -n 1 "$Z3/STOP")）"; return 0; fi   # p0.4.0：kernel-stop.sh（ADR-027）
@@ -153,6 +167,7 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
   local task="$1" wt="$2" attempt="$3" extra="$4"
   local t; t="$(ticket_path "$task")"; local trel="docs/tasks/$(basename "$t")"
   local limit; limit="$(front "$t" time_limit_min)"; limit="${limit:-45}"
+  [[ "$limit" =~ ^[0-9]+$ ]] || limit=45; { [ "$limit" -ge 1 ] && [ "$limit" -le 45 ]; } || limit=45   # p0.4.10：1回の作業員の実行は 1〜45 分（0 は alarm の解除になるので 45 にする。D-67）
   local out="$LOGS/${task}-${attempt}.json"
   # p0.3.2：headless では許可の確認に答える人がおらず、確認待ちは拒否になる（V8 で Edit・Write が拒否された。OBS-042）。
   # 票の files_allowed の Edit・Write と、コミットに要る git add・git commit だけを、この起動に限って許可する。
@@ -167,10 +182,13 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
   [ "${#allow[@]}" -gt 0 ] || { note "${task}: files_allowed が空のため作業員を起動しない"; return 1; }
   # settings.json の allow は信頼されていない workspace では無視されるため、同じものをここで渡す（広げない）
   allow+=("Bash(git add *)" "Bash(git commit *)" "Bash(npx --no-install *)")
-  log "▶ ${task} 作業員を起動（試行 ${attempt}、上限 ${limit}+10 分、worktree ${wt}、許可 ${#allow[@]} 件）"
+  log "▶ ${task} 作業員を起動（試行 ${attempt}、上限 ${limit} 分、worktree ${wt}、許可 ${#allow[@]} 件）"
   # p0.4.9：作業員の起動は予算の台帳の窓口（metered.sh）を通す（予約・同時の数・票ごとの試行の数・停止・期間）。拒まれたら起動しない
-  ( cd "$wt" && run_with_timeout "$(( (limit + 10) * 60 ))" "$BIN_DIR/metered.sh" worker "$task" auto claude -- claude -p --agent worker --output-format json --max-turns 80 \
-      --allowedTools "${allow[@]}" -- "$(worker_prompt "$task" "$trel" "$extra")" ) > "$out" 2> "$LOGS/${task}-${attempt}.err" || true
+  local wrc=0
+  ( cd "$wt" && run_with_timeout "$(( limit * 60 ))" "$BIN_DIR/metered.sh" worker "$task" auto claude -- claude -p --agent worker --output-format json --max-turns 80 \
+      --allowedTools "${allow[@]}" -- "$(worker_prompt "$task" "$trel" "$extra")" ) > "$out" 2> "$LOGS/${task}-${attempt}.err" || wrc=$?
+  # p0.4.10：予算の台帳の窓口が拒んだ・時間切れで止めた（終了 75）ときは、この票を止める（前検査に進まない）
+  if [ "$wrc" -eq 75 ]; then note "${task}: 予算の台帳の窓口が起動を拒んだか、時間切れで止めた（$(tail -n 1 "$LOGS/${task}-${attempt}.err" 2>/dev/null | head -c 80)）"; return 3; fi
   # p0.4.9：利用量が読めなければ 0 にせず、1票の上限を使ったものとして数える（台帳の精算と同じ考え方）
   # 各欄は 0 以上の整数だけを受け取る（負の数・小数・文字列は読めないものとして扱う。Codex の監査 #7）
   local tok; tok="$(jq -r 'def ok: (type=="number") and (. >= 0) and (. == floor); .usage as $u | def okc(k): ($u|has(k)|not) or ($u[k]|ok); if ($u|type)=="object" and ($u.input_tokens|ok) and ($u.output_tokens|ok) and okc("cache_creation_input_tokens") and okc("cache_read_input_tokens") then $u.input_tokens + $u.output_tokens + ($u.cache_creation_input_tokens // 0) + ($u.cache_read_input_tokens // 0) else empty end' "$out" 2>/dev/null || true)"
@@ -187,9 +205,9 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
 PROTECTED_RE='^(\.claude/|CLAUDE\.md$|\.github/|vgdd/|docs/requirements\.md$|docs/tasks/|docs/governance/|merge-requests/)'
 precheck() { # task, wt → 0 なら申請へ。stdout に理由
   local task="$1" wt="$2"; local t; t="$(ticket_path "$task")"
-  local n; n="$(git -C "$REPO" rev-list --count "main..night/$task")"
+  local n; n="$(git -C "$REPO" rev-list --count "main..$(br "$task")")"
   [ "$n" -ge 1 ] || { echo "コミットがない"; return 1; }
-  local changed; changed="$(git -C "$REPO" diff --name-only "main...night/$task")"
+  local changed; changed="$(git -C "$REPO" diff --name-only "main...$(br "$task")")"
   printf '%s\n' "$changed" | grep -Eq "$PROTECTED_RE" && { echo "保護パスへの変更: $(printf '%s\n' "$changed" | grep -E "$PROTECTED_RE" | tr '\n' ' ')"; return 1; }
   local allowed; allowed="$(front_list "$(main_ticket "$t")" files_allowed)"; local outside="" f a okf
   while IFS= read -r f; do
@@ -202,7 +220,7 @@ precheck() { # task, wt → 0 なら申請へ。stdout に理由
   done <<< "$changed"
   [ -z "$outside" ] || { echo "files_allowed の外:${outside}"; return 1; }
   # p0.3.1c：grep -q は一致した時点で読むのをやめ、git が SIGPIPE で終わると pipefail で偽陰性になる（Codex の指摘。OBS-041）。裁判所と同じく最後まで読む
-  git -C "$REPO" diff "main...night/$task" | grep -nE 'sk-ant-api03-[A-Za-z0-9]{40,}|BEGIN (RSA|OPENSSH|PRIVATE)|@gmail\.com|AKIA[0-9A-Z]{16}' >/dev/null && { echo "秘密情報らしい文字列"; return 1; }
+  git -C "$REPO" diff "main...$(br "$task")" | grep -nE 'sk-ant-api03-[A-Za-z0-9]{40,}|BEGIN (RSA|OPENSSH|PRIVATE)|@gmail\.com|AKIA[0-9A-Z]{16}' >/dev/null && { echo "秘密情報らしい文字列"; return 1; }
   if [ -d "$wt/node_modules" ]; then
     # p0.3.1：作業員の書いたテストは sandbox の中で実行する（OBS-034。gate-runner と同じ sandboxed-run.sh）
     ( cd "$wt" && "$Z3/bin/sandboxed-run.sh" --dir "$wt" -- npm run -s test >/dev/null 2>&1 ) || { echo "npm test が不合格"; return 1; }
@@ -212,11 +230,17 @@ precheck() { # task, wt → 0 なら申請へ。stdout に理由
 
 # ---- 票を review にして main にコミット（§2 は触らない） --------------------------------------------------
 mark_review() { # task, head, note
+  # p0.4.10：複数の runner（起動の窓口からの票）が同じ main の checkout を書くので、票の書き換えとコミットを1つのロックで1つずつ行い、コミットは票のパスだけに限る
+  local lk="$Z3/launch/.main-commit.lock" i got=0
+  mkdir -p "$Z3/launch"
+  for i in $(seq 1 120); do if mkdir "$lk" 2>/dev/null; then got=1; break; fi; sleep 1; done
+  [ "$got" -eq 1 ] || { note "${1}: main のコミットのロックを取れない（他の runner が使っている）"; return 1; }   # 取れなければ書かない。他者のロックは消さない
   local t; t="$(ticket_path "$1")"
   sed -i '' -E "2,/^---\$/ s/^status: .*/status: review/" "$t"   # p0.3.1c：front matter の中だけを書き換える（本文の status: に触れない。OBS-041）
   printf '\n- %s night-runner: 作業員の実装を前検査で確認（HEAD %s）。status → review で再申請（%s）\n' "$(ts)" "${2:0:7}" "$3" >> "$t"
   git -C "$REPO" add "docs/tasks/$(basename "$t")"
-  git -C "$REPO" -c user.name=night-runner -c user.email=night-runner@local commit -q -m "night-runner: ${1} を review に（§2 は変えない）"
+  git -C "$REPO" -c user.name=night-runner -c user.email=night-runner@local commit -q -m "night-runner: ${1} を review に（§2 は変えない）" -- "docs/tasks/$(basename "$t")" || { rmdir "$lk"; return 1; }
+  rmdir "$lk"
 }
 
 # ---- 申請と、gate-runner の結果待ち（1件ずつ） ----------------------------------------------------------------
@@ -235,7 +259,7 @@ wait_gate() { # task → merged|rejected|blocked|timeout
 }
 request() { # task, head
   local task="$1" head="$2"
-  jq -n --arg task "$task" --arg branch "night/$task" --arg head "$head" --arg ts "$(ts)" --arg run "$RUN_ID" \
+  jq -n --arg task "$task" --arg branch "$(br "$task")" --arg head "$head" --arg ts "$(ts)" --arg run "$RUN_ID" \
     '{task:$task, branch:$branch, head:$head, requirements_source:"ticket", worker:"night-worker",
       requested_by:"night-runner（行政の長の夜間の代行）", requested_at:$ts, note:("夜間ハーネス " + $run + "。票の §2 は main のもの。前検査は runner が実施")}' \
     > "$REQ_DIR/$task.json"
@@ -243,43 +267,63 @@ request() { # task, head
 
 # ---- 1レーン（1票）。2回まで（初回＋やり直し1回） ------------------------------------------------------------------
 run_lane() { # task
-  local task="$1" wt="$WT_BASE/night-$task" attempt=1 extra="" head res why
-  git -C "$REPO" worktree add "$wt" -b "night/$task" main >/dev/null 2>&1 || { note "${task}: worktree を作れない"; lane_ev fail "$task"; return; }
+  local task="$1" wt; if [ -n "$LAUNCH" ]; then wt="$WT_BASE/launch-${RUN_ID}-$task"; else wt="$WT_BASE/night-$task"; fi
+  local attempt=1 extra="" head res why
+  git -C "$REPO" worktree add "$wt" -b "$(br "$task")" main >/dev/null 2>&1 || { note "${task}: worktree を作れない"; lane_ev fail "$task"; return; }
   lane_ev started "$task"
-  while [ "$attempt" -le 2 ]; do
+  local prev_sig="" req_at=""
+  while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+    if [ -f "$Z3/STOP" ]; then lane_ev fail "$task"; note "${task}: Kernel の停止中。次の試行をしない"; return; fi   # p0.4.10：試行ごとに停止を見る
+    # p0.4.10：差し戻しの上限（3回。裁判所と同じ数え方の票の §6 の行）に達していれば、次の作業員を起動しない
+    if [ "$(gate_returns_of "$(ticket_path "$task")")" -ge 3 ]; then lane_ev fail "$task"; note "${task}: 差し戻しが上限 3 回に達した。次の作業員を起動しない（人の判断へ）"; return; fi
     local rc=0; run_worker "$task" "$wt" "$attempt" "$extra" || rc=$?   # p0.3.1c：set -e のもとで非0を受け取る（以前は非0でレーンが黙って終わった。OBS-040）
     [ "$rc" -eq 2 ] && return
+    [ "$rc" -eq 3 ] && { lane_ev fail "$task"; return; }
     [ "$rc" -eq 1 ] && { lane_ev fail "$task"; note "${task}: 1票のトークンの上限を超えたため中止"; return; }   # p0.3.1c：以前は非0を見ずに続けていた（OBS-040）
     why="$(precheck "$task" "$wt")" || { note "${task}: 前検査で落ちた（${why}）"; extra="前回の問題：${why}。直してからコミットしてください。"; attempt=$((attempt+1)); continue; }
     git -C "$wt" rebase main >/dev/null 2>&1 || { git -C "$wt" rebase --abort >/dev/null 2>&1 || true; note "${task}: rebase の衝突"; extra="main との衝突を直してください（git rebase main）。"; attempt=$((attempt+1)); continue; }
-    head="$(git -C "$REPO" rev-parse "night/$task")"
-    mark_review "$task" "$head" "試行 ${attempt}"
+    head="$(git -C "$REPO" rev-parse "$(br "$task")")"
+    mark_review "$task" "$head" "試行 ${attempt}" || { lane_ev fail "$task"; note "${task}: 票を review にできない。申請しない"; return; }
     git -C "$wt" rebase main >/dev/null 2>&1 || { git -C "$wt" rebase --abort >/dev/null 2>&1 || true; note "${task}: status のコミットの取り込みで衝突。申請しない"; lane_ev fail "$task"; return; }   # p0.3.1c：以前は失敗を無視して申請した（OBS-041）
-    head="$(git -C "$REPO" rev-parse "night/$task")"
+    head="$(git -C "$REPO" rev-parse "$(br "$task")")"
+    req_at="$(node -e 'console.log(new Date().toISOString())')"   # ミリ秒まで（同じ秒の前の判定を混ぜない）
     request "$task" "$head"
     res="$(wait_gate "$task")"
     case "$res" in
       merged) lane_ev merged "$task"; lane_ev ok "$task"; note "${task}: 判定に合格（朝の承認待ち。統合はオーナーが release.sh で行う）"; git -C "$REPO" worktree remove --force "$wt" >/dev/null 2>&1 || true; return;;   # p0.3.1：ブランチは朝の release のために残す
-      rejected) lane_ev rejected "$task"; why="$(tail -n 3 "$(ticket_path "$task")" | grep 'gate-runner: status' | tail -n 1)"; extra="差し戻しの理由（gate-runner）：${why}。これを直してからコミットしてください。"; attempt=$((attempt+1));;
+      rejected) lane_ev rejected "$task"; why="$(tail -n 3 "$(ticket_path "$task")" | grep 'gate-runner: status' | tail -n 1)"
+        # p0.4.10：前の試行の記録（司法の指摘＝根拠あり、変えたファイル＝事実、前の作業員の報告＝未検証の仮説）を次の試行に渡す。
+        #   同じ重い指摘で続けて差し戻されたら、自動で直さずに人へ戻す（同じ失敗を繰り返さない）
+        local chf="$LOGS/${task}-${attempt}.changed" pr
+        git -C "$REPO" diff --name-only "main...$(br "$task")" > "$chf" 2>/dev/null || true
+        pr="$(node "$BIN_DIR/prior-record.mjs" --task "$task" --verdicts "$VERDICTS" --since "$req_at" --worker-log "$LOGS/${task}-${attempt}.json" --changed "$chf" --prev-signature "$prev_sig" 2>/dev/null || true)"
+        if [ -n "$pr" ] && [ "$(printf '%s' "$pr" | jq -r '.repeated')" = "true" ]; then
+          lane_ev fail "$task"; note "${task}: 同じ重い指摘で続けて差し戻された。自動修正を止めて人へ戻す"; return
+        fi
+        prev_sig="$(printf '%s' "$pr" | jq -r '.signature // ""' 2>/dev/null || true)"
+        # 差し戻しの行は票（行政も書ける）から読むので、伏せ字を通し、引用の囲みの中の記録（prior-record）にだけ頼る
+        extra="前の試行は差し戻された。次の記録を読み、直してからコミットしてください。
+$(printf '%s' "$pr" | jq -r '.text // ""' 2>/dev/null || true)"
+        attempt=$((attempt+1));;
       blocked) lane_ev blocked "$task"; note "${task}: blocked（朝にオーナーの裁定）"; lane_ev fail "$task"; return;;
       timeout) note "${task}: gate-runner の結果を 20 分待っても出ない"; lane_ev fail "$task"; return;;
     esac
   done
-  lane_ev fail "$task"; note "${task}: 2回で通らず。朝に確認"
+  lane_ev fail "$task"; note "${task}: ${MAX_ATTEMPTS}回で通らず。人が確認する"
 }
 
 # ---- 本体 -------------------------------------------------------------------------------------------------------
 log "night-runner 起動 run_id=${RUN_ID} parallel=${PARALLEL} until=${UNTIL} max_tickets=${MAX_TICKETS} dry_run=${DRY}"
 [ -z "$(git -C "$REPO" status --porcelain --untracked-files=no)" ] || { echo "main の checkout に未コミットの変更がある。片付けてから" >&2; exit 65; }
-QUEUE_TASKS="$(jq -r '.tickets[]' "$QUEUE")"
+if [ -n "$LAUNCH" ]; then QUEUE_TASKS="$LAUNCH"; else QUEUE_TASKS="$(jq -r '.tickets[]' "$QUEUE")"; fi
 TAKEN=0; declare -a PIDS=() LANES=()
 for task in $QUEUE_TASKS; do
   t="$(ticket_path "$task")"
   if [ -z "$t" ]; then note "${task}: 票がない"; SKIPPED=$((SKIPPED+1)); continue; fi
   st="$(front "$t" status)"
-  if ! { [ "$st" = "ready" ] || { [ "$st" = "in_progress" ] && [ "$(returns_of "$t")" -lt 3 ]; }; }; then note "${task}: status=${st} のため飛ばす"; SKIPPED=$((SKIPPED+1)); continue; fi
+  if ! { [ "$st" = "ready" ] || { [ "$st" = "in_progress" ] && [ "$(gate_returns_of "$t")" -lt 3 ]; }; }; then note "${task}: status=${st} のため飛ばす"; SKIPPED=$((SKIPPED+1)); continue; fi
   [ "$(front "$t" requirements_source)" = "ticket" ] || { note "${task}: requirements_source が ticket ではない"; SKIPPED=$((SKIPPED+1)); continue; }
-  [ "$(front "$t" unattended)" = "true" ] || { note "${task}: unattended: true ではない（オーナーの判断が要る票）"; SKIPPED=$((SKIPPED+1)); continue; }
+  [ -n "$LAUNCH" ] || [ "$(front "$t" unattended)" = "true" ] || { note "${task}: unattended: true ではない（オーナーの判断が要る票）"; SKIPPED=$((SKIPPED+1)); continue; }   # p0.4.10：起動の窓口の票はオーナーが昼に承認した票なので、unattended を求めない
   depends_merged "$t" || { note "${task}: depends_on が未統合。後に回す"; SKIPPED=$((SKIPPED+1)); continue; }
   # p0.4.0：仕様がオーナーに承認されていない票は作業員に渡さない（gate-runner も同じ照合で止める。ADR-005・成立条件②）
   node "$Z3/bin/spec-digest.mjs" --repo "$REPO" --ref main --ticket "docs/tasks/$(basename "$t")" --check "$Z3/evidence/spec_approvals.jsonl" >/dev/null 2>&1 \

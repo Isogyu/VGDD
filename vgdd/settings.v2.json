@@ -128,7 +128,8 @@
         "~/.claude/settings.json",
         "~/.claude/settings.local.json",
         "~/.claude/hooks",
-        "~/.claude.json"
+        "~/.claude.json",
+        "merge-requests/launch"
       ],
       "denyRead": [
         "~/tsubuyaki-z3",
