@@ -1,7 +1,7 @@
 ---
 id: T-037
 title: 統治シアターに「はじめて見る」の案内を足す（5つの手順で図の見方を説明し、該当する場所を光らせる）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -123,3 +123,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 2. 再生の票を案内から自動で選ぶこと（たとえば T-014）は、`TicketReplay` を変えることになるので、この票では入れていない
 
 - 2026-11-07T22:19:56+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T22:23:54+0900 release: status → merged（main=ad57a81752c9。夜間の判定に合格した候補 a89a6f9009ae を、オーナーが朝に承認して統合）
