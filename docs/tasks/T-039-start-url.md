@@ -1,7 +1,7 @@
 ---
 id: T-039
 title: 統治シアターの開始の状態（見る記録と再生の票）を URL で決められるようにする
-status: review
+status: in_progress
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -110,3 +110,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 ## オーナーに聞くこと
 
 1. 選べる票は、再生の並び（T-014・T-026・T-013）の中だけにする（並びを広げるのは別の票）
+
+- 2026-11-07T22:48:27+0900 gate-runner: status → in_progress（judge=CHANGES_REQUIRED, codex=CHANGES_REQUIRED（両方が差し戻し））
