@@ -1,7 +1,7 @@
 ---
 id: T-036
 title: 統治シアターの下に「Claude Code の使い分け」の欄を足す（役割ごとの機能・モデル・道具の制限と、フックの集計）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 2
 time_limit_min: 150
 security_review: false         # 公開済みの集計（summary.json）を既存の API から読むだけ。API は変えない
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-ab6384d485b3ba4d2
+worker: W32
 files_allowed:
   - src/lib/claude-roles.ts                           # 新設：役割の表（固定の文）と、集計から行を組み立てる純粋関数
   - src/lib/claude-roles.test.ts                      # 新設
@@ -102,6 +102,15 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 決定論的な監査＋ judge ＋ Codex judge。T-035 の統合の後に作業員を起動する（同じ `GovernanceTheater.tsx` を触る）。
 
 ## 6. 記録
+
+- 21:50 行政の長が W32 を起動（worktree `agent-ab6384d485b3ba4d2`、T-035 を統合した後の main 382d861 から、モデルは Opus）。仕様はオーナーが 21:33:00 に approve-spec で承認済み（21:50:16 の Kernel の写しの `approvals[].current` で確かめた）。依存の T-034・T-035 は統合済み
+- W32 の最初の報告：HEAD `984fe0c`。A2 の「0 以上の整数」と「`pickSummary` と同じ判定」がぶつかることを「§2 から外れる解釈」として挙げた（`pickSummary` は `z.number()` で負の数・小数も通す。`governance.ts` は変更禁止）。判定は zod 4 の内部の判定を手で写して `pickSummary` に合わせていた。行政の長が `governance.ts` で `z.number()` を確かめ、オーナーに2点を相談した
+- オーナーの判断：(1) 数の判定は `pickSummary` と同じにし、0 以上の整数の条件を外す（厳しくも緩くもしない） (2) `claude-roles.ts` の中に `pickSummary` と同じ形の zod のスキーマを置いて判定する。§2 の A2 をこの意味に直して main e9241f5 でコミットし、22:00:51 に承認し直した（22:03:22 の Kernel の写しの `approvals[].current` で確かめた）
+- W32 の直し：手書きの判定を、`governance.ts` の `summarySchema` と同じ形の zod のスキーマ `roleSummarySchema` と `safeParse` に置き換えた（`@/lib/governance` は `import type` だけのまま）。組み立て直しも `pickSummary` と同じ書き方。`pickSummary` との一致の試験（37 通り、実際の `summary.json` を含む）は残した。コミットに直しを入れ、オーナーの指示で基点を e9241f5 に積み直した（衝突なし）。HEAD `6ee3dd1f381a85cc9b7e36e250814233a6d24c29`、e9241f5 の上に1コミット。test 880 件（44 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:875` の `stopsDir` で差分の外）
+- 行政の長の確認（試験は再実行していない）：差分は A0 の6つだけ（+730）。984fe0c からの変更は `claude-roles.ts` と試験だけ。`roleSummarySchema` の項目と型が `summarySchema` と同じこと、A1 の6行の文が票の表（バッククォートを外した中身）と一字一句同じこと、件数がないときに 0 で埋めず `null`（画面は「—」）にすること、`ClaudeRoles.tsx` と `claude-roles.ts` が `@/lib/governance` を `import type` だけで参照すること、`GovernanceTheater.tsx` の変更が import 1行と T-033 の区画の下の入れ物1つだけ（`key` なし、取り直しにつながない）であることを、§2 と読み合わせた
+- 読み方が割れる所（W32 の選んだ読み方）：(1) 表の中のバッククォートは書式として外し、中身だけを文字列にした（行政の長の指示）。`(main)` は文字列、`null` は値 (2) `GovernanceTheater` には `<div>` の入れ物を置き、`<section aria-label="Claude Code の使い分け">` は `ClaudeRoles` の側が持つ（同じ名前の section を二重にしないため） (3) 入れ物は `px-4 pb-4` で、T-033 の区画の `p-4` と合わせて間を 16px にした
+- 補った解釈（文面の範囲内）：(1) フックの集計の文と拒否の札の数字にも「,」区切りを使う（§3 の「許可 3,442」に合わせた。`toLocaleString("en-US")`） (2) 取得の状態の文は既定の export の側で欄の上に出し、`ClaudeRolesView` には `summary={null}` を渡す（props を `{ summary }` だけに保つため） (3) 応答が object でない・null・配列のとき、`summary` の鍵がないときは「操作の集計を読めませんでした」 (4) 鍵の名前の順は UTF-16 の符号の順（ロケールに左右されない） (5) 表に `min-w-[48rem]` を付け、`overflow-x-auto` の中で横にスクロールさせる
+- **確かめていない**：画面からの実際の `GET /api/governance` の取得（取得の流れの試験もない）、§3 の数字と画面の表示の照合（試験で確かめたのは、実際の `summary.json` での `pickSummary` との判定の一致と、作業員の行の `calls` が 1 以上であることだけ）、1440×900 と 375px の実際の収まり、`npm run build`（クライアントの束に `node:fs` が入らないことは import の形からの推論）。§3 で立法補佐が held の候補で確かめる
 
 ## オーナーに聞くこと
 
