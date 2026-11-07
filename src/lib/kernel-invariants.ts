@@ -1,6 +1,9 @@
 // 前提：docs/governance/ は法律で保護パス（行政は書けない）なので、ディレクトリの敵対的な同時の差し替えは扱わない。
-// 不変条件と承認待ちの写し（<root>/docs/governance/kernel-invariants.json）を読む。T-024。
-// 読むのはこの1か所だけ。パスの組み立てに外からの入力は使わない。どの段階の失敗も null（例外の本文は使わない）。
+// 不変条件と承認待ちの写しを読む。T-024、T-030。
+//   source が "live"（既定）：<root>/docs/governance/kernel-invariants.json（裁判所が書き出す稼働中の写し）
+//   source が "submission"：<root>/docs/governance/snapshots/submission/kernel-invariants.json（提出記録）
+// 読むのはこの2か所だけで、片方が読めなくてももう片方に切り替えない。
+// パスの組み立てに外からの入力は使わない。どの段階の失敗も null（例外の本文は使わない）。
 
 import fs from "node:fs";
 import path from "node:path";
@@ -20,16 +23,26 @@ function isRealDir(p: string): boolean {
 }
 
 /** 不変条件と承認待ちの写しを読んで検証する。なければ・読めなければ・形が合わなければ null */
-export function loadKernelInvariants(root: string = process.cwd()): KernelInvariants | null {
+export function loadKernelInvariants(
+  root: string = process.cwd(),
+  source: "live" | "submission" = "live",
+): KernelInvariants | null {
   try {
     // パスは root と固定の名前だけで組み立てる
     const docsDir = path.join(root, "docs");
     const governanceDir = path.join(docsDir, "governance");
     // (1) docs と docs/governance がリンクでない実在のディレクトリか
     if (!isRealDir(docsDir) || !isRealDir(governanceDir)) return null;
+    let dir = governanceDir;
+    if (source === "submission") {
+      // 提出記録は、snapshots と submission も同じように1つずつ確かめる
+      const snapshotsDir = path.join(governanceDir, "snapshots");
+      dir = path.join(snapshotsDir, "submission");
+      if (!isRealDir(snapshotsDir) || !isRealDir(dir)) return null;
+    }
 
     // (2) リンクか通常ファイルでなければ読まない（FIFO やデバイスを読まない）
-    const file = path.join(governanceDir, "kernel-invariants.json");
+    const file = path.join(dir, "kernel-invariants.json");
     const st = fs.lstatSync(file);
     if (st.isSymbolicLink() || !st.isFile()) return null;
 

@@ -5,13 +5,22 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { GET as invariantsLiveGet } from "@/app/api/governance/kernel/invariants/route";
+import * as invariantsSubmissionRoute from "@/app/api/governance/kernel/invariants/submission/route";
 import { loadKernelInvariants } from "@/lib/kernel-invariants";
 import {
   pickKernelInvariants,
   summarizeInvariants,
   type KernelInvariants,
 } from "@/lib/kernel-invariants-schema";
+
+// T-030：route.ts の試験のため。connection() はリクエストの外で呼べないので差し替える
+const { connectionMock } = vi.hoisted(() => ({ connectionMock: vi.fn(async () => undefined) }));
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  connection: connectionMock,
+}));
 
 const MAX_BYTES = 1_048_576;
 
@@ -280,5 +289,177 @@ describe("loadKernelInvariants", () => {
     fs.writeFileSync(file, paddedJson(MAX_BYTES + 1));
     expect(fs.statSync(file).size).toBe(MAX_BYTES + 1);
     expect(loadKernelInvariants(root)).toBeNull();
+  });
+
+  // ---------- T-030：source（稼働中の写しと提出記録） ----------
+
+  const LIVE_VERSION = "p1.1.1";
+  const SUBMISSION_VERSION = "p2.2.2";
+
+  /** root の下に docs/governance/snapshots/submission を作って、そのパスを返す */
+  function makeSubmissionDir(root: string): string {
+    const dir = path.join(makeGovernance(root), "snapshots", "submission");
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+
+  describe("source", () => {
+    it("live と submission の両方があるとき、source ごとに正しい方を読む", () => {
+      const root = makeRoot();
+      fs.writeFileSync(
+        path.join(makeGovernance(root), FILE),
+        JSON.stringify(validJson({ kernel_version: LIVE_VERSION })),
+      );
+      fs.writeFileSync(
+        path.join(makeSubmissionDir(root), FILE),
+        JSON.stringify(validJson({ kernel_version: SUBMISSION_VERSION })),
+      );
+      expect(loadKernelInvariants(root, "live")?.kernel_version).toBe(LIVE_VERSION);
+      expect(loadKernelInvariants(root, "submission")?.kernel_version).toBe(SUBMISSION_VERSION);
+    });
+
+    it("引数1つの呼び出しは live を読む", () => {
+      const root = makeRoot();
+      fs.writeFileSync(
+        path.join(makeGovernance(root), FILE),
+        JSON.stringify(validJson({ kernel_version: LIVE_VERSION })),
+      );
+      fs.writeFileSync(
+        path.join(makeSubmissionDir(root), FILE),
+        JSON.stringify(validJson({ kernel_version: SUBMISSION_VERSION })),
+      );
+      expect(loadKernelInvariants(root)?.kernel_version).toBe(LIVE_VERSION);
+    });
+
+    it("片方しかないとき、もう片方に切り替えない", () => {
+      const onlySubmission = makeRoot();
+      fs.writeFileSync(path.join(makeSubmissionDir(onlySubmission), FILE), JSON.stringify(validJson()));
+      expect(loadKernelInvariants(onlySubmission)).toBeNull();
+      expect(loadKernelInvariants(onlySubmission, "live")).toBeNull();
+
+      const onlyLive = makeRoot();
+      fs.writeFileSync(path.join(makeGovernance(onlyLive), FILE), JSON.stringify(validJson()));
+      expect(loadKernelInvariants(onlyLive, "submission")).toBeNull();
+    });
+
+    it("snapshots がディレクトリへのリンクなら null（指す先が正しくても）", () => {
+      const root = makeRoot();
+      const real = path.join(root, "real");
+      fs.mkdirSync(path.join(real, "submission"), { recursive: true });
+      fs.writeFileSync(path.join(real, "submission", FILE), JSON.stringify(validJson()));
+      fs.symlinkSync(real, path.join(makeGovernance(root), "snapshots"));
+      expect(loadKernelInvariants(root, "submission")).toBeNull();
+    });
+
+    it("submission がディレクトリへのリンクなら null（指す先が正しくても）", () => {
+      const root = makeRoot();
+      const real = path.join(root, "real");
+      fs.mkdirSync(real);
+      fs.writeFileSync(path.join(real, FILE), JSON.stringify(validJson()));
+      const snapshots = path.join(makeGovernance(root), "snapshots");
+      fs.mkdirSync(snapshots);
+      fs.symlinkSync(real, path.join(snapshots, "submission"));
+      expect(loadKernelInvariants(root, "submission")).toBeNull();
+    });
+
+    it("JSON のファイルがリンクなら null（指す先が正しくても）", () => {
+      const root = makeRoot();
+      const target = path.join(root, "target.json");
+      fs.writeFileSync(target, JSON.stringify(validJson()));
+      fs.symlinkSync(target, path.join(makeSubmissionDir(root), FILE));
+      expect(loadKernelInvariants(root, "submission")).toBeNull();
+    });
+
+    it("docs・docs/governance がリンクなら、submission でも null", () => {
+      const viaGovernance = makeRoot();
+      const realGovernance = path.join(viaGovernance, "real");
+      fs.mkdirSync(path.join(realGovernance, "snapshots", "submission"), { recursive: true });
+      fs.writeFileSync(path.join(realGovernance, "snapshots", "submission", FILE), JSON.stringify(validJson()));
+      fs.mkdirSync(path.join(viaGovernance, "docs"));
+      fs.symlinkSync(realGovernance, path.join(viaGovernance, "docs", "governance"));
+      expect(loadKernelInvariants(viaGovernance, "submission")).toBeNull();
+
+      const viaDocs = makeRoot();
+      const realDocs = path.join(viaDocs, "real");
+      fs.mkdirSync(path.join(realDocs, "governance", "snapshots", "submission"), { recursive: true });
+      fs.writeFileSync(path.join(realDocs, "governance", "snapshots", "submission", FILE), JSON.stringify(validJson()));
+      fs.symlinkSync(realDocs, path.join(viaDocs, "docs"));
+      expect(loadKernelInvariants(viaDocs, "submission")).toBeNull();
+    });
+
+    it("ファイルの場所がディレクトリ（通常のファイルでない）なら null", () => {
+      const root = makeRoot();
+      fs.mkdirSync(path.join(makeSubmissionDir(root), FILE));
+      expect(loadKernelInvariants(root, "submission")).toBeNull();
+    });
+
+    it("ちょうど 1,048,576 バイトは読み、1,048,577 バイトは null", () => {
+      const root = makeRoot();
+      const file = path.join(makeSubmissionDir(root), FILE);
+      fs.writeFileSync(file, paddedJson(MAX_BYTES));
+      expect(loadKernelInvariants(root, "submission")).not.toBeNull();
+      fs.writeFileSync(file, paddedJson(MAX_BYTES + 1));
+      expect(loadKernelInvariants(root, "submission")).toBeNull();
+    });
+
+    it("JSON でない・形が合わないものは null", () => {
+      const root = makeRoot();
+      const file = path.join(makeSubmissionDir(root), FILE);
+      fs.writeFileSync(file, "{ JSON ではない");
+      expect(loadKernelInvariants(root, "submission")).toBeNull();
+      fs.writeFileSync(file, JSON.stringify(validJson({ extra: 1 })));
+      expect(loadKernelInvariants(root, "submission")).toBeNull();
+    });
+
+    it("A6：リポジトリの実際の提出記録が今の検証に通る", () => {
+      expect(loadKernelInvariants(process.cwd(), "submission")).not.toBeNull();
+    });
+  });
+
+  // ---------- T-030：GET /api/governance/kernel/invariants/submission ----------
+
+  describe("GET /api/governance/kernel/invariants/submission", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("export する HTTP メソッドは GET だけで、引数を取らない", () => {
+      expect(Object.keys(invariantsSubmissionRoute)).toEqual(["GET"]);
+      expect(invariantsSubmissionRoute.GET.length).toBe(0);
+    });
+
+    it("source と写しを返す", async () => {
+      const root = makeRoot();
+      fs.writeFileSync(path.join(makeSubmissionDir(root), FILE), JSON.stringify(validJson()));
+      vi.spyOn(process, "cwd").mockReturnValue(root);
+      const r = await invariantsSubmissionRoute.GET();
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ source: "submission", invariants: validJson() });
+    });
+
+    it("提出記録がなければ invariants は null（稼働中の写しがあっても切り替えない）", async () => {
+      const root = makeRoot();
+      fs.writeFileSync(path.join(makeGovernance(root), FILE), JSON.stringify(validJson()));
+      vi.spyOn(process, "cwd").mockReturnValue(root);
+      const r = await invariantsSubmissionRoute.GET();
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ source: "submission", invariants: null });
+    });
+
+    it("例外は本文を入れずに 500", async () => {
+      connectionMock.mockRejectedValueOnce(new Error("架空の例外の本文"));
+      const r = await invariantsSubmissionRoute.GET();
+      expect(r.status).toBe(500);
+      expect(await r.json()).toEqual({ error: "invariants_unavailable" });
+    });
+
+    it("稼働中の写しがなく提出記録があるとき、今の API は invariants: null のまま（切り替わらない）", async () => {
+      const root = makeRoot();
+      fs.writeFileSync(path.join(makeSubmissionDir(root), FILE), JSON.stringify(validJson()));
+      vi.spyOn(process, "cwd").mockReturnValue(root);
+      const r = await invariantsLiveGet();
+      expect(r.status).toBe(200);
+      expect(await r.json()).toEqual({ invariants: null });
+    });
   });
 });

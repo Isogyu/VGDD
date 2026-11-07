@@ -4,7 +4,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as kernelSubmissionRoute from "@/app/api/governance/kernel/submission/route";
+import { GET as kernelLiveGet } from "@/app/api/governance/kernel/route";
 import { loadKernelState } from "@/lib/kernel-state";
 import {
   formatJst,
@@ -13,6 +15,13 @@ import {
   toWire,
   type KernelState,
 } from "@/lib/kernel-state-schema";
+
+// T-030：route.ts の試験のため。connection() はリクエストの外で呼べないので差し替える
+const { connectionMock } = vi.hoisted(() => ({ connectionMock: vi.fn(async () => undefined) }));
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  connection: connectionMock,
+}));
 
 /** 正しい形の状態（JSON の値）。上書きしたい項目は overrides で渡す */
 function validJson(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -386,5 +395,179 @@ describe("loadKernelState", () => {
     const root = makeRoot();
     writeState(root, JSON.stringify(validJson({ extra: true })));
     expect(loadKernelState(root)).toBeNull();
+  });
+});
+
+// ---------- T-030：source（稼働中の写しと提出記録） ----------
+
+const LIVE_VERSION = "p1.1.1-live";
+const SUBMISSION_VERSION = "p2.2.2-submission";
+const FILE = "kernel-state.json";
+
+/** root の下に docs/governance/snapshots/submission を作って、そのパスを返す */
+function makeSubmissionDir(root: string): string {
+  const dir = path.join(root, "docs", "governance", "snapshots", "submission");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function writeSubmission(root: string, text: string): string {
+  const file = path.join(makeSubmissionDir(root), FILE);
+  fs.writeFileSync(file, text);
+  return file;
+}
+
+describe("loadKernelState の source", () => {
+  it("live と submission の両方があるとき、source ごとに正しい方を読む", () => {
+    const root = makeRoot();
+    writeState(root, JSON.stringify(validJson({ kernel_version: LIVE_VERSION })));
+    writeSubmission(root, JSON.stringify(validJson({ kernel_version: SUBMISSION_VERSION })));
+    expect(loadKernelState(root, "live")?.kernel_version).toBe(LIVE_VERSION);
+    expect(loadKernelState(root, "submission")?.kernel_version).toBe(SUBMISSION_VERSION);
+  });
+
+  it("引数1つの呼び出しは live を読む", () => {
+    const root = makeRoot();
+    writeState(root, JSON.stringify(validJson({ kernel_version: LIVE_VERSION })));
+    writeSubmission(root, JSON.stringify(validJson({ kernel_version: SUBMISSION_VERSION })));
+    expect(loadKernelState(root)?.kernel_version).toBe(LIVE_VERSION);
+  });
+
+  it("片方しかないとき、もう片方に切り替えない", () => {
+    const onlySubmission = makeRoot();
+    writeSubmission(onlySubmission, JSON.stringify(validJson()));
+    expect(loadKernelState(onlySubmission)).toBeNull();
+    expect(loadKernelState(onlySubmission, "live")).toBeNull();
+
+    const onlyLive = makeRoot();
+    writeState(onlyLive, JSON.stringify(validJson()));
+    expect(loadKernelState(onlyLive, "submission")).toBeNull();
+  });
+
+  it("snapshots がディレクトリへのリンクなら null（指す先が正しくても）", () => {
+    const root = makeRoot();
+    const real = path.join(root, "elsewhere");
+    fs.mkdirSync(path.join(real, "submission"), { recursive: true });
+    fs.writeFileSync(path.join(real, "submission", FILE), JSON.stringify(validJson()));
+    fs.mkdirSync(path.join(root, "docs", "governance"), { recursive: true });
+    fs.symlinkSync(real, path.join(root, "docs", "governance", "snapshots"));
+    expect(loadKernelState(root, "submission")).toBeNull();
+  });
+
+  it("submission がディレクトリへのリンクなら null（指す先が正しくても）", () => {
+    const root = makeRoot();
+    const real = path.join(root, "elsewhere");
+    fs.mkdirSync(real);
+    fs.writeFileSync(path.join(real, FILE), JSON.stringify(validJson()));
+    fs.mkdirSync(path.join(root, "docs", "governance", "snapshots"), { recursive: true });
+    fs.symlinkSync(real, path.join(root, "docs", "governance", "snapshots", "submission"));
+    expect(loadKernelState(root, "submission")).toBeNull();
+  });
+
+  it("JSON のファイルがリンクなら null（指す先が正しくても）", () => {
+    const root = makeRoot();
+    const target = path.join(root, "target.json");
+    fs.writeFileSync(target, JSON.stringify(validJson()));
+    fs.symlinkSync(target, path.join(makeSubmissionDir(root), FILE));
+    expect(loadKernelState(root, "submission")).toBeNull();
+  });
+
+  it("docs・docs/governance がリンクなら、submission でも null", () => {
+    const viaGovernance = makeRoot();
+    const realGovernance = path.join(viaGovernance, "elsewhere");
+    fs.mkdirSync(path.join(realGovernance, "snapshots", "submission"), { recursive: true });
+    fs.writeFileSync(path.join(realGovernance, "snapshots", "submission", FILE), JSON.stringify(validJson()));
+    fs.mkdirSync(path.join(viaGovernance, "docs"));
+    fs.symlinkSync(realGovernance, path.join(viaGovernance, "docs", "governance"));
+    expect(loadKernelState(viaGovernance, "submission")).toBeNull();
+
+    const viaDocs = makeRoot();
+    const realDocs = path.join(viaDocs, "elsewhere");
+    fs.mkdirSync(path.join(realDocs, "governance", "snapshots", "submission"), { recursive: true });
+    fs.writeFileSync(path.join(realDocs, "governance", "snapshots", "submission", FILE), JSON.stringify(validJson()));
+    fs.symlinkSync(realDocs, path.join(viaDocs, "docs"));
+    expect(loadKernelState(viaDocs, "submission")).toBeNull();
+  });
+
+  it("ファイルの場所がディレクトリ（通常のファイルでない）なら null", () => {
+    const root = makeRoot();
+    fs.mkdirSync(path.join(makeSubmissionDir(root), FILE));
+    expect(loadKernelState(root, "submission")).toBeNull();
+  });
+
+  it("ちょうど 1,048,576 バイトは読み、1,048,577 バイトは null", () => {
+    const body = JSON.stringify(validJson());
+    const root1 = makeRoot();
+    writeSubmission(root1, body + " ".repeat(1_048_576 - Buffer.byteLength(body)));
+    expect(loadKernelState(root1, "submission")).not.toBeNull();
+
+    const root2 = makeRoot();
+    writeSubmission(root2, body + " ".repeat(1_048_577 - Buffer.byteLength(body)));
+    expect(loadKernelState(root2, "submission")).toBeNull();
+  });
+
+  it("JSON でない・形が合わないものは null", () => {
+    const root = makeRoot();
+    writeSubmission(root, "{ not json");
+    expect(loadKernelState(root, "submission")).toBeNull();
+    writeSubmission(root, JSON.stringify(validJson({ extra: true })));
+    expect(loadKernelState(root, "submission")).toBeNull();
+  });
+
+  it("A6：リポジトリの実際の提出記録が今の検証に通る", () => {
+    expect(loadKernelState(process.cwd(), "submission")).not.toBeNull();
+  });
+});
+
+// ---------- T-030：GET /api/governance/kernel/submission ----------
+
+describe("GET /api/governance/kernel/submission", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("export する HTTP メソッドは GET だけで、引数を取らない", () => {
+    expect(Object.keys(kernelSubmissionRoute)).toEqual(["GET"]);
+    expect(kernelSubmissionRoute.GET.length).toBe(0);
+  });
+
+  it("source と、通信の形（by_task が残る）の写しを返す", async () => {
+    const root = makeRoot();
+    writeSubmission(root, JSON.stringify(validJson({ kernel_version: SUBMISSION_VERSION })));
+    vi.spyOn(process, "cwd").mockReturnValue(root);
+    const r = await kernelSubmissionRoute.GET();
+    expect(r.status).toBe(200);
+    const body = (await r.json()) as { source: string; state: unknown };
+    expect(Object.keys(body).sort()).toEqual(["source", "state"]);
+    expect(body.source).toBe("submission");
+    const picked = mustPick(body.state);
+    expect(picked.kernel_version).toBe(SUBMISSION_VERSION);
+    expect(picked.verdicts.by_task.size).toBe(2);
+  });
+
+  it("提出記録がなければ state は null", async () => {
+    const root = makeRoot();
+    // 稼働中の写しがあっても、そちらには切り替えない
+    writeState(root, JSON.stringify(validJson()));
+    vi.spyOn(process, "cwd").mockReturnValue(root);
+    const r = await kernelSubmissionRoute.GET();
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ source: "submission", state: null });
+  });
+
+  it("例外は本文を入れずに 500", async () => {
+    connectionMock.mockRejectedValueOnce(new Error("架空の例外の本文"));
+    const r = await kernelSubmissionRoute.GET();
+    expect(r.status).toBe(500);
+    expect(await r.json()).toEqual({ error: "kernel_unavailable" });
+  });
+
+  it("稼働中の写しがなく提出記録があるとき、今の API は state: null のまま（切り替わらない）", async () => {
+    const root = makeRoot();
+    writeSubmission(root, JSON.stringify(validJson()));
+    vi.spyOn(process, "cwd").mockReturnValue(root);
+    const r = await kernelLiveGet();
+    expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ state: null });
   });
 });
