@@ -1,7 +1,7 @@
 ---
 id: T-042
 title: Kernel の写しの読み取りを、予算・実行・受け入れの新しい項目（任意）にも対応させる（新旧の両方の写しを読める）
-status: in_progress
+status: review
 requirements: [A0, A1, A2, A3, A4]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1
 time_limit_min: 90
 security_review: true          # 写しの検証（公開の項目）を変える
 unattended: false
-branch: worktree-agent-a2268f64d923de204
-worker: W39
+branch: worktree-agent-ae7854a6b38ec3d46
+worker: W42
 files_allowed:
   - src/lib/kernel-state-schema.ts                    # 任意の3項目の検証と型を足すだけ
   - src/lib/kernel-state.test.ts                      # 試験を足す
@@ -78,3 +78,11 @@ held の後、立法補佐が候補で `/governance` を開き、提出記録・
 1. 3項目の形（A1）を、法律の改正 L1・L3 で書く形として固定する
 
 - 2026-11-08T00:01:24+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
+- 01:3x 差し戻しの原因は、§2 の A1 の `until` の形が曖昧だったこと（オーナーが Z3 の指摘を共有）。立法補佐が §2 に形を書いた（77e3e37）。行政の長が「`Date.parse` が数を返すこと」の読み方が割れることを知らせ（Node の `Date.parse` は 2月30日・24時に数を返すが、実装は拒む）、オーナーが「存在しない日時も拒む」に決めた。立法補佐が §2 に書き（a0e8f40）、オーナーが 01:56:51 に approve-spec で承認し直した（02:02:24 の Kernel の写しの `approvals[].current` で確かめた）
+- 01:58 行政の長が W42 を起動（worktree `agent-ae7854a6b38ec3d46`、main a0e8f40 から、モデルは Opus）。W39 の `d37a2a7` を cherry-pick させ、コードは変えずに試験を足させた。作業員の起動は台帳の外（法律 p0.4.9 は司法の呼び出しだけを台帳に通す。昼の作業員は次の改正 L2 で窓口に寄せる）
+- W42 の報告（1回目）：HEAD `af6dc79`。`kernel-state-schema.ts` は `d37a2a7` と同じ。足した試験は次のとおり。不正な `until` の一覧に、秒の省略2件・10桁の小数秒・桁のない小数点・4月31日・小数秒つきの24時。新しい試験で、境目の値（9桁の小数秒・2028-02-29・23:59:59・月末など8件）が通ること。**W42 は件数を数えるために `npx --no-install vitest run src/lib/kernel-state.test.ts` を1回使った**（作業員の決まりでは使わない。読み取りだけで、ファイルは変わっていない）
+- 読み方が割れる所（オーナーが決めた）：月の日数を `Date.UTC(year, month, 0)` で求めると、0〜99 年が 1900 年代として扱われ、`0000-02-29` を拒んでいた（ISO 8601 の暦では 0 年はうるう年で、`Date.parse` は数を返す）。グレゴリオ暦に0年はないと読めば拒んでよく、ISO 8601 の暦と読めば通すべきなので、オーナーに知らせた。オーナーは (b)「ISO 8601 の暦のとおり通す」に決めた。§2 は変わらないので、承認し直しは要らない
+- W42 の報告（2回目）：HEAD `d39d51f50bce57e773895ea6bc8ea6a73fb2c238`、a0e8f40 の上に1コミット（2ファイル、+352 / -2）。`isValidOffsetDateTime` の月の日数を `setUTCFullYear` で求める形に直した（`d37a2a7` との差はこの1行だけ）。`0000-02-29` が通る試験と、`0001-02-29` を拒む試験を足した。test は 992 件（49 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:880` の `stopsDir` で差分の外）。npx は使っていない
+- 行政の長の確認（試験は再実行していない）：差分は A0 の2つだけ。`af6dc79` からの差は、直した1行と試験の値の2件だけ。今の試験（T-042 より前からあるもの）の中身は変わっていない（`kernel-state.test.ts` の import の1行に `expectTypeOf` を足しただけ）。Node で `setUTCFullYear` が 0 年の2月を29日、1 年の2月を28日にすることを確かめた
+- 補った解釈（文面の範囲内）：(1) `until` の長さの上限を 40 字にした。§2 の形で一番長いのは 35 字なので、40 字の境目は形に合わない文字列にしか当たらない (2) `period_id` の文字の種類は制限しない (3) 3つの型 `KernelBudget`・`KernelRuns`・`KernelAcceptance` を export した
+- **確かめていない**：画面（`/governance`）で、提出記録と稼働中の観測の両方が今までどおり出ること、`npm run build`、0〜99 年のほかの値（0004・0100 など）、書く側（L1・L3）がこの形で `until` を出すか。§3 で立法補佐が held の候補で確かめる
