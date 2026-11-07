@@ -8,6 +8,7 @@ import type { Replay } from "@/lib/governance-replay-schema";
 // 写しの generated_at は +09:00 の形なので、写し用の formatJst で整形する（null は「—」）
 import { formatJst as formatSnapshotJst } from "@/lib/kernel-state-schema";
 import { loadTheaterData, type TheaterData, type TheaterSource } from "@/lib/theater-data";
+import { GUIDE_STEPS } from "@/lib/theater-guide";
 import {
   formatFetchTime,
   hasFailedSection,
@@ -22,6 +23,7 @@ import ClaudeRoles from "./ClaudeRoles";
 import DecisionPanel from "./DecisionPanel";
 import GovernanceStage from "./GovernanceStage";
 import LawComparison from "./LawComparison";
+import TheaterGuide from "./TheaterGuide";
 import TheaterShell from "./TheaterShell";
 import TicketReplay from "./TicketReplay";
 import { theaterTokens } from "./tokens";
@@ -66,6 +68,8 @@ export default function GovernanceTheater() {
   // 最後の取得の時刻（HH:MM:SS、日本時間）と、最新の取得の失敗。source を変えたら初めに戻す（T-035 A3）
   const [lastFetchedAt, setLastFetchedAt] = useState<string | null>(null);
   const [fetchFailed, setFetchFailed] = useState(false);
+  // 「はじめて見る」の案内の手順（0〜4）。null は案内していない（T-037 A3）。source の切り替えでは戻さない
+  const [guideStep, setGuideStep] = useState<number | null>(null);
 
   // 「source を選んでいる期間」の番号。effect のたびと部品が外れたときに進める。
   // 要求は始めたときの番号を持ち、応答の時点で今の番号と違えば何も反映しない（T-035 A2）
@@ -145,6 +149,10 @@ export default function GovernanceTheater() {
 
   const stopped = data?.state.kind === "ok" && data.state.value.stopped.active;
   const verdicts = currentEvent ? verdictLabels(currentEvent) : [];
+  // 案内中は案内の手順の強調、そうでなければ選んだ出来事の強調。currentEvent は案内中も更新され続ける
+  const stageFocus =
+    guideStep !== null ? GUIDE_STEPS[guideStep].focus : currentEvent ? focusFor(currentEvent) : null;
+  const lastGuideStep = GUIDE_STEPS.length - 1;
 
   return (
     <>
@@ -159,6 +167,16 @@ export default function GovernanceTheater() {
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-1">
+              {guideStep === null && (
+                // source によらず出す。案内中は出さない（T-037 A3）
+                <button
+                  type="button"
+                  onClick={() => setGuideStep(0)}
+                  className="rounded border border-slate-600 bg-slate-800 px-2 py-1 text-sm text-slate-100 hover:bg-slate-700"
+                >
+                  はじめて見る
+                </button>
+              )}
               <div role="group" aria-label="見る記録" className="flex gap-1">
                 {SOURCES.map(({ value, label }) => (
                   <button
@@ -202,10 +220,19 @@ export default function GovernanceTheater() {
       stage={
         // 図の高さの制約は 1024px 以上だけ。狭い画面では SVG の縦横比どおりの高さ
         <div className="lg:h-full lg:[&_svg]:mx-auto lg:[&_svg]:max-h-full lg:[&_svg]:w-auto">
-          <GovernanceStage focus={currentEvent ? focusFor(currentEvent) : null} stopped={stopped} />
+          <GovernanceStage focus={stageFocus} stopped={stopped} />
         </div>
       }
       side={
+        // 案内中は、この区画の中身だけを案内に替える。再生（controls）は同じ位置に描いたまま
+        guideStep !== null ? (
+          <TheaterGuide
+            step={guideStep}
+            onPrev={() => setGuideStep((s) => (s === null ? s : Math.max(0, s - 1)))}
+            onNext={() => setGuideStep((s) => (s === null ? s : Math.min(lastGuideStep, s + 1)))}
+            onClose={() => setGuideStep(null)}
+          />
+        ) : (
         <div className="flex flex-col gap-2">
           {currentEvent ? (
             <>
@@ -224,6 +251,7 @@ export default function GovernanceTheater() {
           )}
           <p className="text-xs text-slate-300">出来事は票の §6 の記録の分類です。記録の文そのものは公開していません</p>
         </div>
+        )
       }
       controls={
         data === null ? (
