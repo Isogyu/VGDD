@@ -1,7 +1,7 @@
 ---
 id: T-036
 title: 統治シアターの下に「Claude Code の使い分け」の欄を足す（役割ごとの機能・モデル・道具の制限と、フックの集計）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -118,3 +118,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 2. `(main)` の集計は agent_type のない記録のまとめで、役職を見分けていない。表では「メインのセッション」とし、注記で行政の長だけの件数ではないと書いた
 
 - 2026-11-07T22:06:01+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T22:08:37+0900 release: status → merged（main=78dc6d5013c7。夜間の判定に合格した候補 e6707088b5e0 を、オーナーが朝に承認して統合）
