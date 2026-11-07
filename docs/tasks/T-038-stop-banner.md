@@ -1,7 +1,7 @@
 ---
 id: T-038
 title: 統治シアターの見出しに「停止の帯」と「判断待ちの件数」を出す
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1.5
 time_limit_min: 120
 security_review: false         # 取得済みの写しから、決まった文と件数を出すだけ
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-ae749cb14c6fed88c
+worker: W34
 files_allowed:
   - src/lib/theater-banner.ts                         # 新設：帯と件数の文を組み立てる純粋関数
   - src/lib/theater-banner.test.ts                    # 新設
@@ -93,6 +93,13 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 決定論的な監査＋ judge ＋ Codex judge。T-036・T-037 の統合の後に作業員を起動する（同じ `GovernanceTheater.tsx` を触る）。
 
 ## 6. 記録
+
+- 22:25 行政の長が W34 を起動（worktree `agent-ae749cb14c6fed88c`、T-037 を統合した後の main 66a726f から、モデルは Opus）。仕様はオーナーが 21:57:44 に approve-spec で承認済み（22:24:31 の Kernel の写しの `approvals[].current` で確かめた）。依存の T-033・T-035・T-036・T-037 は統合済み
+- W34 の報告：HEAD `89a6b46d5950f4f4461365d771454c8dcb32a3c2`、66a726f の上に1コミット。test 903 件（47 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:875` の `stopsDir` で差分の外）。§2 から外れる解釈はない
+- 行政の長の確認（試験は再実行していない）：差分は A0 の4つだけ（+174 / -9）。`theater-banner.ts` の2つの関数は A1 の文面どおりで、型の3つは `import type`、`pendingDecisions`・`formatJst` は値として使うだけ。`pendingSummaryText` の数え方（`invariants` が `ok` のときだけその値、それ以外は `null`）は `DecisionPanel` と同じ。`GovernanceTheater.tsx` では、帯と件数を `data?.state ?? null`・`data?.invariants ?? null`（`DecisionPanel` に渡すものと同じ）から作り、state・ref・effect・fetch を足していない。`TheaterShell`・`selectSource`・T-035 の ref・`TicketReplay` の位置と `key`・`guideStep` は変わっていない
+- 読み方が割れる所（W34 の選んだ読み方）：(1) 「取得の状態の項目の並びの後に」のリンクは、`<dl>` の中に `<a>` を入れると HTML として正しくないので、`<dl>` とリンクを flex-wrap の `div` で包み、リンクを `<dl>` の直後に置いた（広い画面では同じ行、狭い画面では折り返す。`<dl>` のクラスと中身は同じで、字下げだけ変わった） (2) 帯は `<p>` 1つに `role="status"`・赤の系統の文字・枠・背景・太字を直接付けた
+- 補った解釈（文面の範囲内）：(1) リンクの色は `text-amber-200 underline font-semibold`（下の判断待ちの行の琥珀色に合わせた） (2) 帯は `px-3 py-1 text-sm` で1行に収まる大きさ、`break-words min-w-0` で狭い画面では折り返す。見出しのほかの余白は調整していない（帯を出すと約 30px 高くなる） (3) `invariants` が `missing`・`null` のときも、`failed` と同じく仕様の承認待ちを数えない（A1 の「ok ならその value・それ以外は null」）
+- **確かめていない**：取得の後の帯の出方（停止中の写しで出る・停止が解けると消える）、件数と下の欄の判断待ちの行の数の一致（同じ `pendingDecisions` を同じ引数で呼ぶので、コードの上では一致するはず）、`#decisions` のリンクで欄へ移ること、1440×900 で帯が出ても最初の画面に収まること・375px で横スクロールしないこと、`npm run build`。§3 で立法補佐が held の候補で確かめる
 
 ## オーナーに聞くこと
 
