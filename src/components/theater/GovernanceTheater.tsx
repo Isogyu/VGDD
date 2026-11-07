@@ -3,6 +3,7 @@
 // 統治シアター（T-034）。T-029〜T-032 の部品をつなぎ、データの取得・今の出来事・見る source の切り替えを持つ。
 // 出すのは、票の ID と題、整形した時刻、決まった文、判定の結論、source と書き出しの時刻だけ。
 
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Replay } from "@/lib/governance-replay-schema";
 // 写しの generated_at は +09:00 の形なので、写し用の formatJst で整形する（null は「—」）
@@ -20,6 +21,7 @@ import {
 // 記録の出来事の ts は +0900 の形なので、再生用の formatJst で整形する
 import { formatJst, labelFor, verdictLabels } from "@/lib/theater-replay";
 import { focusFor } from "@/lib/theater-stage";
+import { parseStartSource, parseStartTicket } from "@/lib/theater-start";
 import ClaudeRoles from "./ClaudeRoles";
 import DecisionPanel from "./DecisionPanel";
 import GovernanceStage from "./GovernanceStage";
@@ -62,7 +64,14 @@ function Fact({ label, value }: { label: string; value: string }) {
 }
 
 export default function GovernanceTheater() {
-  const [source, setSource] = useState<TheaterSource>("submission");
+  // 開始の設定（T-039 A2）。最初に作られたときに URL の値を検証して一度だけ決め、URL が変わっても取り直さない。
+  // 生の値は使わず、決まった値（source）と票の ID の形（ticket）にしたものだけを持つ
+  const searchParams = useSearchParams();
+  const [start] = useState(() => ({
+    source: parseStartSource(searchParams.get("source")),
+    ticketId: parseStartTicket(searchParams.get("ticket")),
+  }));
+  const [source, setSource] = useState<TheaterSource>(start.source);
   // null のあいだは取得中
   const [data, setData] = useState<TheaterData | null>(null);
   const [currentEvent, setCurrentEvent] = useState<ReplayEvent | null>(null);
@@ -279,8 +288,13 @@ export default function GovernanceTheater() {
         data === null ? (
           <p>{LOADING}</p>
         ) : data.replay.kind === "ok" ? (
-          // source が変わったら外して作り直す。再生は始まる前から
-          <TicketReplay key={source} tickets={data.replay.value.tickets} onEventChange={setCurrentEvent} />
+          // source が変わったら外して作り直す。再生は始まる前から。作り直すたびに、最初に決めた票を選ぶ（T-039 A2）
+          <TicketReplay
+            key={source}
+            tickets={data.replay.value.tickets}
+            onEventChange={setCurrentEvent}
+            initialTicketId={start.ticketId}
+          />
         ) : (
           <p>記録を取得できませんでした</p>
         )

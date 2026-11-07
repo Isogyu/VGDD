@@ -146,6 +146,39 @@ describe("TicketReplay の初期の表示", () => {
   });
 });
 
+// T-039 A3・A5
+describe("TicketReplay の最初の選択（initialTicketId）", () => {
+  const selected = (html: string) =>
+    [...html.matchAll(/<option[^>]*value="([^"]*)"[^>]*selected=""/g)].map((match) => match[1]);
+
+  it("並びの2番目の票（T-026）を渡すと、その票が選ばれた表示になる", () => {
+    const html = renderToStaticMarkup(<TicketReplay tickets={tickets} onEventChange={noop} initialTicketId="T-026" />);
+    expect(selected(html)).toEqual(["T-026"]);
+    // 一覧は T-026 の1つの出来事
+    expect(itemsOfList(html)).toHaveLength(1);
+    expect(itemsOfList(html)[0]).not.toContain("司法の2系統が重大な指摘で分かれた");
+  });
+
+  it.each([
+    ["入力にあるが並びにない票", "T-002"],
+    ["入力にない例の票", "T-013"],
+    ["入力にない票", "T-999"],
+    ["null", null],
+    ["undefined", undefined],
+  ])("%s なら並びの先頭（T-014）", (_name, initialTicketId) => {
+    const html = renderToStaticMarkup(
+      <TicketReplay tickets={tickets} onEventChange={noop} initialTicketId={initialTicketId} />,
+    );
+    expect(selected(html)).toEqual(["T-014"]);
+    expect(itemsOfList(html)).toHaveLength(4);
+  });
+
+  it("並びの先頭を渡しても、初期の表示は props を渡さないときと同じ", () => {
+    const html = renderToStaticMarkup(<TicketReplay tickets={tickets} onEventChange={noop} initialTicketId="T-014" />);
+    expect(html).toBe(markup);
+  });
+});
+
 describe("TicketReplay の例の票がないとき", () => {
   it.each([
     ["対象外の票だけ", [ticket("T-002", "架空の票の題その二", [event(1, { kind: "held" })])]],

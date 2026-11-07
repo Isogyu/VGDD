@@ -25,6 +25,8 @@ type ReplayEvent = ReplayTicket["events"][number];
 type TicketReplayProps = {
   tickets: Replay["tickets"];
   onEventChange: (event: ReplayEvent | null) => void;
+  // 部品が作られたときに最初に選ぶ票（T-039 A3）。並びにないときと null は並びの先頭。作られた後に変わっても選択は変えない
+  initialTicketId?: string | null;
 };
 
 const TONE_TOKENS = {
@@ -52,9 +54,12 @@ function ToneBadge({ event }: { event: EventClass }) {
 }
 
 // 統治シアターの下の区画に置く、票1枚の再生（T-032）。データは取りに行かず、props の出来事だけを出す。
-export default function TicketReplay({ tickets, onEventChange }: TicketReplayProps) {
+export default function TicketReplay({ tickets, onEventChange, initialTicketId = null }: TicketReplayProps) {
   const options = pickFeatured(tickets);
-  const [selectedId, setSelectedId] = useState(options[0]?.id ?? null);
+  // 初期値は作られたときにだけ使われる
+  const [selectedId, setSelectedId] = useState(
+    options.find((option) => option.id === initialTicketId)?.id ?? options[0]?.id ?? null,
+  );
   const [replay, dispatch] = useReducer(replayReducer, INITIAL_REPLAY);
 
   // 選んだ票がなくなったら、並びの先頭に移る
