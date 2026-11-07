@@ -33,7 +33,7 @@
 | [`tasks/_board.json`](tasks/_board.json) | 票の盤 | 裁判所だけ |
 | [`governance/summary.json`](governance/summary.json) | 操作の集計（件数だけ） | オーナー |
 | `governance/kernel-state.json`・`kernel-invariants.json` | Kernel の状態の表示用ファイル。Git で追跡しないので clone にはない | 裁判所だけ |
-| [`governance/snapshots/submission/`](governance/snapshots/submission/) | 提出の時点の Kernel の状態の写し。稼働中の写しとは分けて読む | 立法補佐 |
+| [`governance/snapshots/submission/`](governance/snapshots/submission/) | 提出の時点の Kernel の状態の写し。稼働中の写しとは分けて読む（今は 11/7 02:03・法律 p0.4.5 の暫定の写しで、今の p0.4.8 の検証結果とは別。機能凍結の前に取り直す） | 立法補佐 |
 | [`../vgdd/kernel/history.json`](../vgdd/kernel/history.json) | 法律の版ごとの公開の要約 | 立法補佐が書き、オーナーの承認で入る |
 | [`vgdd-status.md`](vgdd-status.md) | 構成要素の状況と、迂回の検証（V6・V7。2026-11-03 の記録）の結果 | 行政の長 |
 | [`implementation-notes.md`](implementation-notes.md) | 計画からの逸脱と判断 | 行政の長 |
