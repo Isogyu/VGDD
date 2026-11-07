@@ -1,10 +1,10 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-07T22:34:33.573+09:00",
+  "generated_at": "2026-11-07T22:50:54.284+09:00",
   "totals": {
     "tickets": 42,
-    "merged": 39,
-    "rejected": 35,
+    "merged": 40,
+    "rejected": 36,
     "blocked": 0,
     "disagreements": 17
   },
@@ -363,9 +363,9 @@
     {
       "id": "T-039",
       "title": "統治シアターの開始の状態（見る記録と再生の票）を URL で決められるようにする",
-      "status": "ready",
+      "status": "in_progress",
       "estimate_h": 1.5,
-      "returns": 0,
+      "returns": 1,
       "merged_at": null,
       "disagreements": 0
     },
@@ -381,10 +381,10 @@
     {
       "id": "T-041",
       "title": "統治シアターの下の「証拠」の7つの区画を、見出しで開閉できるようにする（最初は「統治の数字」だけ開く）",
-      "status": "ready",
+      "status": "merged",
       "estimate_h": 1,
       "returns": 0,
-      "merged_at": null,
+      "merged_at": "2026-11-07T22:50:51+0900",
       "disagreements": 0
     }
   ]
