@@ -37,6 +37,7 @@ check_git_config() {
   [ "$cur" = "$(cat "$base")" ] || { echo "共有の .git/config が基準値から変わっている。オーナーが確かめるまで止める（fail-closed。OBS-033）" >&2; exit 70; }
 }
 QUEUE="$Z3/night/queue.json"; DRY=0; PARALLEL=""; UNTIL=""
+BIN_DIR="$(cd "$(dirname "$0")" && pwd)"   # p0.5.0：予算の台帳の窓口（metered.sh・ledger.mjs）は自分と同じ場所に置く
 while [ $# -gt 0 ]; do
   case "$1" in
     --queue) QUEUE="$2"; shift 2;;
@@ -167,9 +168,12 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
   # settings.json の allow は信頼されていない workspace では無視されるため、同じものをここで渡す（広げない）
   allow+=("Bash(git add *)" "Bash(git commit *)" "Bash(npx --no-install *)")
   log "▶ ${task} 作業員を起動（試行 ${attempt}、上限 ${limit}+10 分、worktree ${wt}、許可 ${#allow[@]} 件）"
-  ( cd "$wt" && run_with_timeout "$(( (limit + 10) * 60 ))" claude -p --agent worker --output-format json --max-turns 80 \
+  # p0.5.0：作業員の起動は予算の台帳の窓口（metered.sh）を通す（予約・同時の数・票ごとの試行の数・停止・期間）。拒まれたら起動しない
+  ( cd "$wt" && run_with_timeout "$(( (limit + 10) * 60 ))" "$BIN_DIR/metered.sh" worker "$task" auto claude -- claude -p --agent worker --output-format json --max-turns 80 \
       --allowedTools "${allow[@]}" -- "$(worker_prompt "$task" "$trel" "$extra")" ) > "$out" 2> "$LOGS/${task}-${attempt}.err" || true
-  local tok; tok="$(jq -r '(.usage.input_tokens // 0) + (.usage.output_tokens // 0)' "$out" 2>/dev/null || echo 0)"
+  # p0.5.0：利用量が読めなければ 0 にせず、1票の上限を使ったものとして数える（台帳の精算と同じ考え方）
+  local tok; tok="$(jq -r 'if (.usage.input_tokens|type)=="number" and (.usage.output_tokens|type)=="number" then .usage.input_tokens + .usage.output_tokens + (.usage.cache_creation_input_tokens // 0) + (.usage.cache_read_input_tokens // 0) else empty end' "$out" 2>/dev/null || true)"
+  if ! [[ "$tok" =~ ^[0-9]+$ ]]; then note "${task}: 作業員の利用量を読めない。1票の上限 ${MAX_TOK_TICKET} を使ったものとして数える"; tok="$MAX_TOK_TICKET"; fi
   lane_ev tokens "$tok"
   if grep -q -i -E 'usage limit|rate limit|利用上限' "$out" "$LOGS/${task}-${attempt}.err" 2>/dev/null; then
     lane_ev stop "claude の利用上限の文言"; note "${task}: claude の利用上限の文言を検知。この票と夜の運転を止める"; return 2

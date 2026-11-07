@@ -62,7 +62,9 @@ EOF
 if [ "$DRY" -eq 1 ]; then printf '%s\n' "$INPUT"; exit 0; fi
 command -v claude >/dev/null || { echo "claude CLI が見つからない" >&2; exit 69; }
 mkdir -p "$OUT_DIR"
-RAW="$(printf '%s' "$INPUT" | claude -p --agent constitutional-review --output-format json --max-turns 1 2>/dev/null || true)"
+# p0.5.0：呼び出しは予算の台帳の窓口（metered.sh）を通す（票のない「法律」の呼び出し）。拒まれたら出力なし＝VIOLATES（fail-closed）
+METER="$(cd "$(dirname "$0")" && pwd)/metered.sh"
+RAW="$(printf '%s' "$INPUT" | "$METER" constitution - "${VGDD_CONSTITUTION_TOKENS:-300000}" claude -- claude -p --agent constitutional-review --output-format json --max-turns 1 2>/dev/null || true)"
 OUT_FILE="$OUT_DIR/constitution-$(date +%Y%m%d-%H%M%S).json"
 export RAW REASON
 node - > "$OUT_FILE" <<'NODE'
