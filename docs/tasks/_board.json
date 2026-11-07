@@ -1,9 +1,9 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-07T14:58:46.793+09:00",
+  "generated_at": "2026-11-07T19:47:17.131+09:00",
   "totals": {
-    "tickets": 33,
-    "merged": 33,
+    "tickets": 34,
+    "merged": 34,
     "rejected": 35,
     "blocked": 0,
     "disagreements": 17
@@ -304,6 +304,15 @@
       "estimate_h": 3,
       "returns": 0,
       "merged_at": "2026-11-07T14:57:38+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-034",
+      "title": "統治シアターを /governance の先頭に組み込み、今の区画を下の「証拠」に移し、旧い API から記録の文を除く（統治シアター U7）",
+      "status": "merged",
+      "estimate_h": 3,
+      "returns": 0,
+      "merged_at": "2026-11-07T19:47:12+0900",
       "disagreements": 0
     }
   ]
