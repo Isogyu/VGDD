@@ -1,9 +1,9 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-07T22:08:45.151+09:00",
+  "generated_at": "2026-11-07T22:23:56.884+09:00",
   "totals": {
-    "tickets": 40,
-    "merged": 37,
+    "tickets": 41,
+    "merged": 38,
     "rejected": 35,
     "blocked": 0,
     "disagreements": 17
@@ -345,10 +345,10 @@
     {
       "id": "T-037",
       "title": "統治シアターに「はじめて見る」の案内を足す（5つの手順で図の見方を説明し、該当する場所を光らせる）",
-      "status": "ready",
+      "status": "merged",
       "estimate_h": 2,
       "returns": 0,
-      "merged_at": null,
+      "merged_at": "2026-11-07T22:23:54+0900",
       "disagreements": 0
     },
     {
@@ -365,6 +365,15 @@
       "title": "統治シアターの開始の状態（見る記録と再生の票）を URL で決められるようにする",
       "status": "ready",
       "estimate_h": 1.5,
+      "returns": 0,
+      "merged_at": null,
+      "disagreements": 0
+    },
+    {
+      "id": "T-040",
+      "title": "票の再生で、代表の3枚だけでなく記録のある全票を選べるようにし、記録の分類の印と絞り込みを付ける",
+      "status": "ready",
+      "estimate_h": 2,
       "returns": 0,
       "merged_at": null,
       "disagreements": 0
