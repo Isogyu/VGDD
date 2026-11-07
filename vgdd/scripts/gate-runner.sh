@@ -37,8 +37,9 @@ git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.
 check_git_config() {
   local base="$Z3/evidence/git-config.baseline" cur
   cur="$(shasum -a 256 "$REPO/.git/config" | cut -c1-64)"
-  if [ ! -f "$base" ]; then echo "git の設定の基準値がない（${base}）。オーナーが vgdd/scripts/git-baseline.sh で作る（fail-closed）" >&2; exit 70; fi
-  [ "$cur" = "$(cat "$base")" ] || { echo "共有の .git/config が基準値から変わっている。オーナーが確かめるまで止める（fail-closed。OBS-033）" >&2; exit 70; }
+  # p0.4.7（OBS-060）：止まる前に証拠ストアに記録を残す（記録がないと、止まったことが外から分からない）。中身は種類だけ（設定の本文・ハッシュは残さない）
+  if [ ! -f "$base" ]; then log_event "git_config_changed" "-" '"kind":"baseline_missing"'; echo "git の設定の基準値がない（${base}）。オーナーが vgdd/scripts/git-baseline.sh で作る（fail-closed）" >&2; exit 70; fi
+  [ "$cur" = "$(cat "$base")" ] || { log_event "git_config_changed" "-" '"kind":"mismatch"'; echo "共有の .git/config が基準値から変わっている。オーナーが確かめるまで止める（fail-closed。OBS-033）" >&2; exit 70; }
 }
 while [ $# -gt 0 ]; do
   case "$1" in

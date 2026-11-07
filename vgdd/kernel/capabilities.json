@@ -1,6 +1,6 @@
 {
   "schema": "vgdd.capabilities.v1",
-  "kernel_version": "p0.4.6",
+  "kernel_version": "p0.4.7",
   "note": "Governance Kernel の権限の表（ADR-001・ADR-003）。役割ごとに、何ができ、何ができず、それを どの層が強制しているかを書く。expect はフック（Policy Decision Point）の判定。enforced_by はその操作を実際に止める層（複数あれば全部）。'promise' は強制がなく約束だけのもの（弱点として公開する）。probes は適合性テスト（vgdd/conformance/run.mjs）がフックに実際に入力する操作で、{self} はその役割の作業場所のルート、{main} は main の checkout、{wt} は作業員の worktree、{z3} は Z3。 個々の probe に expect があれば、その役割についてはそちらを優先する。",
   "layers": {
     "hook": "PreToolUse フック policy.mjs（Policy Decision Point。拒否と記録）",
@@ -813,10 +813,13 @@
       "title": "自動再試行には有限の回数・時間・予算上限を設ける",
       "status": "partial",
       "tests": [
-        "G:G16"
+        "G:G16",
+        "G:G23",
+        "G:G23b",
+        "G:G23c"
       ],
       "gaps": [
-        "差し戻しの上限3回は票の記録で数えるが、上限での停止の判例はない",
+        "差し戻しの回数は票の §6 の裁判所の行で数える（票の §6 を人が書き換えれば数が変わる。§6 は書き足すだけの運用に頼る）",
         "時間と費用の上限は Kernel で強制していない（夜間の until と票の数の上限だけ）"
       ]
     },

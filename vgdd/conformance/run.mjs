@@ -496,6 +496,31 @@ function groupG() {
   record('G', 'G22', 'security_review の票で3つの司法が APPROVED なら統合される（陽性の対照）', g.inMain && g.status === 'merged', `inMain=${g.inMain} status=${g.status} ${g.code ? g.out : ''}`);
   g = runGate(gateFixture('g8'), 'APPROVED', ['--hold']);
   record('G', 'G8', '夜間（--hold）は合格しても統合せず、held として朝の承認を待つ', !g.inMain && g.events.some((e) => e.type === 'held'), `inMain=${g.inMain}`);
+  // ---- p0.4.7（INV-07）：差し戻しの上限。実運用では T-002・T-003 が上限で blocked になった（11/3〜11/4） ----
+  // 票の §6 に裁判所の差し戻しの記録の行を n 行足す（§6 は仕様の指紋に入らないので、承認は外れない）
+  const withReturns = (n) => (fx, id) => {
+    const tp = path.join(fx.main, `docs/tasks/${id}-probe.md`);
+    const lines = Array.from({ length: n }, (_, i) => `- 2026-11-03T20:0${i}:00+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/x${i}.ts）`);
+    fs.appendFileSync(tp, `\n## 6. 記録\n\n${lines.join('\n')}\n`);
+    git(fx.main, 'add', '-A'); git(fx.main, 'commit', '-q', '-m', `${id} の差し戻し ${n} 回`);
+  };
+  g = runGate(gateFixture('g23', { afterApprove: withReturns(3) }), 'APPROVED');
+  record('G', 'G23', '差し戻しが3回に達した票の申請は、司法を呼ばずに blocked にしてオーナーの判断へ（司法が APPROVED でも統合しない。自動の再試行を有限にする）',
+    !g.inMain && !g.judged && !g.pending && g.status === 'blocked' && g.events.some((e) => e.type === 'rejected' && /差し戻しが 3 回に達した/.test(e.reason || '')),
+    `status=${g.status} judged=${g.judged} pending=${g.pending} inMain=${g.inMain}`);
+  g = runGate(gateFixture('g23b', { afterApprove: withReturns(2) }), 'APPROVED');
+  record('G', 'G23b', '差し戻しが2回なら上限の前なので、普通に審査して統合される（陽性の対照）', g.inMain && g.judged && g.status === 'merged', `status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
+  const g23c = gateFixture('g23c', { afterApprove: withReturns(3) });
+  write(path.join(g23c.z3, 'evidence/annulments.jsonl'), JSON.stringify({ ts: '2026-11-03T21:00:00+0900', task: g23c.id, reason: '法律の不具合による差し戻しの取り消し G23c' }) + '\n');
+  g = runGate(g23c, 'APPROVED');
+  record('G', 'G23c', 'オーナーが取り消した差し戻しは上限に数えない（3回のうち1回を取り消せば、審査して統合される）', g.inMain && g.status === 'merged', `status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
+  // ---- p0.4.7（OBS-060）：共有の .git/config が基準値と違えば止まる。止まる前に証拠ストアに記録を残す ----
+  const g24 = gateFixture('g24');
+  git(g24.main, 'config', 'branch.main.vscode-merge-base', 'origin/main');
+  g = runGate(g24, 'APPROVED');
+  record('G', 'G24', '共有の .git/config が基準値と違えば、申請を処理せずに止まり、止まる前に git_config_changed を証拠ストアに残す（黙って終わらない。OBS-060）',
+    g.code !== 0 && !g.judged && g.pending && g.status === 'review' && !g.inMain && g.events.some((e) => e.type === 'git_config_changed'),
+    `exit=${g.code} judged=${g.judged} pending=${g.pending} events=${g.events.map((e) => e.type).join(',')}`);
 }
 
 // ---- INV 不変条件（p0.4.4。ADR-034〜046 の総括の INV-01〜12） ------------------------------------------

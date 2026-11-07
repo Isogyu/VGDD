@@ -249,6 +249,30 @@
       "tests_total": 397,
       "prev_failed": 1,
       "obs": []
+    },
+    {
+      "version": "p0.4.7",
+      "date": "2026-11-07",
+      "title": "差し戻しの上限に判例を付け、裁判所が黙って止まらないようにする",
+      "fixed": [
+        "差し戻しの上限3回（実運用では T-002・T-003 が上限で blocked）に、止まる場面の判例がなかった",
+        "共有の .git/config が基準値と違うとき、裁判所が証拠ストアに何も残さずに終了し、約2時間止まったことが記録から分からなかった"
+      ],
+      "found_by": [
+        "operation",
+        "legislative"
+      ],
+      "precedents": [
+        "G23",
+        "G23b",
+        "G23c",
+        "G24"
+      ],
+      "tests_total": 401,
+      "prev_failed": 1,
+      "obs": [
+        "OBS-060"
+      ]
     }
   ]
 }
