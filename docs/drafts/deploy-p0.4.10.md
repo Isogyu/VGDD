@@ -10,9 +10,9 @@
    ```
 4. **写す**：
    ```bash
-   cd ~/tsubuyaki-worklog/app && cp -p vgdd/scripts/{night-runner.sh,kernel-state.mjs,launcher.sh,launch-intake.mjs,prior-record.mjs} ~/tsubuyaki-z3/bin/ && chmod +x ~/tsubuyaki-z3/bin/{launcher.sh,launch-intake.mjs,prior-record.mjs} && cp -p vgdd/hooks/policy.mjs ~/tsubuyaki-z3/hooks/
+   cd ~/tsubuyaki-worklog/app && cp -p vgdd/scripts/{night-runner.sh,kernel-state.mjs,launcher.sh,launch-intake.mjs,prior-record.mjs,metered.sh} ~/tsubuyaki-z3/bin/ && chmod +x ~/tsubuyaki-z3/bin/{launcher.sh,launch-intake.mjs,prior-record.mjs} && cp -p vgdd/hooks/policy.mjs ~/tsubuyaki-z3/hooks/
    ```
-5. **配置済みの版を確かめる**：
+5. **配置済みの版を確かめる**（`exit=0` でなければ再開しない）：
    ```bash
    cd ~/tsubuyaki-worklog/app && set -o pipefail; node vgdd/conformance/run.mjs --impl z3 --record | tail -1; echo "exit=$?"
    ```

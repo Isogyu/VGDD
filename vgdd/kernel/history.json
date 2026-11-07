@@ -404,8 +404,8 @@
         "CAP-LAUNCH-REQUEST-NAME",
         "CAP-AGENT-OTHER"
       ],
-      "tests_total": 490,
-      "prev_failed": 33,
+      "tests_total": 493,
+      "prev_failed": 38,
       "obs": []
     }
   ]
