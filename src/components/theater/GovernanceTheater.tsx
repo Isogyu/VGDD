@@ -18,6 +18,7 @@ import {
 // 記録の出来事の ts は +0900 の形なので、再生用の formatJst で整形する
 import { formatJst, labelFor, verdictLabels } from "@/lib/theater-replay";
 import { focusFor } from "@/lib/theater-stage";
+import ClaudeRoles from "./ClaudeRoles";
 import DecisionPanel from "./DecisionPanel";
 import GovernanceStage from "./GovernanceStage";
 import LawComparison from "./LawComparison";
@@ -252,6 +253,10 @@ export default function GovernanceTheater() {
         />
       </div>
     </section>
+    {/* T-036 A4：判例の比較・判断待ちの下に、横幅いっぱいの区画を1つ。source に依らず、取り直しにも加えない */}
+    <div className={`${theaterTokens.page.background} ${theaterTokens.page.text} w-full min-w-0 px-4 pb-4`}>
+      <ClaudeRoles />
+    </div>
     </>
   );
 }

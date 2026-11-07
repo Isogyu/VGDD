@@ -75,4 +75,13 @@ describe("GovernanceTheater の初期の表示", () => {
     expect(markup).not.toContain("最後の取得");
     expect(markup).not.toContain("最新の取得で一部または全部を取得できませんでした");
   });
+
+  // T-036 A4・A5
+  it("判例の比較・判断待ちの下に「Claude Code の使い分け」の見出しを出す", () => {
+    expect(markup).toMatch(/<h2[^>]*>Claude Code の使い分け<\/h2>/);
+    // T-033 の区画の直後に、シアターの色の横幅いっぱいの入れ物を置く
+    const wrapper = markup.indexOf('</div></section><div class="bg-slate-950 text-slate-100 w-full');
+    expect(wrapper).toBeGreaterThan(markup.indexOf("判断待ちと次の担当"));
+    expect(markup.indexOf("Claude Code の使い分け")).toBeGreaterThan(wrapper);
+  });
 });
