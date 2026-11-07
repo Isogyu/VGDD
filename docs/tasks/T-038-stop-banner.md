@@ -1,7 +1,7 @@
 ---
 id: T-038
 title: 統治シアターの見出しに「停止の帯」と「判断待ちの件数」を出す
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -106,3 +106,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 1. 帯の文「Kernel は停止中（11/7 21:46 から）。統合しません」でよいか
 
 - 2026-11-07T22:31:16+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T22:34:27+0900 release: status → merged（main=7813d3cf18cc。夜間の判定に合格した候補 d97a5b2bd775 を、オーナーが朝に承認して統合）
