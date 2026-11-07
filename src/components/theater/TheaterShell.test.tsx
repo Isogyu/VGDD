@@ -40,11 +40,26 @@ describe("TheaterShell", () => {
     expect(shellMarkup.match(/中身-/g)).toHaveLength(regions.length);
   });
 
-  it("画面の高さを行で 15:65:20 に分け、背景と文字はテーマによらず固定する", () => {
-    for (const className of ["lg:h-dvh", "lg:grid-rows-[15fr_65fr_20fr]", "bg-slate-950", "text-slate-100"]) {
+  it("1024px 以上の行を中身の高さ・残り・16rem に分け、背景と文字はテーマによらず固定する", () => {
+    for (const className of ["lg:h-dvh", "lg:grid-rows-[auto_minmax(0,1fr)_16rem]", "bg-slate-950", "text-slate-100"]) {
       expect(shellMarkup).toContain(className);
     }
+    expect(shellMarkup).not.toContain("15fr");
     expect(shellMarkup).not.toContain("dark:");
+  });
+
+  it("主役・選んだ票・再生の区画は縮められ、選んだ票の区画は中で縦にスクロールできる", () => {
+    for (const { open } of regions.slice(1)) {
+      const start = shellMarkup.indexOf(open);
+      const tag = shellMarkup.slice(start, shellMarkup.indexOf(">", start));
+      expect(tag).toMatch(/\bmin-h-0\b/);
+    }
+    const side = shellMarkup.slice(shellMarkup.indexOf(regions[2].open));
+    expect(side.slice(0, side.indexOf(">"))).toContain("overflow-y-auto");
+  });
+
+  it("1024px 未満で行を伸ばさない（見出しの下に余分な空きを作らない）", () => {
+    expect(shellMarkup).toMatch(/\bcontent-start\b/);
   });
 
   it("動きのクラスを付けない", () => {

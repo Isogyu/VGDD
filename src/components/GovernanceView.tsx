@@ -1,12 +1,11 @@
 "use client";
 
 // 統治のライブ画面（T-013、D-59③）。票の盤・票1枚の運命・統治の数字を、GET /api/governance から取って表示する。
-// 出すのは件数とリポジトリの記録（票の §6 の行）だけ。生のログは扱わない。
+// 出すのは件数と、票の §6 の行の時刻・担い手・状態だけ（記録の文は出さない。T-034）。生のログは扱わない。
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-// 型だけを読む（governance.ts は node:fs を使うので、値は読み込まない）
-import type { GovernanceData, GovernanceTicket, TimelineEvent } from "@/lib/governance";
+import type { PublicGovernance, PublicGovernanceEvent, PublicGovernanceTicket } from "@/lib/governance-public";
 import { formatMdHm } from "@/lib/time";
 import GovernanceMap from "@/components/GovernanceMap";
 import KernelPanel from "@/components/KernelPanel";
@@ -22,7 +21,7 @@ const COLUMNS: { status: string; label: string }[] = [
   { status: "blocked", label: "判断待ち" },
 ];
 
-const ACTOR_LABELS: Record<TimelineEvent["actor"], string> = {
+const ACTOR_LABELS: Record<PublicGovernanceEvent["actor"], string> = {
   "gate-runner": "裁判所",
   "night-runner": "夜間の代行",
   release: "朝の統合",
@@ -46,7 +45,7 @@ function tsToMs(ts: string): number {
 }
 
 /** timeline を時刻の順に並べる（同じ時刻・解釈できない時刻は出てきた順のまま） */
-function sortTimeline(timeline: TimelineEvent[]): TimelineEvent[] {
+function sortTimeline(timeline: PublicGovernanceEvent[]): PublicGovernanceEvent[] {
   return timeline
     .map((e, i) => ({ e, i, ms: tsToMs(e.ts) }))
     .sort((a, b) => {
@@ -57,8 +56,8 @@ function sortTimeline(timeline: TimelineEvent[]): TimelineEvent[] {
 }
 
 /** 最初に選ぶ票：timeline の件数が最も多い票。同数なら id の大きい票 */
-function defaultTicketId(tickets: GovernanceTicket[]): string | null {
-  let best: GovernanceTicket | null = null;
+function defaultTicketId(tickets: PublicGovernanceTicket[]): string | null {
+  let best: PublicGovernanceTicket | null = null;
   for (const t of tickets) {
     if (
       !best ||
@@ -92,7 +91,7 @@ function StatusBadge({ status }: { status: string | null }) {
 }
 
 export default function GovernanceView() {
-  const [data, setData] = useState<GovernanceData | null>(null);
+  const [data, setData] = useState<PublicGovernance | null>(null);
   const [error, setError] = useState<string | null>(null);
   // 押して選んだ票。null のあいだは既定の票（defaultTicketId）を出す
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -107,7 +106,7 @@ export default function GovernanceView() {
           setError(`読み込めませんでした（${r.status}）`);
           return;
         }
-        const d = (await r.json()) as GovernanceData;
+        const d = (await r.json()) as PublicGovernance;
         if (!cancelled) setData(d);
       } catch {
         if (!cancelled) setError("読み込めませんでした");
@@ -143,7 +142,7 @@ export default function GovernanceView() {
       {/* 1. 見出しと説明 */}
       <header>
         <Link href="/" className="text-sm text-zinc-500 underline">← 作業画面へ</Link>
-        <h1 className="mt-1 text-xl font-semibold">VGDD Governance Kernel：統治のライブ画面</h1>
+        <h2 className="mt-1 text-xl font-semibold">証拠：実運用の集計・票の記録・検証結果</h2>
         <p className="text-sm text-zinc-600 dark:text-zinc-300">
           題材のアプリ（つぶやき業務ログ）を AI のチームが開発したときの、実運用の集計・票の記録・検証結果。Kernel の写しは自動で取り直し、ほかの区画は画面を開いた時点のもの（件数とリポジトリの記録だけ。生のログは公開していない）
         </p>
@@ -229,7 +228,6 @@ export default function GovernanceView() {
                       <span className="text-xs font-medium">{ACTOR_LABELS[e.actor]}</span>
                       <StatusBadge status={e.status} />
                     </div>
-                    <p className="mt-0.5 break-words text-zinc-700 dark:text-zinc-200">{e.detail}</p>
                   </li>
                 ))}
               </ol>
