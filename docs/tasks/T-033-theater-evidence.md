@@ -1,7 +1,7 @@
 ---
 id: T-033
 title: 統治シアターの下に「判例の比較」と「判断待ちと次の担当」の欄を足す（統治シアター U5・U6）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 2
 time_limit_min: 150
 security_review: false         # 公開済みの写しと法律の要約を表示するだけ。API は変えない
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a1a12810a9c7d93f5
+worker: W30
 files_allowed:
   - src/lib/theater-evidence.ts                       # 新設：比較と判断待ちを組み立てる純粋関数
   - src/lib/theater-evidence.test.ts                  # 新設
@@ -121,6 +121,11 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 決定論的な監査＋ judge ＋ Codex judge。API と公開の項目は変えないので security は省く（security_review: false）。
 
 ## 6. 記録
+
+- 20:04 行政の長が W30 を起動（worktree `agent-a1a12810a9c7d93f5`、main 8430e66 から、モデルは Opus）。仕様はオーナーが 20:03:05 に approve-spec で承認済み（20:04:18 の Kernel の写しの `approvals[].current` で確かめた）。依存の T-025・T-030・T-034 は統合済み
+- W30 の報告：HEAD `403419b4133969f2dcb060e8ff84a638e625760c`。test 805 件（41 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:875` の `stopsDir` で差分の外）。**`GET /api/governance/history` の実際の取得、source の切り替え、1440×900 と 375px の実際の収まり、`npm run build` は確かめていない**。§3 で立法補佐が held の候補で確かめる
+- 行政の長の確認（試験は再実行していない）：差分は A0 の8つだけ（+1003 / -0）。`theater-evidence.ts`・`LawComparison.tsx`・`DecisionPanel.tsx` の全体と、`GovernanceTheater.tsx` の差分を §2 と読み合わせた。`TheaterShell` に渡す4つの区画は変わっていない。`judiciary.status` の `"unavailable"`、`TheaterSection` の3つの形、`pending_approvals` はスキーマのとおり。§2 から外れる解釈はない
+- 補った解釈（文面の範囲内）：(1) 判例の比較の `h2` は、読み込み中・失敗のときも出す（A6 で初期の表示に `h2` を求めるため） (2) `selected` が比べられる版でないとき（`null` を含む）は、ボタンと出どころの1行だけを出す (3) 不変条件の札は、`invariants` が `ok` なら `state` によらず出す（A3 の条件は `invariants` だけ） (4) `pendingDecisions` の key は、停止が `"stopped"`、司法が `"judiciary"`、票の行が票の ID。同じ種類の中の重複（held に同じ票が2回など）も1行にする (5) 応答の形が違うとは、本文がオブジェクトでない・配列・`history` の鍵がないこと。取得は AbortController で外れたときに中止する (6) 札と行の色は `tokens.ts` と同じ組（amber・red・gray の破線・emerald）を、完全な class 名で書いた（`tokens.ts` は変えていない） (7) `GovernanceTheater.tsx` はフラグメントで包み、`TheaterShell` の部分の字下げを直していない（変えていないことを差分で見えるようにするため）
 
 ## オーナーに聞くこと
 
