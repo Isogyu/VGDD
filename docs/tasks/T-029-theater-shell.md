@@ -1,7 +1,7 @@
 ---
 id: T-029
 title: 統治シアターの画面の骨格（区画・色・余白）を作り、/governance/theater で見られるようにする（統治シアター U1）
-status: blocked
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -97,3 +97,4 @@ depends_on: []
 3. 入口は `/governance/theater`（試作）。今の `/governance` に組み込むのは T-034
 
 - 2026-11-07T09:42:37+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
+- 09:44 オーナーが裁定（merge）。申請の SHA は変えずに申請し直す
