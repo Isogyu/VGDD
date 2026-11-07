@@ -44,4 +44,28 @@ describe("GovernanceTheater の初期の表示", () => {
     expect(markup).not.toContain("取得できませんでした");
     expect(markup).not.toContain("書き出しがありません");
   });
+
+  // T-033 A4・A6
+  it("シアターの下に「判例の比較」と「判断待ちと次の担当」の見出しを出す", () => {
+    expect(markup).toMatch(/<h2[^>]*>判例の比較<\/h2>/);
+    expect(markup).toMatch(/<h2[^>]*>判断待ちと次の担当<\/h2>/);
+    // 最初の画面（再生の操作の区画）の後ろに置く
+    const footerEnd = markup.indexOf("</footer>");
+    expect(footerEnd).toBeGreaterThan(-1);
+    expect(markup.indexOf("判例の比較")).toBeGreaterThan(footerEnd);
+    expect(markup.indexOf("判断待ちと次の担当")).toBeGreaterThan(footerEnd);
+  });
+
+  it("新しい区画はシアターの背景と文字の色で、1024px 以上で横に2列", () => {
+    const m = markup.match(/<section aria-label="判例の比較と判断待ち" class="([^"]*)"/);
+    expect(m).not.toBeNull();
+    const classes = (m?.[1] ?? "").split(" ");
+    for (const c of ["bg-slate-950", "text-slate-100", "grid-cols-1", "lg:grid-cols-2"]) {
+      expect(classes).toContain(c);
+    }
+  });
+
+  it("取得前の判断待ちの欄は、見ている source の表示名と「読み込み中…」", () => {
+    expect(markup).toContain("提出記録・—の写しから");
+  });
 });

@@ -11,9 +11,12 @@ import { loadTheaterData, type TheaterData, type TheaterSource } from "@/lib/the
 // 記録の出来事の ts は +0900 の形なので、再生用の formatJst で整形する
 import { formatJst, labelFor, verdictLabels } from "@/lib/theater-replay";
 import { focusFor } from "@/lib/theater-stage";
+import DecisionPanel from "./DecisionPanel";
 import GovernanceStage from "./GovernanceStage";
+import LawComparison from "./LawComparison";
 import TheaterShell from "./TheaterShell";
 import TicketReplay from "./TicketReplay";
+import { theaterTokens } from "./tokens";
 
 type ReplayEvent = Replay["tickets"][number]["events"][number];
 
@@ -75,6 +78,7 @@ export default function GovernanceTheater() {
   const verdicts = currentEvent ? verdictLabels(currentEvent) : [];
 
   return (
+    <>
     <TheaterShell
       header={
         <div className="flex flex-col gap-1">
@@ -145,5 +149,23 @@ export default function GovernanceTheater() {
         )
       }
     />
+    {/* 最初の画面の外（T-033 A4）。1024px 以上で横に2列、未満で縦に1列。写しは今見ている source のものだけを渡す */}
+    <section
+      aria-label="判例の比較と判断待ち"
+      className={`${theaterTokens.page.background} ${theaterTokens.page.text} grid w-full grid-cols-1 gap-4 p-4 lg:grid-cols-2`}
+    >
+      <div className="min-w-0">
+        <LawComparison />
+      </div>
+      <div className="min-w-0">
+        <DecisionPanel
+          state={data?.state ?? null}
+          invariants={data?.invariants ?? null}
+          sourceLabel={sourceLabel(source)}
+          generatedAt={data?.generated_at ?? null}
+        />
+      </div>
+    </section>
+    </>
   );
 }
