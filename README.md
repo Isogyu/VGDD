@@ -2,7 +2,7 @@
 
 **AI のチームに開発を任せても、仕様の承認・裁定・停止は人が持つ。役割ごとの権限と承認の条件を、プロンプトではなく実行環境で制御する開発統治の仕組みと、その実運用の集計・票の記録・検証結果の可視化。**
 
-Built with Claude: Japan 2026 の提出作品です。題材のアプリ「つぶやき業務ログ」を、この仕組みのもとで AI のチームが実際に開発しました。画面に出すのは、そのときの実運用の集計・票の記録・検証結果です。
+Built with Claude: Japan 2026 の提出作品です（テーマ1「あなたにしかない深さを。」）。題材のアプリ「つぶやき業務ログ」を、この仕組みのもとで AI のチームが実際に開発しました。画面に出すのは、そのときの実運用の集計・票の記録・検証結果です。
 
 ## 課題
 
@@ -46,11 +46,24 @@ AI に開発を任せる範囲が広がるほど、人は「何を作らせる�
 | 期間中に作った：裁判所 | 統合キューと監査（`gate-runner.sh`）、朝の統合（`release.sh`） | [`vgdd/scripts/`](vgdd/scripts/) |
 | 期間中に作った：司法の組み立て | 司法への入力を機械的に集める部分、判定の形（スキーマ）、役割の定義 | `vgdd/scripts/judge.sh`、`judge-codex.sh`、[`vgdd/schemas/`](vgdd/schemas/)、[`vgdd/agents/`](vgdd/agents/) |
 | 期間中に作った：適合性テスト | 権限の表から試験を作り、写しのリポジトリの上で動かす判例集 | [`vgdd/conformance/run.mjs`](vgdd/conformance/run.mjs) |
-| 期間中に作った：可視化の画面 | `/governance` の区画と、作成中の統治シアター | `src/components/`、`src/lib/` |
+| 期間中に作った：可視化の画面 | `/governance` の統治シアター（主役の図・票の再生・判例の比較・判断待ち）と、その下の証拠の区画 | `src/components/`、`src/lib/` |
 | 期間中に作った：題材のアプリ | つぶやき業務ログ（`/`） | `src/` |
 | 他社の道具：Claude Code | **開発の中心**。行政の長・作業員・テスト担当・Claude の司法を動かす（立法補佐は別のアカウントの Claude）。権限ルール、PreToolUse フック、sandbox、worktree の仕組みは Claude Code のもの | Anthropic |
 | 他社の道具：Codex | **別系統**の司法・監査と、設計の相談 | OpenAI |
 | 他社の道具：`sandbox-exec` | 裁判所の監査の sandbox（呼び出すスクリプトは自作） | Apple（macOS） |
+
+### Claude Code が開発の中心だった根拠
+
+| 記録 | 中身 | 出どころ |
+|---|---|---|
+| 作業員 | 票の実装と修正は、Claude Code が起動した作業員が隔離した worktree で行った。票の `worker` の欄と §6 に、W1〜W30 の30種類の識別子が記録されている（同じ識別子の作業員を何度か起動したこともある） | 各票の `worker` と §6 |
+| フックが判定したツール呼び出し | Claude Code の PreToolUse フックが 13 セッションで 3,524 件を判定し、82 件を拒否した（保護パス 42、git の範囲 19 など） | [`docs/governance/summary.json`](docs/governance/summary.json)（11/7 12:27 に生成、最後の記録は同日 11:13） |
+| 権限と sandbox | Claude Code の権限ルールと sandbox に、行政の長と作業員が Z3（承認・判定・証拠）を読み書きすることを拒否する設定を置く。適合性テスト ST16 で、配置済みの設定が原本の拒否の規則と読み書きの禁止の一覧をすべて含み、sandbox の主な3つの設定とフックが同じことを確かめる | [`.claude/settings.json`](.claude/settings.json)、[`docs/validation.md`](docs/validation.md) |
+| 司法とモデルの使い分け | 第1の司法は Claude Code のサブエージェント定義 `judge`（`claude -p --agent judge`。モデルは Sonnet、組み込みのツールを外し、差分・受け入れ条件・決定論的な監査の結果を入力にする）。作業員の起動の記録のうち、モデルの名前を書いたものは Opus。Codex は第2の司法と、法律の改正の監査 | [`.claude/agents/judge.md`](.claude/agents/judge.md)、`vgdd/scripts/judge.sh`、`judge-codex.sh` |
+
+### 作者と、履歴の名義
+
+作ったのは作者1人です（作者の申告）。履歴に出る `gate-runner` と `night-runner` は、自作の裁判所（`gate-runner.sh`）と夜間の運転のスクリプトが記録のコミットに使う名義で、人ではありません。
 
 ほかに Next.js・React・zod・Tailwind CSS・Anthropic SDK などのオープンソースを使っています（[`package.json`](package.json)）。
 
