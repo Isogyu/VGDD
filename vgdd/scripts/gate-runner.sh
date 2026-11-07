@@ -202,6 +202,10 @@ process_request() {
   # p0.4.7：数えるのは「## 6. 記録」の見出しから後ろの、裁判所の記録の行の形（- <時刻> gate-runner: status → in_progress）だけ。
   #   票の説明や引用の中の同じ文字列は数えない（Codex の監査 p0.4.7 #2）。見出しから後ろを全部見るのは、裁判所が票の末尾に書き足すため
   local returns; returns="$(awk '/^## 6\. 記録[ \t]*$/{s=1;next} s && /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9][+-][0-9][0-9][0-9][0-9] gate-runner: status → in_progress/{n++} END{print n+0}' "$t")"
+  # p0.4.7：Z3 の裁判所の出来事（rejected・status in_progress）でも数え、多い方を使う。行政は main の票の §6 を書けるが Z3 は書けないので、
+  #   §6 の行を消しても回数は減らない（オーナーの指摘。11/7 時点の 32 票で、両方の数は一致した）
+  local ev_returns=0; [ -f "$EVENTS" ] && ev_returns="$(jq -R --arg t "$task" 'fromjson? | objects | select(.type == "rejected" and .task == $t and .status == "in_progress")' "$EVENTS" 2>/dev/null | jq -s 'length' 2>/dev/null || echo 0)"; ev_returns="${ev_returns:-0}"
+  [ "$ev_returns" -le "$returns" ] || returns="$ev_returns"
   # p0.2.4：オーナーが取り消した差し戻し（法律の不具合・鎖の連鎖によるもの）は数えない。取り消しの記録は Z3 にあり、行政は書けない（OBS-020）
   #   p0.4.7：取り消しの記録は JSON として読む（空白の有無で数が変わらない。読めない行は数えない。Codex の監査 p0.4.7 #1）。1行＝1回の取り消し
   local annulled=0; [ -f "$Z3/evidence/annulments.jsonl" ] && annulled="$(jq -R --arg t "$task" 'fromjson? | objects | select(.task == $t)' "$Z3/evidence/annulments.jsonl" 2>/dev/null | jq -s 'length' 2>/dev/null || echo 0)"; annulled="${annulled:-0}"

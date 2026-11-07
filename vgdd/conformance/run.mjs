@@ -516,11 +516,25 @@ function groupG() {
   g = runGate(g23c, 'APPROVED');
   record('G', 'G23c', 'オーナーが取り消した差し戻しは上限に数えない（3回のうち1回を取り消せば、審査して統合される）。取り消しの記録は JSON として読み、空白の有無で数が変わらず、読めない行は数えない',
     g.code === 0 && g.inMain && g.status === 'merged', `exit=${g.code} status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
+  // 票の §6 の行を消しても回数は減らない：Z3 の裁判所の出来事（rejected・in_progress）が3件あれば、§6 に行がなくても blocked（オーナーの指摘、p0.4.7）
+  const g23f = gateFixture('g23f');
+  write(path.join(g23f.z3, 'evidence/gate_events.jsonl'), [0, 1, 2].map((i) => JSON.stringify({ ts: `2026-11-03T20:0${i}:00+0900`, type: 'rejected', task: g23f.id, reason: '差し戻し G23f', status: 'in_progress' })).join('\n') + '\n');
+  g = runGate(g23f, 'APPROVED');
+  record('G', 'G23f', '票の §6 から差し戻しの行を消しても回数は減らない（Z3 の裁判所の出来事に差し戻しが3件あれば、§6 に行がなくても司法を呼ばずに blocked。行政は §6 を書けるが Z3 は書けない）',
+    g.code === 0 && !g.inMain && !g.judged && g.status === 'blocked', `exit=${g.code} status=${g.status} judged=${g.judged}`);
+  // 読めない取り消しの行は数えない：差し戻し4回・正しい取り消し1行・JSON でない行1行なら、残りは3回で blocked（Codex の監査 p0.4.7b）
+  const g23e = gateFixture('g23e', { afterApprove: withReturns(4) });
+  write(path.join(g23e.z3, 'evidence/annulments.jsonl'), JSON.stringify({ ts: '2026-11-03T21:00:00+0900', task: g23e.id, reason: 'G23e' }) + '\n{"task":"' + g23e.id + '", 壊れた行\n');
+  g = runGate(g23e, 'APPROVED');
+  record('G', 'G23e', '読めない取り消しの行は数えない（差し戻し4回・正しい取り消し1行・JSON でない行1行なら、残り3回で blocked）',
+    g.code === 0 && !g.inMain && !g.judged && g.status === 'blocked', `exit=${g.code} status=${g.status} judged=${g.judged}`);
   // 数えるのは §6 の後ろの、裁判所の記録の行の形だけ（票の説明や引用の中の同じ文字列は数えない。Codex の監査 p0.4.7 #2）
   const g23d = gateFixture('g23d', { afterApprove: (fx, id) => {
     const tp = path.join(fx.main, `docs/tasks/${id}-probe.md`);
-    const quote = ['gate-runner: status → in_progress（説明 1）', '> gate-runner: status → in_progress（引用 2）', '- 立法補佐の記録：gate-runner: status → in_progress が3回あった'].join('\n');
-    fs.appendFileSync(tp, `\n## 5b. 補足\n\n${quote}\n\n## 6. 記録\n\n- 2026-11-03T20:00:00+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/x.ts）\n- 11:00 行政の長：gate-runner: status → in_progress の後に直した\n`);
+    const quote = ['- 2026-11-02T10:00:00+0900 gate-runner: status → in_progress（§6 の前に写した例 1）', '- 2026-11-02T10:01:00+0900 gate-runner: status → in_progress（§6 の前に写した例 2）', 'gate-runner: status → in_progress（説明 1）', '> gate-runner: status → in_progress（引用 2）', '- 立法補佐の記録：gate-runner: status → in_progress が3回あった'].join('\n');
+    // 雛形の「## 6. 記録」の前に補足の節を差し込み、§6 の後ろには裁判所の行1つと人の記録を足す
+    const body = fs.readFileSync(tp, 'utf8').replace(/\n## 6\. 記録\n/, `\n## 5b. 補足\n\n${quote}\n\n## 6. 記録\n`);
+    fs.writeFileSync(tp, body + '\n- 2026-11-03T20:00:00+0900 gate-runner: status → in_progress（files_allowed の外を変更している: src/x.ts）\n- 11:00 行政の長：gate-runner: status → in_progress の後に直した\n');
     git(fx.main, 'add', '-A'); git(fx.main, 'commit', '-q', '-m', `${id} の説明と引用`);
   } });
   g = runGate(g23d, 'APPROVED');
