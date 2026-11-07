@@ -94,4 +94,20 @@ describe("GovernanceTheater の初期の表示", () => {
     expect(markup).not.toContain('aria-label="はじめて見る人への案内"');
     expect(markup).not.toContain("案内の光は説明のための強調で、記録の出来事ではありません");
   });
+
+  // T-038 A4
+  it("初期の表示（取得前）に停止の帯と判断待ちの件数を出さない", () => {
+    expect(markup).not.toContain('role="status"');
+    expect(markup).not.toContain("Kernel は停止中");
+    expect(markup).not.toContain("判断待ち ");
+    expect(markup).not.toContain("判断待ちはありません");
+    expect(markup).not.toContain('href="#decisions"');
+  });
+
+  it("判断待ちと次の担当の欄を包む要素に id=\"decisions\" があり、欄はその中にある", () => {
+    const wrapper = markup.indexOf('<div id="decisions"');
+    expect(wrapper).toBeGreaterThan(-1);
+    expect(markup.match(/id="decisions"/g)).toHaveLength(1);
+    expect(markup.indexOf('<section aria-label="判断待ちと次の担当"')).toBeGreaterThan(wrapper);
+  });
 });
