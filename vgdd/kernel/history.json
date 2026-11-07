@@ -398,13 +398,14 @@
         "W4",
         "W5",
         "W6",
+        "W7",
         "CAP-LAUNCH-WORKER",
         "CAP-LAUNCH-REQUEST",
         "CAP-LAUNCH-REQUEST-NAME",
         "CAP-AGENT-OTHER"
       ],
-      "tests_total": 473,
-      "prev_failed": 20,
+      "tests_total": 490,
+      "prev_failed": 33,
       "obs": []
     }
   ]

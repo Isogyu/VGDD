@@ -27,7 +27,8 @@ export function scrub(s, max) {
   t = t.replace(/sk-ant-[A-Za-z0-9_-]{8,}/g, '［伏せた］').replace(/AKIA[0-9A-Z]{16}/g, '［伏せた］').replace(/-----BEGIN [A-Z ]+-----[\s\S]*?(-----END [A-Z ]+-----|$)/g, '［伏せた］');
   t = t.replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '［伏せた］');
   t = t.replace(/sk-[A-Za-z0-9_-]{16,}/g, '［伏せた］').replace(/gh[pousr]_[A-Za-z0-9]{20,}/g, '［伏せた］');
-  t = t.replace(/(^|[\s(（「『"'`=:])(?:\/[^\s'"`）)」』]+|[A-Za-z]:\\[^\s'"`）)」』]*)/g, '$1［パス］');   // 絶対パスはどれも伏せる
+  t = t.replace(/\/(?:Users|home|private|var|tmp|opt|etc|usr|Library|Volumes|System|Applications|root|srv|mnt)\/[^\s'"`）)」』、。]*/g, '［パス］');   // よく使う根のパスは、前の文字によらず伏せる
+  t = t.replace(/(^|[\s(（「『"'`=:、。])(?:\/[^\s'"`）)」』、。]+|[A-Za-z]:\\[^\s'"`）)」』、。]*)/g, '$1［パス］');   // ほかの絶対パスも伏せる
   t = t.replace(/```/g, "'''");   // 引用の囲みを壊させない
   t = t.replace(/\s+/g, ' ').trim();
   return t.length > max ? `${t.slice(0, max)}…` : t;

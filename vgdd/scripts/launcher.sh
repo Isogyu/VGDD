@@ -43,10 +43,9 @@ cycle() {
     [[ "$task" =~ ^T-[0-9]{3,4}$ ]] || continue
     printf '{"tickets":["%s"],"limits":{"until":"23:59","max_tickets":1,"parallel":1}}\n' "$task" > "$QDIR/queue-${task}.json"
     log "${task}: night-runner --launch を起動"
-    set -m
-    nohup "$HERE/night-runner.sh" --queue "$QDIR/queue-${task}.json" --repo "$REPO" --launch "$task" ${extra[@]+"${extra[@]}"} >> "$QDIR/${task}.log" 2>&1 &
+    # 端末を持たない新しいセッションで動かす（p0.4.9a と同じ理由。プロセス群の ID は pid と同じ）
+    nohup perl -MPOSIX -e 'my $s = POSIX::setsid(); defined($s) && $s > 0 or exit 126; exec @ARGV or exit 127' "$HERE/night-runner.sh" --queue "$QDIR/queue-${task}.json" --repo "$REPO" --launch "$task" ${extra[@]+"${extra[@]}"} < /dev/null >> "$QDIR/${task}.log" 2>&1 &
     local pid=$!
-    set +m
     "${INTAKE[@]}" --started "$task" --pid "$pid"
   done
 }
