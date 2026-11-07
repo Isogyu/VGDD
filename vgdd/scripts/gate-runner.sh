@@ -204,7 +204,14 @@ process_request() {
   local returns; returns="$(awk '/^## 6\. 記録[ \t]*$/{s=1;next} s && /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9][+-][0-9][0-9][0-9][0-9] gate-runner: status → in_progress/{n++} END{print n+0}' "$t")"
   # p0.4.7：Z3 の裁判所の出来事（rejected・status in_progress）でも数え、多い方を使う。行政は main の票の §6 を書けるが Z3 は書けないので、
   #   §6 の行を消しても回数は減らない（オーナーの指摘。11/7 時点の 32 票で、両方の数は一致した）
-  local ev_returns=0; [ -f "$EVENTS" ] && ev_returns="$(jq -R --arg t "$task" 'fromjson? | objects | select(.type == "rejected" and .task == $t and .status == "in_progress")' "$EVENTS" 2>/dev/null | jq -s 'length' 2>/dev/null || echo 0)"; ev_returns="${ev_returns:-0}"
+  #   集計は1つの jq で行い、失敗・読めない行・数でない出力のどれでも 0 にせず、申請を残して処理しない（fail-closed。Codex の監査 p0.4.7c）
+  local ev_returns=0
+  if [ -f "$EVENTS" ]; then
+    ev_returns="$(jq -Rn --arg t "$task" '[inputs | (fromjson? // "BROKEN")] | if any(. == "BROKEN") then error("broken") else map(objects | select(.type == "rejected" and .task == $t and .status == "in_progress")) | length end' "$EVENTS" 2>/dev/null)" || ev_returns=""
+    if ! [[ "$ev_returns" =~ ^[0-9]+$ ]]; then
+      log_event "returns_uncountable" "$task" '"source":"gate_events"'; return
+    fi
+  fi
   [ "$ev_returns" -le "$returns" ] || returns="$ev_returns"
   # p0.2.4：オーナーが取り消した差し戻し（法律の不具合・鎖の連鎖によるもの）は数えない。取り消しの記録は Z3 にあり、行政は書けない（OBS-020）
   #   p0.4.7：取り消しの記録は JSON として読む（空白の有無で数が変わらない。読めない行は数えない。Codex の監査 p0.4.7 #1）。1行＝1回の取り消し

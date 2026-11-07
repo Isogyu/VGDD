@@ -385,7 +385,8 @@ function runGate(fx, verdict, extra = [], env = {}) {
   const r = sh('bash', [path.join(IMPL.bin, 'gate-runner.sh'), '--repo', fx.main, '--once', '--interval', '1', ...extra],
     { cwd: fx.main, env: { ...process.env, ...UTF8, VGDD_Z3_DIR: fx.z3, STUB_VERDICT: verdict, ...env }, timeout: 120000 });
   const evf = path.join(fx.z3, 'evidence/gate_events.jsonl');
-  const events = fs.existsSync(evf) ? fs.readFileSync(evf, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
+  // 読めない行は飛ばす（G23g は壊れた行を置いて裁判所の fail-closed を試す）
+  const events = fs.existsSync(evf) ? fs.readFileSync(evf, 'utf8').split('\n').filter(Boolean).flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } }) : [];
   const inMain = sh('git', ['-C', fx.main, 'merge-base', '--is-ancestor', fx.head, 'main']).status === 0;
   const judged = fs.existsSync(path.join(fx.z3, 'evidence/judge-called.log'));
   const pending = fs.existsSync(path.join(fx.main, `merge-requests/${fx.id}.json`));
@@ -522,6 +523,31 @@ function groupG() {
   g = runGate(g23f, 'APPROVED');
   record('G', 'G23f', '票の §6 から差し戻しの行を消しても回数は減らない（Z3 の裁判所の出来事に差し戻しが3件あれば、§6 に行がなくても司法を呼ばずに blocked。行政は §6 を書けるが Z3 は書けない）',
     g.code === 0 && !g.inMain && !g.judged && g.status === 'blocked', `exit=${g.code} status=${g.status} judged=${g.judged}`);
+  // 多い方を使う（足し算ではない）・取り消しは1回だけ引く・別の票／blocked／別の種類は数えない（Codex の監査 p0.4.7c）
+  const rejEv = (id, n, extra = {}) => Array.from({ length: n }, (_, i) => JSON.stringify({ ts: `2026-11-03T20:1${i}:00+0900`, type: 'rejected', task: id, reason: '差し戻し', status: 'in_progress', ...extra }));
+  const g23f2 = gateFixture('g23f2', { afterApprove: withReturns(2) });
+  write(path.join(g23f2.z3, 'evidence/gate_events.jsonl'), rejEv(g23f2.id, 2).join('\n') + '\n');
+  g = runGate(g23f2, 'APPROVED');
+  record('G', 'G23f2', '§6 と Z3 の記録がどちらも2回なら、足さずに多い方（2回）を使い、審査して統合される',
+    g.code === 0 && g.inMain && g.status === 'merged', `exit=${g.code} status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
+  const g23f3 = gateFixture('g23f3', { afterApprove: withReturns(3) });
+  write(path.join(g23f3.z3, 'evidence/gate_events.jsonl'), rejEv(g23f3.id, 3).join('\n') + '\n');
+  write(path.join(g23f3.z3, 'evidence/annulments.jsonl'), JSON.stringify({ ts: '2026-11-03T21:00:00+0900', task: g23f3.id, reason: 'G23f3' }) + '\n');
+  g = runGate(g23f3, 'APPROVED');
+  record('G', 'G23f3', '§6 と Z3 の記録がどちらも3回で、取り消しが1回なら、残り2回で審査して統合される（取り消しは1回だけ引く）',
+    g.code === 0 && g.inMain && g.status === 'merged', `exit=${g.code} status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
+  const g23f4 = gateFixture('g23f4');
+  write(path.join(g23f4.z3, 'evidence/gate_events.jsonl'), [...rejEv('T-999', 3), ...rejEv(g23f4.id, 3, { status: 'blocked' }), ...rejEv(g23f4.id, 3, { type: 'disagreement' })].join('\n') + '\n');
+  g = runGate(g23f4, 'APPROVED');
+  record('G', 'G23f4', '別の票の差し戻し・blocked の記録・別の種類の出来事は数えない（それぞれ3件あっても審査して統合される）',
+    g.code === 0 && g.inMain && g.status === 'merged', `exit=${g.code} status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
+  // Z3 の記録を数えられなければ 0 とみなさず、申請を残して処理しない（fail-closed）
+  const g23g = gateFixture('g23g');
+  write(path.join(g23g.z3, 'evidence/gate_events.jsonl'), rejEv(g23g.id, 1).join('\n') + '\n{"type":"rejected", 壊れた行\n');
+  g = runGate(g23g, 'APPROVED');
+  record('G', 'G23g', 'Z3 の裁判所の出来事に読めない行があれば、差し戻しの回数を 0 とみなさず、司法を呼ばずに申請を残して returns_uncountable を記録する（fail-closed）',
+    g.code === 0 && !g.inMain && !g.judged && g.pending && g.status === 'review' && g.events.some((e) => e.type === 'returns_uncountable' && e.task === g23g.id),
+    `exit=${g.code} status=${g.status} judged=${g.judged} pending=${g.pending}`);
   // 読めない取り消しの行は数えない：差し戻し4回・正しい取り消し1行・JSON でない行1行なら、残りは3回で blocked（Codex の監査 p0.4.7b）
   const g23e = gateFixture('g23e', { afterApprove: withReturns(4) });
   write(path.join(g23e.z3, 'evidence/annulments.jsonl'), JSON.stringify({ ts: '2026-11-03T21:00:00+0900', task: g23e.id, reason: 'G23e' }) + '\n{"task":"' + g23e.id + '", 壊れた行\n');

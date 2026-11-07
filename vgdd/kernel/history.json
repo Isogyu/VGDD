@@ -273,11 +273,15 @@
         "G23d",
         "G23e",
         "G23f",
+        "G23f2",
+        "G23f3",
+        "G23f4",
+        "G23g",
         "G24",
         "G24b"
       ],
-      "tests_total": 405,
-      "prev_failed": 7,
+      "tests_total": 409,
+      "prev_failed": 8,
       "obs": [
         "OBS-060"
       ]
