@@ -1,12 +1,12 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-07T02:27:00.932+09:00",
+  "generated_at": "2026-11-07T09:44:33.655+09:00",
   "totals": {
-    "tickets": 30,
-    "merged": 28,
-    "rejected": 34,
+    "tickets": 32,
+    "merged": 29,
+    "rejected": 35,
     "blocked": 0,
-    "disagreements": 15
+    "disagreements": 16
   },
   "tickets": [
     {
@@ -264,17 +264,35 @@
     {
       "id": "T-028",
       "title": "票の記録を、自由な文を含まない公開用のイベント（列挙値だけ）に変える API を作る（統治シアター U0）",
-      "status": "ready",
+      "status": "merged",
       "estimate_h": 2,
       "returns": 0,
-      "merged_at": null,
+      "merged_at": "2026-11-07T09:44:14+0900",
       "disagreements": 0
     },
     {
       "id": "T-029",
       "title": "統治シアターの画面の骨格（区画・色・余白）を作り、/governance/theater で見られるようにする（統治シアター U1）",
-      "status": "ready",
+      "status": "blocked",
       "estimate_h": 2,
+      "returns": 1,
+      "merged_at": null,
+      "disagreements": 1
+    },
+    {
+      "id": "T-030",
+      "title": "Kernel の状態の写しを「提出記録」からも読めるようにし、統治シアターのデータを1か所で取る（統治シアター U2）",
+      "status": "ready",
+      "estimate_h": 3,
+      "returns": 0,
+      "merged_at": null,
+      "disagreements": 0
+    },
+    {
+      "id": "T-031",
+      "title": "統治シアターの主役の図（人・三権・Kernel・統合の SVG）を作り、記録の出来事ごとに光る場所を変える（統治シアター U3）",
+      "status": "ready",
+      "estimate_h": 3,
       "returns": 0,
       "merged_at": null,
       "disagreements": 0
