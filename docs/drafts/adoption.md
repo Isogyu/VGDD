@@ -1,6 +1,6 @@
 # 試す・動かす・ほかの案件に入れる
 
-> **下書き**（2026-11-07 01:4x、行政の長）。提出の前に `docs/adoption.md` に移す。リンクは移した後の置き場所を基準に書いた。この引用の枠は、移すときに外す。
+> **下書き**（2026-11-07 01:4x、行政の長。11:1x に法律 p0.4.7 に合わせて更新）。提出の前に `docs/adoption.md` に移す。リンクは移した後の置き場所を基準に書いた。この引用の枠は、移すときに外す。
 
 **実績の範囲：** Kernel を実稼働させたのは、この案件の、オーナー1人・macOS の機械1台だけです。ほかの環境での構築は試していません。下の準備と条件は、実装と運用の記録から整理したもので、手順どおりに動くことはまだ確かめていません。
 
@@ -12,7 +12,7 @@
 |---|---|
 | 適合性テスト（`node vgdd/conformance/run.mjs`。`jq`・`shasum`・UTF-8 のロケールが要る） | 使い捨ての試験用リポジトリと偽の Z3 の上で、止めるべき操作が止まり、通すべき操作が通ること。LLM は呼ばないので、判定の中身ではなく判定の扱いを試す |
 | 前の版との比較 | 法律の版の差は [`vgdd/kernel/history.json`](../vgdd/kernel/history.json) と Git の履歴で追える |
-| `/governance` | 統治の数字・票の盤・票1枚の運命・法律の歴史。全体図は一部の数が「—」で、Kernel と不変条件の区画は、状態の表示用ファイルがないので空（コードから読んだ動作で、clone では未確認） |
+| `/governance` | 統治の数字・票の盤・票1枚の運命・法律の歴史。全体図は一部の数が「—」で、Kernel と不変条件の区画は、状態の表示用ファイルがないので空（一時的な clone で確かめた。[`validation.md` §4](validation.md)） |
 | 記録を読む | 票の §2 と §6（[`tasks/`](tasks/)）、主張と証拠（[`validation.md`](validation.md)） |
 
 適合性テストは、実際の sandbox と起動設定を試しません（[`kernel.md` §6](kernel.md)）。
@@ -36,9 +36,9 @@
 この順で通した記録はありません。`<repo>` は対象のリポジトリ、`<z3>` は作業フォルダの外の保護領域です。
 
 - [ ] **Z3 の配置**：`<z3>/hooks/` にフック、`<z3>/bin/` に裁判所と関連のスクリプト、`<z3>/evidence/` に記録の置き場所を作る。開発エージェントから読めず書けないようにする
-- [ ] **設定**：`vgdd/settings.v2.json` を `<repo>/.claude/settings.json` に置き、パスを直す。**原本には `docs/governance` の書き込みの保護が抜けているので、sandbox の `denyWrite` に足す。** `vgdd/agents/` を `<repo>/.claude/agents/` に置く
+- [ ] **設定**：`vgdd/settings.v2.json` を `<repo>/.claude/settings.json` に置き、パスを直す。`vgdd/agents/` を `<repo>/.claude/agents/` に置く
 - [ ] **基準値の作成**：`.git/config` を確かめてから `git-baseline.sh` を実行する
-- [ ] **起動**：sandbox の外で `VGDD_REPO=<repo> VGDD_Z3_DIR=<z3> <z3>/bin/gate-runner.sh --repo <repo>` を動かす。道具が欠ければ起動しない
+- [ ] **起動**：sandbox の外で `VGDD_Z3_DIR=<z3> <z3>/bin/gate-runner.sh --repo <repo>` を動かす。道具が欠ければ起動しない
 - [ ] **確認**：適合性テストを稼働中の実装に対して動かす（`run.mjs --impl z3` は既定の Z3 の場所に固定で、`VGDD_Z3_DIR` を見ない）。小さな票を1枚、承認・申請・判定・統合まで通す。停止と再開を1回試す。迂回の検証を、その環境でやり直す
 
 ### 変える設定の場所
@@ -47,7 +47,7 @@
 |---|---|
 | リポジトリ：`gate-runner.sh`・`night-runner.sh` | 引数 `--repo <repo>` |
 | リポジトリ：`approve-spec.sh`・`release.sh`・`kernel-stop.sh`・`kernel-resume.sh`・`git-baseline.sh` | 環境変数 `VGDD_REPO` |
-| リポジトリ：`sandboxed-run.sh`（裁判所の監査から呼ばれ、対象の `.env.local` の読み取りを禁じる） | 環境変数 `VGDD_REPO`。**`gate-runner.sh` の `--repo` だけでは渡らないので、起動のときに両方を指定する** |
+| リポジトリ：`sandboxed-run.sh`（裁判所の監査から呼ばれ、対象の `.env.local` の読み取りを禁じる） | 環境変数 `VGDD_REPO`。`gate-runner.sh` が `--repo` の値を渡す（法律 p0.4.6、判例 ST14） |
 | Z3：スクリプトとフック | 環境変数 `VGDD_Z3_DIR` |
 | フックの起動のパス、保護パス、`additionalDirectories` | `<repo>/.claude/settings.json`（原本は開発時の配置を前提に書いてある） |
 
