@@ -1,7 +1,7 @@
 ---
 id: T-030
 title: Kernel の状態の写しを「提出記録」からも読めるようにし、統治シアターのデータを1か所で取る（統治シアター U2）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 3
 time_limit_min: 210
 security_review: true          # ファイルの読み込みの場所を足す（固定の名前だけ）
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a0acbb41cd39252d4
+worker: W26
 files_allowed:
   - src/lib/kernel-state.ts                                   # 読む場所を source で選べるようにするだけ
   - src/lib/kernel-state.test.ts
@@ -97,6 +97,14 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 決定論的な監査＋ judge ＋ Codex judge ＋ Codex security。T-031 とはファイルが重ならない。
 
 ## 6. 記録
+
+- 09:48 行政の長が W26 を起動（worktree `agent-a0acbb41cd39252d4`、main 5e7f84e から、モデルは Opus）。仕様はオーナーが 09:46:00 に approve-spec で承認済み（立法補佐の指示の条件を、09:46:18 の Kernel の写しの `approvals[].current` で確かめた）。依存の T-028 は統合済み
+- W26 の報告：HEAD `98cbf9c26d256e27978924512d82def282c433cf`。test 535 件（31 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:723` で差分の外）。**HTTP サーバー経由の API と画面は動かしていない**（`npm run dev` は実行していない。vitest の中で `connection` を差し替えて route の `GET` を直接呼び、実際の提出記録が 200 で検証を通ることと、今の API が切り替わらないことを見た。Next の経路解決、本物の `connection()`、§3 の版と時刻の値は未確認。§3 で立法補佐が held の候補で確かめる）
+- 補った解釈：(1) `pickReplay` は §2 より厳しく、`ts` は記録の行の形、`seq` は 1 以上の整数、`id`・`title`・`status`・`generated_at` は空でない文字列に限る (2) 200 で `state`／`invariants` のキーがない応答は `failed`（`missing` は値が `null` のときだけ）(3) 「200 以外」は `status !== 200`（201 も `failed`）(4) `fetchFn` は `(url, init?)` の形で `{ cache: "no-store" }` を渡す。中止の signal は T-034 の側で包む想定 (5) 返り値の `replay` の型から `missing` を除いた (6) 「import はしない」は `governance-replay-schema.ts` への指定と読み、試験のファイルは `governance-replay.ts`・`governance.ts` を import する。手順の案からの逸脱なし
+- 実行時の注意：`source` に型の外の値が実行時に渡ると、ローダーと `loadTheaterData` は live として扱う。今の呼び出しは固定の値なのでこの経路は通らない。T-034 で外からの値（URL など）を source に渡すなら、検証が要る
+- §2 より多い試験：route の `GET` の直接の呼び出し（export・応答の形・`toWire`・本文なしの 500・切り替わらないこと）、実際の5つの `GET` を `fetchFn` につないだ試験、`pickReplay` の型と T-028 の応答の型の比較、`node:fs` を読まないことの検査。A6 の試験は実際の提出記録に依るので、写しを更新して検証に合わなければ落ちる
+- 拒否された操作：Bash の heredoc の `python3` で2つのローダーを書き換えるコマンド（フック。置換する文字列のコメントの `<root>/docs/governance/...` がリダイレクトと判定された誤検知とみられる）。W26 は Bash で再試行せず、Edit ツールで同じ内容に編集した。行政の長の読み：書き込み先は `files_allowed` の中で、オーナーの決まり（`app/` 内は Edit・Write で書く）に沿う道具に直したもの。保護を越えてはいない
+- 09:56 行政の長が差分を確認（`files_allowed` の10個だけ、追加 1130・削除 10。ローダーの source、2つの新しい route（`GET` だけ、`await connection()` の後に読む、`toWire`、本文なしの 500、Route Segment Config なし）、`loadTheaterData`（URL は source ごとに固定で別の source を呼ぶ経路なし、replay は `pickReplay` だけ、submission の `source` を必須）、`pickReplay` の列挙値を読んだ。既存の試験の変更は `vi` の import だけという報告。禁止語・秘密情報の形なし。行政の長は試験と API を自分では動かしていない）。`status: review` で main にコミットし申請。旧い `GET /api/governance` の `detail` は残る（§1 のとおり T-034）
 
 ## オーナーに聞くこと
 
