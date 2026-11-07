@@ -19,13 +19,11 @@ OUT="$(mktemp "${TMPDIR:-/tmp}/vgdd-metered.XXXXXX")"
 PID=""
 cleanup() { rm -f "$OUT"; }
 trap cleanup EXIT
-# 子を自分のプロセス群で動かす（job control を有効にすると、バックグラウンドの子は新しいプロセス群の長になる）
-set -m
-exec 3<&0
-"$@" <&3 > "$OUT" &
-PID=$!
-set +m
 stop_child() {
+  if [ -z "$PID" ]; then   # まだ起動していない：予約を取り消して終わる
+    node "$LEDGER" cancel --run "$RUN" >/dev/null 2>&1 || true
+    echo "interrupted" >&2; exit 75
+  fi
   kill -TERM -- "-$PID" 2>/dev/null || kill -TERM "$PID" 2>/dev/null
   for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 -- "-$PID" 2>/dev/null || break; sleep 0.5; done
   kill -KILL -- "-$PID" 2>/dev/null || true
@@ -35,7 +33,14 @@ stop_child() {
   node "$LEDGER" finish --run "$RUN" --code 143 --usage-file "$OUT" --format "$FORMAT" >/dev/null 2>&1 || { echo "finish_failed" >&2; exit 75; }
   echo "interrupted" >&2; exit 75
 }
+# trap は子を起動する前に置く（起動の直前・直後の中断でも子を残さない。Codex の再監査 ①）
 trap stop_child TERM INT HUP ALRM
+# 子を自分のプロセス群で動かす（job control を有効にすると、バックグラウンドの子は新しいプロセス群の長になる）
+set -m
+exec 3<&0
+"$@" <&3 > "$OUT" &
+PID=$!
+set +m
 if ! node "$LEDGER" started --run "$RUN" --pid "$PID" >/dev/null 2>&1; then
   echo "started_failed" >&2; stop_child
 fi

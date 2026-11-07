@@ -115,8 +115,10 @@ export function readLimits() {
 }
 
 // ---- 状態を作り直す ------------------------------------------------------------------------------
+/** 起動の記録の pid はプロセス群の長（窓口が job control で動かす）。群に1つでも生きていれば生きているとみなす（Codex の再監査 ①） */
 function alive(pid) {
-  try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
+  const probe = (target) => { try { process.kill(target, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
+  return probe(-pid) || probe(pid);
 }
 
 /**
@@ -165,6 +167,8 @@ export function summarize(allRuns, limits) {
     ticket: (t) => ({
       used: sum((r) => consumedOf(r) + reservedOf(r), (r) => r.task === t),
       attempts: runs.filter((r) => live(r) && r.kind === 'worker' && r.task === t).length,
+      // 前の期間で動いている実行の予約も、その票の使用量に入れる（Codex の再監査 ②）
+      usedOther: allRuns.filter((r) => r.task === t && r.period !== pid && activeAll(r)).reduce((a, r) => a + r.reserve, 0),
       activeWorker: allRuns.some((r) => r.kind === 'worker' && r.task === t && activeAll(r)),
       overrun: runs.some((r) => r.task === t && r.overrun),
     }),
@@ -208,7 +212,7 @@ export function begin({ kind, task, req, tokens }) {
     if (task !== '-') {
       const t = s.ticket(task);
       if (t.overrun) throw new Refused('overrun');
-      if (t.used + want > limits.tokens_per_ticket) throw new Refused('tokens_ticket');
+      if (t.used + t.usedOther + want > limits.tokens_per_ticket) throw new Refused('tokens_ticket');
       if (kind === 'worker') {
         if (t.activeWorker) throw new Refused('worker_running');
         if (t.attempts >= limits.attempts_per_ticket) throw new Refused('attempts');
@@ -256,6 +260,19 @@ export function finish({ run, code, usageText, format }) {
   });
 }
 
+/** 起動の前に中断したときの取り消し（起動の記録がない実行だけ） */
+export function cancel({ run }) {
+  if (!ID.test(run)) throw new Refused('bad_args');
+  return withLock(() => {
+    const events = readLedger(); findRun(events, run);
+    const id = `cancel:${run}`;
+    if (events.some((e) => e.event_id === id)) return 'duplicate';
+    if (events.some((e) => (e.type === 'started' || e.type === 'finish') && e.run_id === run)) throw new Refused('bad_transition');
+    append(events, { type: 'cancel', event_id: id, run_id: run });
+    return 'ok';
+  });
+}
+
 export function status() {
   const events = readLedger();
   let limits = null; try { limits = readLimits(); } catch { /* 上限がなければ null */ }
@@ -264,7 +281,7 @@ export function status() {
   const count = (st) => runs.filter((r) => r.state === st).length;
   return {
     period_id: limits?.period_id ?? null, until: limits?.until ?? null,
-    tokens: { settled: s.settled, reserved: s.reserved, unknown_runs: s.unknown_runs, limit: limits?.tokens_total ?? null },
+    tokens: { settled: s.settled, reserved: s.reserved, reserved_other_periods: s.reserved_other_periods, unknown_runs: s.unknown_runs, limit: limits?.tokens_total ?? null },
     judge_calls: { used: s.judge_used, limit: limits?.judge_calls ?? null },
     workers: { active: s.workers_active, limit: limits?.workers ?? null },
     runs: { launching: count('launching'), started: count('started'), finished: count('finished'), ended_unrecorded: count('ended_unrecorded'), cancelled: count('cancelled') },
@@ -287,9 +304,11 @@ if (isMain) {
       let text = null;
       if (f) { try { const st = fs.lstatSync(f); if (st.isFile() && st.size <= 32 * 1024 * 1024) text = fs.readFileSync(f, 'utf8'); } catch { text = null; } }
       console.log(finish({ run: opt('--run') ?? '', code: Number(opt('--code')), usageText: text, format: opt('--format') || 'none' }));
+    } else if (cmd === 'cancel') {
+      console.log(cancel({ run: opt('--run') ?? '' }));
     } else if (cmd === 'status') {
       const s = status();
-      console.log(rest.includes('--json') ? JSON.stringify(s) : `期間 ${s.period_id ?? '—'}（${s.until ?? '—'} まで）：トークン 消費 ${s.tokens.settled}・予約 ${s.tokens.reserved}／${s.tokens.limit ?? '—'}（不明 ${s.tokens.unknown_runs} 件）、司法 ${s.judge_calls.used}／${s.judge_calls.limit ?? '—'}、作業員 ${s.workers.active}／${s.workers.limit ?? '—'}${s.overrun ? '、超過あり（後続を止める）' : ''}`);
+      console.log(rest.includes('--json') ? JSON.stringify(s) : `期間 ${s.period_id ?? '—'}（${s.until ?? '—'} まで）：トークン 消費 ${s.tokens.settled}・予約 ${s.tokens.reserved}（前の期間から ${s.tokens.reserved_other_periods}）／${s.tokens.limit ?? '—'}（不明 ${s.tokens.unknown_runs} 件）、司法 ${s.judge_calls.used}／${s.judge_calls.limit ?? '—'}、作業員 ${s.workers.active}／${s.workers.limit ?? '—'}${s.overrun ? '、超過あり（後続を止める）' : ''}`);
     } else if (cmd === 'verify') {
       readLedger(); console.log('ok');
     } else { console.error('bad_args'); process.exit(64); }

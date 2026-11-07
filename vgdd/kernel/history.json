@@ -347,9 +347,12 @@
         "B21",
         "B22",
         "B23",
-        "B24"
+        "B24",
+        "B25",
+        "B26",
+        "B27"
       ],
-      "tests_total": 439,
+      "tests_total": 442,
       "prev_failed": 3,
       "obs": []
     }

@@ -73,6 +73,10 @@ const raw = process.env.RAW || ''; let text = raw;
 const unavailable = process.env.CLI_RC !== '0';
 try { const o = JSON.parse(raw); if (o && typeof o.result === 'string') text = o.result; } catch {}
 let v = null; if (!unavailable) { const m = text.match(/\{[\s\S]*\}/); if (m) { try { v = JSON.parse(m[0]); } catch {} } }
+// p0.4.9（Codex の再監査 ⑤）：vgdd.constitutional.v1 の形（欄・型・判定の値）に完全に合うときだけ判定として採る
+const exact = (o, keys) => !!o && typeof o === 'object' && !Array.isArray(o) && Object.keys(o).length === keys.length && keys.every((k) => k in o);
+if (v && !(exact(v, ['schema', 'verdict', 'violations', 'notes']) && v.schema === 'vgdd.constitutional.v1' && (v.verdict === 'CONSISTENT' || v.verdict === 'VIOLATES')
+  && typeof v.notes === 'string' && Array.isArray(v.violations) && v.violations.every((x) => exact(x, ['clause', 'diff_location', 'reason']) && ['clause', 'diff_location', 'reason'].every((k) => typeof x[k] === 'string')))) v = null;
 process.stdout.write(JSON.stringify({ type: 'constitutional_review', reason: process.env.REASON, review: v, parse_ok: !!v, unavailable, verdict: v?.verdict ?? 'VIOLATES', note: unavailable ? '審査を実行できなかった（予算の窓口の拒否か CLI の失敗。fail-closed で VIOLATES と記録する）' : v ? null : '出力を JSON として解釈できない（fail-closed）' }, null, 2) + '\n');
 NODE
 echo "憲法審査: $(node -e "console.log(require('$OUT_FILE').verdict)")  （保存: ${OUT_FILE}）"

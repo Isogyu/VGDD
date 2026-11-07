@@ -359,7 +359,7 @@ if [ "$mode" = security ]; then [ -z "\${STUB_SECURITY_NOFILE:-}" ] || exit 69; 
 printf '{"final_verdict":"%s","parse_ok":true,"codex":{"findings":[]}}\\n' "\${STUB_CODEX_VERDICT:-\${STUB_VERDICT:-CHANGES_REQUIRED}}" > "$out/$task-$(git rev-parse HEAD | cut -c1-12)-codex-$mode.json"
 `;
 // 実装の指紋（kernel-state.mjs の implSha と同じ並び）。run.mjs --record が残し、状態の写しが稼働中の Z3 と照合する
-const IMPL_FILES = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh', 'ledger.mjs', 'metered.sh', 'budget-set.sh', 'night-runner.sh', 'review-constitution.sh'];
+const IMPL_FILES = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh', 'ledger.mjs', 'metered.sh', 'budget-set.sh', 'night-runner.sh', 'review-constitution.sh', 'approve-spec.sh', 'kernel-stop.sh', 'kernel-resume.sh'];
 const implShaFor = (bin, policy) => sha256hex(IMPL_FILES.map((f) => path.join(bin, f)).concat([policy, path.join(path.dirname(policy), 'verify-chain.mjs')]).map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return '<なし>'; } }).join('\n--\n'));
 const POLICY_LINE = (/^(p\d+\.\d+)\./.exec(CAPS.kernel_version) || [])[1] || null;
 function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export const v = 2;\n' }, stop = false, afterApprove = null, ticket = {}, approveExtra = { policy_line: POLICY_LINE } } = {}) {
@@ -1217,6 +1217,44 @@ function groupB() {
   s = st(z);
   record('B', 'B23', '窓口が時間切れ（ALRM）を受けたら、子と孫をプロセス群ごと終わらせ、終わりを確かめてから精算する（終了 75）', r23.status === 75 && gpid > 0 && !gAlive && s?.runs.finished === 1 && s?.workers.active === 0, `rc=${r23.status} grandchild_alive=${gAlive} finished=${s?.runs.finished}`);
   if (gAlive) { try { process.kill(gpid, 'SIGKILL'); } catch { /* 終わっている */ } }
+
+  // B25 孫だけが TERM を無視して残る：親が先に終わっても、プロセス群が残る間は枠を解かない。KILL まで待って終わりを確かめる
+  z = mk({ workers: 1, tokens_total: 100000, tokens_per_ticket: 100000 });
+  const stubborn = path.join(z, 'stubborn.sh'); write(stubborn, `#!/bin/bash\n( trap '' TERM; sleep 60 ) &\necho $! > '${path.join(z, 'g2.pid')}'\nsleep 60\n`); fs.chmodSync(stubborn, 0o755);
+  const bg25 = spawn('perl', ['-e', 'alarm shift; exec @ARGV or exit 127', '2', 'bash', meter, 'worker', 'T-972', '100', 'none', '--', stubborn], { env: env(z), stdio: 'ignore' });
+  sh('bash', ['-c', 'sleep 3.5']);   // ALRM の後、TERM で親は終わり、孫は残っている時間
+  const mid = L(z, 'begin', '--kind', 'worker', '--task', 'T-973', '--req', 'mid', '--tokens', '100');
+  sh('bash', ['-c', 'sleep 6']);     // KILL の後
+  let g2 = 0; try { g2 = Number(fs.readFileSync(path.join(z, 'g2.pid'), 'utf8').trim()); } catch { /* ない */ }
+  let g2Alive = false; try { process.kill(g2, 0); g2Alive = true; } catch { g2Alive = false; }
+  s = st(z);
+  record('B', 'B25', '孫が TERM を無視して残る間は作業員の枠を解かず、KILL で終わりを確かめてから精算する', mid.status === 75 && /workers/.test(mid.stderr) && !g2Alive && s?.workers.active === 0 && s?.runs.finished === 1, `mid=${mid.stderr.trim()} g2_alive=${g2Alive} active=${s?.workers.active}`);
+  if (g2Alive) { try { process.kill(g2, 'SIGKILL'); } catch { /* 終わっている */ } }
+  try { bg25.kill('SIGKILL'); } catch { /* 終わっている */ }
+
+  // B26 期間を変えた後も、前の期間の予約はその票の上限に入る
+  z = mk({ workers: 5, tokens_total: 100000, tokens_per_ticket: 500 });
+  L(z, 'begin', '--kind', 'worker', '--task', 'T-974', '--req', 'q26', '--tokens', '400');
+  write(path.join(z, 'budget/limits.json'), JSON.stringify({ schema: 'vgdd.budget-limits.v1', period_id: 'pB3', until: '2099-01-01T00:00:00+09:00', tokens_total: 100000, tokens_per_ticket: 500, tokens_per_run: 400, judge_calls: 5, workers: 5, attempts_per_ticket: 5, set_at: '2026-11-08T01:00:00+09:00' }) + '\n');
+  const r26 = L(z, 'begin', '--kind', 'judge', '--task', 'T-974', '--req', 'q26b', '--tokens', '200');
+  record('B', 'B26', '期間を変えた後も、前の期間で動いている予約はその票の上限（tokens_per_ticket）に入る', r26.status === 75 && /tokens_ticket/.test(r26.stderr), r26.stderr.trim());
+
+  // B27 本物の review-constitution.sh：形の合わない判定・CLI の失敗は採らない（VIOLATES）。形の合う判定は採る（陽性の対照）
+  const fr = fixture('b27');
+  const fk = path.join(fr.base, 'fakebin');
+  const runRev = (body, rc = 0) => {
+    write(path.join(fk, 'claude'), `#!/bin/bash\nprintf '%s' '${JSON.stringify({ type: 'result', subtype: 'success', is_error: false, result: body })}'\nexit ${rc}\n`); fs.chmodSync(path.join(fk, 'claude'), 0o755);
+    const od = path.join(fr.base, `rev-${crypto.randomBytes(3).toString('hex')}`);
+    sh('bash', [path.join(IMPL.bin, 'review-constitution.sh'), '--reason', '試験', '--out', od], { cwd: fr.main, env: { ...process.env, ...UTF8, PATH: `${fk}:${process.env.PATH}`, VGDD_Z3_DIR: fr.z3 }, timeout: 60000 });
+    const f = fs.existsSync(od) ? fs.readdirSync(od).find((x) => x.endsWith('.json')) : null;
+    try { return JSON.parse(fs.readFileSync(path.join(od, f), 'utf8')); } catch { return null; }
+  };
+  const partial = runRev('{"verdict":"CONSISTENT"}');
+  const failed = runRev(JSON.stringify({ schema: 'vgdd.constitutional.v1', verdict: 'CONSISTENT', violations: [], notes: '' }), 1);
+  const goodRev = runRev(JSON.stringify({ schema: 'vgdd.constitutional.v1', verdict: 'CONSISTENT', violations: [], notes: '' }));
+  record('B', 'B27', '本物の review-constitution.sh：形の欠けた判定と CLI の失敗は採らず VIOLATES、形の合う判定は採る（陽性の対照）',
+    partial?.verdict === 'VIOLATES' && partial?.parse_ok === false && failed?.verdict === 'VIOLATES' && failed?.unavailable === true && goodRev?.verdict === 'CONSISTENT',
+    `partial=${partial?.verdict} failed=${failed?.verdict}/${failed?.unavailable} good=${goodRev?.verdict}`);
 
   // B24 本物の judge.sh：予算で拒まれたら CLI を起動せず判定は成り立たない。上限の中なら成り立つ（陽性の対照）
   const fx = fixture('b24'); commitTicket(fx, 'T-971', {});
