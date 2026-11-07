@@ -1,7 +1,7 @@
 ---
 id: T-039
 title: 統治シアターの開始の状態（見る記録と再生の票）を URL で決められるようにする
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1.5
 time_limit_min: 120
 security_review: false         # URL の値は決まった値の中から選ぶだけ。外へ送らない
 unattended: false
-branch: null
-worker: null
+branch: worktree-agent-a03e7c91133b5a54d
+worker: W35
 files_allowed:
   - src/lib/theater-start.ts                          # 新設：URL の値を検証する純粋関数
   - src/lib/theater-start.test.ts                     # 新設
@@ -98,6 +98,14 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 決定論的な監査＋ judge ＋ Codex judge。T-038 の統合の後に作業員を起動する（同じ `GovernanceTheater.tsx` を触る）。
 
 ## 6. 記録
+
+- 22:36 行政の長が W35 を起動（worktree `agent-a03e7c91133b5a54d`、T-038 を統合した後の main 0a6de21 から、モデルは Opus。T-041 の W36 と並行）。仕様はオーナーが 21:57:48 に approve-spec で承認済み（22:34:42 の Kernel の写しの `approvals[].current` で確かめた）。依存の T-032・T-035・T-038 は統合済み
+- W35 の報告：HEAD `ec47ffbeaad086014f35221edea46bd6b1b5398d`、0a6de21 の上に1コミット。test 949 件（48 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:875` の `stopsDir` で差分の外）。**`npm run -s build` は sandbox の中で落ちた**（Turbopack が `globals.css` の PostCSS のローダーで新しいプロセスを作り、ローカルのポートに bind しようとして `Operation not permitted (os error 1)`。変えたファイルとは関係なく、プリレンダリングの前に止まった）。W35 は `--webpack` などの回避をしていない。§2 から外れる解釈はない
+- **build は立法補佐が ec47ffb で確かめた（22:4x、/governance は Static）**：立法補佐が ec47ffb を自分の一時的な作業ツリーで、sandbox の外でビルドした（W35 の worktree と main には触れず、sandbox の設定も変えていない）。build は成功し、経路の一覧で `/governance` は「○ (Static)」、`useSearchParams` によるプリレンダリングのエラーはない。あわせて起動して、`?source=live&ticket=T-026` で稼働中の観測と T-026 が選ばれること、`?source=x&ticket=T-014%0A` で既定（提出記録・並びの先頭）になることを確かめた
+- 行政の長の確認（試験は再実行していない）：差分は A0 の6つだけ（+170 / -6）。`parseStartTicket` は `/^T-[0-9]{3,4}$/` だけで判定し、`trim` しない（JavaScript の `$` は `m` フラグがなければ文字列の末尾だけに合う）。試験で `"T-014\n"`・`"T-014\r\n"`・`" T-014"`・`"T-014 "`・`"T-014\t"`・全角の数字などを拒む。開始の設定は `useState` の初期化関数で `{ source, ticketId }` を一度だけ決め、最初の `source` の状態はその値。`TicketReplay` は `key={source}` のまま、作り直すたびに決めた `initialTicketId` を受ける。`TicketReplay` に足した props は `initialTicketId` の1つだけで、`useState` の初期値だけに使う。`selectSource`・T-035 の取り直し・ref・`guideStep`・T-038 の帯と件数は変わっていない。URL を書き換えるコード（`router`・`history`）はない
+- 読み方が割れる所（W35 の選んだ読み方）：A3 の「並びにない票」は、(1) 入力の `tickets` にあるが `pickFeatured` の並びにない票（T-002）と、(2) 入力にない票（T-999）の2通りに読める。どちらでも並びの先頭になることを試験した（例の一覧にあるが入力にない T-013 も）
+- 補った解釈（文面の範囲内）：(1) `initialTicketId` の既定値は `null`（`undefined` も同じ扱い） (2) 開始の設定は、`useState` の初期化関数で作る1つのオブジェクトに持つ (3) 試験の `next/navigation` の差し替えは `vi.hoisted` と `vi.mock` で書いた
+- **確かめていない**：開いた後に source や票を切り替えても URL が変わらないこと、T-026 で始めて T-014 を選んでから source を切り替えると T-026 に戻ること、T-035 の取り直しと T-037 の案内の開始・終了で選択が変わらないこと（どれもコードを読んだだけ）。§3 で立法補佐が held の候補で確かめ、候補でもう一度 build を確かめる
 
 ## オーナーに聞くこと
 
