@@ -39,12 +39,12 @@ stop_child() {
 }
 # trap は子を起動する前に置く（起動の直前・直後の中断でも子を残さない。Codex の再監査 ①）
 trap stop_child TERM INT HUP ALRM
-# 子を自分のプロセス群で動かす（job control を有効にすると、バックグラウンドの子は新しいプロセス群の長になる）
-set -m
+# 子を新しいセッション（端末を持たない、新しいプロセス群の長）で動かす。p0.4.9a：以前は job control（set -m）で別のプロセス群にしていたが、
+#   裁判所が端末の上で動くと、子（Codex）が終わるときに端末の設定を戻そうとして SIGTTOU で止まり、窓口がそれを「生きている」と見て TERM を送っていた。
+#   新しいセッションの子は端末を持たないので止まらない。プロセス群の ID は子の pid と同じ（群ごとの停止と生死の判定はそのまま）
 exec 3<&0
-"$@" <&3 > "$OUT" &
+perl -MPOSIX -e 'my $s = POSIX::setsid(); defined($s) && $s > 0 or exit 126; exec @ARGV or exit 127' "$@" <&3 > "$OUT" &
 PID=$!
-set +m
 if ! node "$LEDGER" started --run "$RUN" --pid "$PID" >/dev/null 2>&1; then
   echo "started_failed" >&2; stop_child
 fi
