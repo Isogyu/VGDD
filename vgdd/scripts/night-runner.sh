@@ -180,8 +180,11 @@ run_worker() { # task, wt, attempt, extra → log json path。失敗なら非0
   allow+=("Bash(git add *)" "Bash(git commit *)" "Bash(npx --no-install *)")
   log "▶ ${task} 作業員を起動（試行 ${attempt}、上限 ${limit}+10 分、worktree ${wt}、許可 ${#allow[@]} 件）"
   # p0.4.9：作業員の起動は予算の台帳の窓口（metered.sh）を通す（予約・同時の数・票ごとの試行の数・停止・期間）。拒まれたら起動しない
-  ( cd "$wt" && run_with_timeout "$(( (limit + 10) * 60 ))" "$BIN_DIR/metered.sh" worker "$task" auto claude -- claude -p --agent worker --output-format json --max-turns 80 \
-      --allowedTools "${allow[@]}" -- "$(worker_prompt "$task" "$trel" "$extra")" ) > "$out" 2> "$LOGS/${task}-${attempt}.err" || true
+  local wrc=0
+  ( cd "$wt" && run_with_timeout "$(( limit * 60 ))" "$BIN_DIR/metered.sh" worker "$task" auto claude -- claude -p --agent worker --output-format json --max-turns 80 \
+      --allowedTools "${allow[@]}" -- "$(worker_prompt "$task" "$trel" "$extra")" ) > "$out" 2> "$LOGS/${task}-${attempt}.err" || wrc=$?
+  # p0.4.10：予算の台帳の窓口が拒んだ・時間切れで止めた（終了 75）ときは、この票を止める（前検査に進まない）
+  if [ "$wrc" -eq 75 ]; then note "${task}: 予算の台帳の窓口が起動を拒んだか、時間切れで止めた（$(tail -n 1 "$LOGS/${task}-${attempt}.err" 2>/dev/null | head -c 80)）"; return 3; fi
   # p0.4.9：利用量が読めなければ 0 にせず、1票の上限を使ったものとして数える（台帳の精算と同じ考え方）
   # 各欄は 0 以上の整数だけを受け取る（負の数・小数・文字列は読めないものとして扱う。Codex の監査 #7）
   local tok; tok="$(jq -r 'def ok: (type=="number") and (. >= 0) and (. == floor); .usage as $u | def okc(k): ($u|has(k)|not) or ($u[k]|ok); if ($u|type)=="object" and ($u.input_tokens|ok) and ($u.output_tokens|ok) and okc("cache_creation_input_tokens") and okc("cache_read_input_tokens") then $u.input_tokens + $u.output_tokens + ($u.cache_creation_input_tokens // 0) + ($u.cache_read_input_tokens // 0) else empty end' "$out" 2>/dev/null || true)"
@@ -260,8 +263,10 @@ run_lane() { # task
   lane_ev started "$task"
   local prev_sig="" req_at=""
   while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
+    if [ -f "$Z3/STOP" ]; then lane_ev fail "$task"; note "${task}: Kernel の停止中。次の試行をしない"; return; fi   # p0.4.10：試行ごとに停止を見る
     local rc=0; run_worker "$task" "$wt" "$attempt" "$extra" || rc=$?   # p0.3.1c：set -e のもとで非0を受け取る（以前は非0でレーンが黙って終わった。OBS-040）
     [ "$rc" -eq 2 ] && return
+    [ "$rc" -eq 3 ] && { lane_ev fail "$task"; return; }
     [ "$rc" -eq 1 ] && { lane_ev fail "$task"; note "${task}: 1票のトークンの上限を超えたため中止"; return; }   # p0.3.1c：以前は非0を見ずに続けていた（OBS-040）
     why="$(precheck "$task" "$wt")" || { note "${task}: 前検査で落ちた（${why}）"; extra="前回の問題：${why}。直してからコミットしてください。"; attempt=$((attempt+1)); continue; }
     git -C "$wt" rebase main >/dev/null 2>&1 || { git -C "$wt" rebase --abort >/dev/null 2>&1 || true; note "${task}: rebase の衝突"; extra="main との衝突を直してください（git rebase main）。"; attempt=$((attempt+1)); continue; }
@@ -269,7 +274,7 @@ run_lane() { # task
     mark_review "$task" "$head" "試行 ${attempt}"
     git -C "$wt" rebase main >/dev/null 2>&1 || { git -C "$wt" rebase --abort >/dev/null 2>&1 || true; note "${task}: status のコミットの取り込みで衝突。申請しない"; lane_ev fail "$task"; return; }   # p0.3.1c：以前は失敗を無視して申請した（OBS-041）
     head="$(git -C "$REPO" rev-parse "$(br "$task")")"
-    req_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    req_at="$(node -e 'console.log(new Date().toISOString())')"   # ミリ秒まで（同じ秒の前の判定を混ぜない）
     request "$task" "$head"
     res="$(wait_gate "$task")"
     case "$res" in

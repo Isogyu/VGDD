@@ -737,7 +737,7 @@
     },
     {
       "id": "CAP-LAUNCH-WORKER",
-      "title": "作業員（worker）・テスト担当（tester）を Agent ツールで起動する（p0.4.10。起動は Kernel の窓口だけ）",
+      "title": "作業員（worker）・テスト担当（tester）を Agent ツールや claude の CLI で起動する（p0.4.10。起動は Kernel の窓口だけ）",
       "allowed": [],
       "enforced_by": [
         "hook"
@@ -760,6 +760,20 @@
           "subagent_type": "Worker",
           "description": "x",
           "prompt": "x"
+        },
+        {
+          "tool": "Agent",
+          "subagent_type": "  WoRkEr  ",
+          "description": "x",
+          "prompt": "x"
+        },
+        {
+          "tool": "Bash",
+          "command": "claude -p --agent worker -- 実装する"
+        },
+        {
+          "tool": "Bash",
+          "command": "cd x && claude --agent=tester -p 'y'"
         }
       ],
       "expect": {
@@ -792,7 +806,7 @@
     },
     {
       "id": "CAP-LAUNCH-REQUEST-NAME",
-      "title": "作業員の起動の申請に、票の ID の形でない名前を使う（p0.4.10）",
+      "title": "作業員の起動の申請を、票の ID の形でない名前で置く・Bash で置く（p0.4.10）",
       "allowed": [],
       "enforced_by": [
         "hook"
@@ -807,6 +821,14 @@
           "tool": "Write",
           "file_path": "{self}/merge-requests/launch/T-901.json.sh",
           "content": "x"
+        },
+        {
+          "tool": "Bash",
+          "command": "cp /tmp/r.json merge-requests/launch/T-901.json"
+        },
+        {
+          "tool": "Bash",
+          "command": "touch merge-requests/launch/x.json"
         }
       ],
       "expect": {

@@ -310,7 +310,7 @@ const BASH_PROTECTED_TOKENS = [
   { re: /docs\/tasks\/_board\.json/, noRead: false, label: 'docs/tasks/_board.json' },
   { re: /docs\/governance(?![\w.-])|kernel-(state|invariants)\.json/, noRead: false, label: 'docs/governance（Kernel の状態の写し）' },   // p0.4.3。p0.4.5：docs/governance.md（文書）を取り違えない
   { re: new RegExp(String.raw`merge-requests\/done` + END_OF_WORD), noRead: false, label: 'merge-requests/done' },
-  { re: new RegExp(String.raw`merge-requests\/launch\/done` + END_OF_WORD), noRead: false, label: 'merge-requests/launch/done' },   // p0.4.10：起動の窓口が処理済みの申請を置く
+  { re: new RegExp(String.raw`merge-requests\/launch` + END_OF_WORD), noRead: false, label: 'merge-requests/launch（起動の申請は Write ツールで行政の長だけが置く。Bash では書かない）' },   // p0.4.10
   { re: tok(String.raw`(\.\.\/)?preparation`), noRead: false, label: '準備資料' },
   { re: tok(String.raw`(\.\.\/)?event_records`), noRead: false, label: '作業記録' },
 ];
@@ -639,6 +639,10 @@ function judge(input, projectDir, git) {
     }
     case 'Bash': {
       const cmd = String(ti.command || '');
+      // p0.4.10：作業員・テスト担当を CLI で直接起動すること（claude … --agent worker|tester）も、起動の窓口を通らないので拒む（どの役割からも）
+      if (/(^|[\s;&|(`$])claude\b[^;&|\n]*\s--agent(\s+|=)\s*['"]?\s*(worker|tester)\b/i.test(cmd)) {
+        return { target: cmd.slice(0, 200), decision: 'deny', reason: '作業員（worker・tester）を claude の CLI で直接起動できない。起動の窓口（merge-requests/launch/T-NNN.json）を使う' };
+      }
       const r = judgeBash(cmd, git, agentType, cwd, projectDir, confine);
       return { target: cmd.slice(0, 200), ...r };
     }
