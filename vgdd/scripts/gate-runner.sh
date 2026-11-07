@@ -37,8 +37,9 @@ git() { command git -c core.hooksPath=/dev/null -c core.fsmonitor=false -c core.
 check_git_config() {
   local base="$Z3/evidence/git-config.baseline" cur
   cur="$(shasum -a 256 "$REPO/.git/config" | cut -c1-64)"
-  if [ ! -f "$base" ]; then echo "git の設定の基準値がない（${base}）。オーナーが vgdd/scripts/git-baseline.sh で作る（fail-closed）" >&2; exit 70; fi
-  [ "$cur" = "$(cat "$base")" ] || { echo "共有の .git/config が基準値から変わっている。オーナーが確かめるまで止める（fail-closed。OBS-033）" >&2; exit 70; }
+  # p0.4.7（OBS-060）：止まる前に証拠ストアに記録を残す（記録がないと、止まったことが外から分からない）。中身は種類だけ（設定の本文・ハッシュは残さない）
+  if [ ! -f "$base" ]; then log_event "git_config_changed" "-" '"kind":"baseline_missing"'; echo "git の設定の基準値がない（${base}）。オーナーが vgdd/scripts/git-baseline.sh で作る（fail-closed）" >&2; exit 70; fi
+  [ "$cur" = "$(cat "$base")" ] || { log_event "git_config_changed" "-" '"kind":"mismatch"'; echo "共有の .git/config が基準値から変わっている。オーナーが確かめるまで止める（fail-closed。OBS-033）" >&2; exit 70; }
 }
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -52,6 +53,10 @@ while [ $# -gt 0 ]; do
 done
 
 Z3="${VGDD_Z3_DIR:-${HOME}/tsubuyaki-z3}"
+# p0.4.6：監査の sandbox（sandboxed-run.sh）は VGDD_REPO の .env.local を読ませない。--repo の値を渡す（既定と違う場所で使うと、
+#   p0.4.5 までは対象のリポジトリの .env.local が監査中のコードから読めた。行政の長の報告）
+REPO="$(CDPATH= cd -- "$REPO" 2>/dev/null && pwd -P)" || { echo "--repo のフォルダがない" >&2; exit 64; }   # 起動の時点で絶対・正規化したパスに（相対パスで渡されても、監査の作業場所で解決しない。Codex の監査 p0.4.6 #1）
+export VGDD_REPO="$REPO"
 VERDICTS="$Z3/evidence/verdicts"
 EVENTS="$Z3/evidence/gate_events.jsonl"
 BIN="$Z3/bin"                      # judge.sh / judge-codex.sh の実行用コピーもここに置く
@@ -194,9 +199,23 @@ process_request() {
   local actual; actual="$(git -C "$REPO" rev-parse "$branch")"
   # p0.3.0：以後の検査・判定・統合は、この完全な SHA（${actual}）に固定する。ブランチ名は使わない（OBS-023②）
   [[ "$actual" == "$sha"* ]] || { fail "$task" "申請の HEAD（${sha}）とブランチの HEAD（${actual:0:12}）が違う" && mv "$req" "$DONE_DIR/"; return; }
-  local returns; returns="$(grep -c 'gate-runner: status → in_progress' "$t" || true)"
+  # p0.4.7：数えるのは「## 6. 記録」の見出しから後ろの、裁判所の記録の行の形（- <時刻> gate-runner: status → in_progress）だけ。
+  #   票の説明や引用の中の同じ文字列は数えない（Codex の監査 p0.4.7 #2）。見出しから後ろを全部見るのは、裁判所が票の末尾に書き足すため
+  local returns; returns="$(awk '/^## 6\. 記録[ \t]*$/{s=1;next} s && /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9][+-][0-9][0-9][0-9][0-9] gate-runner: status → in_progress/{n++} END{print n+0}' "$t")"
+  # p0.4.7：Z3 の裁判所の出来事（rejected・status in_progress）でも数え、多い方を使う。行政は main の票の §6 を書けるが Z3 は書けないので、
+  #   §6 の行を消しても回数は減らない（オーナーの指摘。11/7 時点の 32 票で、両方の数は一致した）
+  #   集計は1つの jq で行い、失敗・読めない行・数でない出力のどれでも 0 にせず、申請を残して処理しない（fail-closed。Codex の監査 p0.4.7c）
+  local ev_returns=0
+  if [ -f "$EVENTS" ]; then
+    ev_returns="$(jq -Rn --arg t "$task" '[inputs | (fromjson? // "BROKEN")] | if any(. == "BROKEN") then error("broken") else map(objects | select(.type == "rejected" and .task == $t and .status == "in_progress")) | length end' "$EVENTS" 2>/dev/null)" || ev_returns=""
+    if ! [[ "$ev_returns" =~ ^[0-9]+$ ]]; then
+      log_event "returns_uncountable" "$task" '"source":"gate_events"'; return
+    fi
+  fi
+  [ "$ev_returns" -le "$returns" ] || returns="$ev_returns"
   # p0.2.4：オーナーが取り消した差し戻し（法律の不具合・鎖の連鎖によるもの）は数えない。取り消しの記録は Z3 にあり、行政は書けない（OBS-020）
-  local annulled; annulled="$(grep -c "\"task\":\"$task\"" "$Z3/evidence/annulments.jsonl" 2>/dev/null || true)"; annulled="${annulled:-0}"
+  #   p0.4.7：取り消しの記録は JSON として読む（空白の有無で数が変わらない。読めない行は数えない。Codex の監査 p0.4.7 #1）。1行＝1回の取り消し
+  local annulled=0; [ -f "$Z3/evidence/annulments.jsonl" ] && annulled="$(jq -R --arg t "$task" 'fromjson? | objects | select(.task == $t)' "$Z3/evidence/annulments.jsonl" 2>/dev/null | jq -s 'length' 2>/dev/null || echo 0)"; annulled="${annulled:-0}"
   returns=$(( returns - annulled )); [ "$returns" -ge 0 ] || returns=0
   [ "$returns" -lt "$MAX_RETURNS" ] || { fail "$task" "差し戻しが $MAX_RETURNS 回に達した。オーナーの判断へ" "blocked" && mv "$req" "$DONE_DIR/"; return; }
 

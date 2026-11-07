@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # VGDD — 夜間ハーネス（night-runner）。行政の長の役を機械的に代行して、承認済みの票のキューを無人で回す。
-# 設計：docs/harness.md（D-55③・D-37・D-45⑦）。**案・未試験**（V8 の試験運転で確かめてから本番に使う）。
+# 設計：docs/harness.md（D-55③・D-37・D-45⑦）。V8 の試験運転（2026-11-04〜05）と 2026-11-05 夜の運転で使った。適合性テストの N 群で確かめる（p0.4.6 で頭書きを今の状態に合わせた）。
 #
 # 置き場所：原本は vgdd/scripts/night-runner.sh。実行用は ~/tsubuyaki-z3/bin/night-runner.sh（オーナーがコピー）。
 # 動かす人：オーナー。sandbox の外で起動する。gate-runner は**別に**起動しておく（runner は gate-runner を起こさない・止めない）。

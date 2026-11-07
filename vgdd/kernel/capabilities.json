@@ -1,6 +1,6 @@
 {
   "schema": "vgdd.capabilities.v1",
-  "kernel_version": "p0.4.5",
+  "kernel_version": "p0.4.7",
   "note": "Governance Kernel の権限の表（ADR-001・ADR-003）。役割ごとに、何ができ、何ができず、それを どの層が強制しているかを書く。expect はフック（Policy Decision Point）の判定。enforced_by はその操作を実際に止める層（複数あれば全部）。'promise' は強制がなく約束だけのもの（弱点として公開する）。probes は適合性テスト（vgdd/conformance/run.mjs）がフックに実際に入力する操作で、{self} はその役割の作業場所のルート、{main} は main の checkout、{wt} は作業員の worktree、{z3} は Z3。 個々の probe に expect があれば、その役割についてはそちらを優先する。",
   "layers": {
     "hook": "PreToolUse フック policy.mjs（Policy Decision Point。拒否と記録）",
@@ -632,7 +632,12 @@
         "ST11",
         "ST12",
         "ST11b",
-        "ST13"
+        "ST13",
+        "ST14",
+        "ST15",
+        "ST14b",
+        "ST14c",
+        "ST14d"
       ],
       "known_gaps": [
         "中身が Z3 と一致することは、Z3 を読めるオーナーの照合に依る（行政は照合できない）",
@@ -808,10 +813,21 @@
       "title": "自動再試行には有限の回数・時間・予算上限を設ける",
       "status": "partial",
       "tests": [
-        "G:G16"
+        "G:G16",
+        "G:G23",
+        "G:G23b",
+        "G:G23c",
+        "G:G23d",
+        "G:G23e",
+        "G:G23f",
+        "G:G23f2",
+        "G:G23f3",
+        "G:G23f4",
+        "G:G23f5",
+        "G:G23g"
       ],
       "gaps": [
-        "差し戻しの上限3回は票の記録で数えるが、上限での停止の判例はない",
+        "差し戻しの回数は、票の §6 の裁判所の行の形の行と、Z3 の裁判所の出来事（gate_events の rejected で status が in_progress）の多い方。§6 の行の書き手は確かめない（§6 に同じ形の行を写せば多く数える。fail-closed の側）。§6 の行を消しても減らないのは、対応する出来事が Z3 に残っている場合に限る。gate_events はハッシュチェーンの対象ではなく、同じ機械の管理者（オーナーの権限）は書き換えられる",
         "時間と費用の上限は Kernel で強制していない（夜間の until と票の数の上限だけ）"
       ]
     },
