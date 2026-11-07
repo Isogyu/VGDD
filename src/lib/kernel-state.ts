@@ -1,6 +1,9 @@
 // 前提：docs/governance/ は保護パスなので、ディレクトリの敵対的な同時の差し替えまでは扱わない。
-// Kernel の状態の写し（<root>/docs/governance/kernel-state.json）を読む。T-022。
-// 読むのはこの1か所だけ。パスの組み立てに外からの入力は使わない。どの段階の失敗も null（例外の本文は使わない）。
+// Kernel の状態の写しを読む。T-022、T-030。
+//   source が "live"（既定）：<root>/docs/governance/kernel-state.json（裁判所が書き出す稼働中の写し）
+//   source が "submission"：<root>/docs/governance/snapshots/submission/kernel-state.json（提出記録）
+// 読むのはこの2か所だけで、片方が読めなくてももう片方に切り替えない。
+// パスの組み立てに外からの入力は使わない。どの段階の失敗も null（例外の本文は使わない）。
 // isRealDir と通常ファイルの読み方は src/lib/governance.ts の形を写した（governance.ts は export していないため）。
 // 1,048,576 バイトの上限はこのファイルで新しく足した。
 
@@ -57,14 +60,24 @@ function readRegularFileBounded(p: string): string | null {
 }
 
 /** Kernel の状態の写しを読んで検証する。なければ・読めなければ・形が合わなければ null */
-export function loadKernelState(root: string = process.cwd()): KernelState | null {
+export function loadKernelState(
+  root: string = process.cwd(),
+  source: "live" | "submission" = "live",
+): KernelState | null {
   try {
     // パスは root と固定の名前だけで組み立てる
     const docsDir = path.join(root, "docs");
     const governanceDir = path.join(docsDir, "governance");
     // (1) docs と docs/governance がリンクでない実在のディレクトリか
     if (!isRealDir(docsDir) || !isRealDir(governanceDir)) return null;
-    const text = readRegularFileBounded(path.join(governanceDir, "kernel-state.json"));
+    let dir = governanceDir;
+    if (source === "submission") {
+      // 提出記録は、snapshots と submission も同じように1つずつ確かめる
+      const snapshotsDir = path.join(governanceDir, "snapshots");
+      dir = path.join(snapshotsDir, "submission");
+      if (!isRealDir(snapshotsDir) || !isRealDir(dir)) return null;
+    }
+    const text = readRegularFileBounded(path.join(dir, "kernel-state.json"));
     if (text === null) return null;
     let json: unknown;
     try {
