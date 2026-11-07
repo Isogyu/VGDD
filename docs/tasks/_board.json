@@ -1,9 +1,9 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-07T20:29:36.444+09:00",
+  "generated_at": "2026-11-07T21:49:21.382+09:00",
   "totals": {
-    "tickets": 35,
-    "merged": 35,
+    "tickets": 38,
+    "merged": 36,
     "rejected": 35,
     "blocked": 0,
     "disagreements": 17
@@ -322,6 +322,33 @@
       "estimate_h": 3,
       "returns": 0,
       "merged_at": "2026-11-07T19:47:12+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-035",
+      "title": "統治シアターの「稼働中の観測」を自動で取り直し、取得の時刻と失敗を見せる",
+      "status": "merged",
+      "estimate_h": 1.5,
+      "returns": 0,
+      "merged_at": "2026-11-07T21:49:16+0900",
+      "disagreements": 0
+    },
+    {
+      "id": "T-036",
+      "title": "統治シアターの下に「Claude Code の使い分け」の欄を足す（役割ごとの機能・モデル・道具の制限と、フックの集計）",
+      "status": "ready",
+      "estimate_h": 2,
+      "returns": 0,
+      "merged_at": null,
+      "disagreements": 0
+    },
+    {
+      "id": "T-037",
+      "title": "統治シアターに「はじめて見る」の案内を足す（5つの手順で図の見方を説明し、該当する場所を光らせる）",
+      "status": "ready",
+      "estimate_h": 2,
+      "returns": 0,
+      "merged_at": null,
       "disagreements": 0
     }
   ]
