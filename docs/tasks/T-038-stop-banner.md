@@ -104,3 +104,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 ## オーナーに聞くこと
 
 1. 帯の文「Kernel は停止中（11/7 21:46 から）。統合しません」でよいか
+
+- 2026-11-07T22:31:16+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
