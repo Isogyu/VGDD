@@ -1,7 +1,7 @@
 ---
 id: T-039
 title: 統治シアターの開始の状態（見る記録と再生の票）を URL で決められるようにする
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -117,3 +117,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 - 積み直し：W35 の worktree で `git rebase b04de5a` を試したが、作業ツリーの `docs/tasks/_board.json` の上書きが sandbox に拒まれて途中で止まった（`error: unable to unlink old 'docs/tasks/_board.json': Operation not permitted` / `error: could not detach HEAD`。HEAD は ec47ffb のまま、作業ツリーは b04de5a のファイルが一部書き出されたまま残っている。戻すには変更の破棄と未追跡ファイルの削除が要るので、手を付けていない）。代わりに、行政の長が b04de5a から新しい worktree（`agent-a3d1c57c14eee089f`）で W37 を起動し、`git cherry-pick ec47ffb` で積み直した（衝突・拒否なし）。HEAD `955e8568fcbe53e3240e8d498e9f999d7a2224a9`、b04de5a の上に1コミット。T-039 の6ファイルの中身は ec47ffb と同じ（`git diff ec47ffb 955e856 --` 6ファイルが空。行政の長が確かめた）。コミットメッセージも同じ。test 953 件（49 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:875` の `stopsDir` で差分の外）。build は動かしていない（§3 で立法補佐が候補で確かめる）
 
 - 2026-11-07T23:07:59+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T23:23:03+0900 release: status → merged（main=961155d18774。夜間の判定に合格した候補 6075a5f8151e を、オーナーが朝に承認して統合）
