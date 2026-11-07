@@ -1,7 +1,7 @@
 ---
 id: T-043
 title: 初心者向けの要件確認（/requirements）を足す。固定の質問・回答・未解決の事項・受け入れ条件の候補を LLM から独立したデータで持ち、票の下書きの文を出す
-status: review
+status: in_progress
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -109,3 +109,5 @@ held の後、立法補佐が候補で確かめる（build は作業員の sandb
 
 1. 画面は `/requirements`（ローカルだけで動かす）。トップの画面や `/governance` からの導線は、別の票で足す
 2. 初心者が本当に使えるかは未検証。開発の経験のない人に試してもらうまで、README では「仮説」と書く
+
+- 2026-11-08T00:14:54+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
