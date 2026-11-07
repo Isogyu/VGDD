@@ -1,7 +1,7 @@
 ---
 id: T-030
 title: Kernel の状態の写しを「提出記録」からも読めるようにし、統治シアターのデータを1か所で取る（統治シアター U2）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -112,3 +112,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 2. `docs/governance/snapshots/submission/README.md` の「画面はこのフォルダを読まない」は、この票の統合の後に立法補佐が直す
 
 - 2026-11-07T10:02:09+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T11:00:41+0900 release: status → merged（main=f41e7c01c8c9。夜間の判定に合格した候補 d5bed1e40d79 を、オーナーが朝に承認して統合）
