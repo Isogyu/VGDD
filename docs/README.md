@@ -20,7 +20,7 @@
 | [`validation.md`](validation.md) | 主張と証拠の対応、代表例3件 | **最初に読む** |
 | [`drafts/architecture.md`](drafts/architecture.md) | 責務・権限・信頼の境界 | 全体の形を知る。下書き |
 | [`adoption.md`](adoption.md) | clone で試す・作者が別の場所に構築する・ほかの人が既存の案件に入れる、の違いと導入の確認の表 | 自分で試す |
-| [`kernel.md`](kernel.md) | 設計方針（ADR）と実装の対応、不変条件の状態 | §3 の最新の合計（p0.4.7、410 件）の段落と §4b が現在の状態。ほかの部分は当時の数字 |
+| [`kernel.md`](kernel.md) | 設計方針（ADR）と実装の対応、不変条件の状態 | §3 の最新の合計（p0.4.8、414 件）の段落と §4b が現在の状態。ほかの部分は当時の数字 |
 | [`governance.md`](governance.md) | 統治の設計の詳細 | 11/3 の設計が土台で、今の実装と違う箇所がある。今の規範は SPEC |
 | [`harness.md`](harness.md) | 夜間の運転の当時の設計案 | §1〜§9 は 11/4 の案を土台に 11/5 まで更新したもので、§10 は施行の記録。今の規範は SPEC。今の運転の記録は [`drafts/night-log.md`](drafts/night-log.md) と票の §6 |
 | [`environment.md`](environment.md) | 開発環境と依存の記録 | |

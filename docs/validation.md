@@ -1,9 +1,9 @@
-# 主張と証拠の対応（VGDD Governance Kernel、法律 p0.4.7）
+# 主張と証拠の対応（VGDD Governance Kernel、法律 p0.4.8）
 
 作品で言うこと（主張）を、規範（仕様）・判例（適合性テスト）・実運用の記録に結ぶ。**確かめた範囲**の列は、どの方法で確かめたかを分けて書く。「実装済み」と書いてよいのは、判例か実運用の記録で確かめたものだけ（憲法の約束4）。規範の正本は `vgdd/kernel/SPEC.md` と `vgdd/kernel/capabilities.json`。ここは案内で、規範を写さない。
 
-- 試験の対象：法律 p0.4.7（`vgdd/kernel/capabilities.json` の `kernel_version`）
-- 適合性テスト：`node vgdd/conformance/run.mjs`（依存なし、Node 22 以上）。原本 410/410。稼働中の写し（`--impl z3`）は 2026-11-07 11:08 に 410/410（記録は Z3 にあり、公開の写しは `docs/governance/kernel-invariants.json` の `verified_by`）。p0.4.5 の時点は 387 件（11/7 01:25 に稼働中の写しで 387/387）
+- 試験の対象：法律 p0.4.8（`vgdd/kernel/capabilities.json` の `kernel_version`）
+- 適合性テスト：`node vgdd/conformance/run.mjs`（依存なし、Node 22 以上）。原本 414/414。稼働中の写し（`--impl z3`）は 2026-11-07 15:10 に 414/414（記録は Z3 にあり、公開の写しは `docs/governance/kernel-invariants.json` の `verified_by`）。p0.4.7 の時点は 410 件（11:08）、p0.4.5 の時点は 387 件（11/7 01:25 に稼働中の写しで 387/387）
 - 実運用の記録：票の §6（`docs/tasks/T-0*.md`）、票の盤（`docs/tasks/_board.json`）、操作の集計（`docs/governance/summary.json`）。証拠ストアと判定の本文は Z3 にあり、公開しない
 
 ## 1. 代表例
