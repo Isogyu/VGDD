@@ -1,6 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import GovernanceTheater from "./GovernanceTheater";
+
+// T-039：useSearchParams を差し替える。試験ごとに URL の検索の部分を変える（既定は何もない）
+const navigation = vi.hoisted(() => ({ search: "" }));
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(navigation.search),
+}));
+
+function renderWithSearch(search: string): string {
+  navigation.search = search;
+  try {
+    return renderToStaticMarkup(<GovernanceTheater />);
+  } finally {
+    navigation.search = "";
+  }
+}
 
 // 初期の表示だけを試す（SSR では effect が動かないので、取得はしない）
 const markup = renderToStaticMarkup(<GovernanceTheater />);
@@ -109,5 +124,37 @@ describe("GovernanceTheater の初期の表示", () => {
     expect(wrapper).toBeGreaterThan(-1);
     expect(markup.match(/id="decisions"/g)).toHaveLength(1);
     expect(markup.indexOf('<section aria-label="判断待ちと次の担当"')).toBeGreaterThan(wrapper);
+  });
+});
+
+// T-039 A2・A5
+describe("GovernanceTheater の開始の source（URL の値）", () => {
+  const PRESSED_SUBMISSION = /<button[^>]*aria-pressed="true"[^>]*>提出記録<\/button>/;
+  const PRESSED_LIVE = /<button[^>]*aria-pressed="true"[^>]*>稼働中の観測<\/button>/;
+
+  it("URL に何もないとき、最初の source は「提出記録」", () => {
+    const html = renderWithSearch("");
+    expect(html).toMatch(PRESSED_SUBMISSION);
+    expect(html).toMatch(/<button[^>]*aria-pressed="false"[^>]*>稼働中の観測<\/button>/);
+    expect(html).toContain("<dd>提出記録</dd>");
+  });
+
+  it("source=live のとき、「稼働中の観測」が aria-pressed=\"true\"", () => {
+    const html = renderWithSearch("?source=live&ticket=T-026");
+    expect(html).toMatch(PRESSED_LIVE);
+    expect(html).toMatch(/<button[^>]*aria-pressed="false"[^>]*>提出記録<\/button>/);
+    expect(html).toContain("<dd>稼働中の観測</dd>");
+  });
+
+  it.each(["?source=x", "?source=LIVE", "?source=live%0A", "?ticket=T-999"])(
+    "%s は既定の「提出記録」",
+    (search) => {
+      expect(renderWithSearch(search)).toMatch(PRESSED_SUBMISSION);
+    },
+  );
+
+  it("URL の生の値を画面に出さない", () => {
+    const html = renderWithSearch("?source=zzq-source-raw&ticket=zzq-ticket-raw");
+    expect(html).not.toContain("zzq-");
   });
 });
