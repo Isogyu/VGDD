@@ -45,7 +45,11 @@ function lastStates() {
   for (const line of text.split('\n')) {
     if (!line) continue;
     let o; try { o = JSON.parse(line); } catch { console.error('状態の壊れた行。止める'); process.exit(70); }   // 重複の防止の根拠を失ったまま受け付けない
-    if (o && typeof o.task === 'string') m.set(o.task, o);
+    // 形も確かめる：票の ID、状態の名前、started・ended の正の整数の pid
+    const okRow = o && typeof o === 'object' && /^T-[0-9]{3,4}$/.test(o.task ?? '') && ['received', 'started', 'ended'].includes(o.state)
+      && (o.state === 'received' || (Number.isSafeInteger(o.pid) && o.pid > 0));
+    if (!okRow) { console.error('状態の形の違う行。止める'); process.exit(70); }
+    m.set(o.task, o);
   }
   return m;
 }

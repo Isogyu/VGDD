@@ -28,7 +28,9 @@ log() { echo "[$(date +%H:%M:%S)] $*"; }
 # ---- 1つだけ動く --------------------------------------------------------------------------------------
 # ロックは pid を中身に持つ記号リンク（作るのと pid を書くのが1回の操作。作りかけのロックを「持ち主なし」と見ない）
 LOCK="$QDIR/.lock"
-if ! ln -s "$$" "$LOCK" 2>/dev/null; then
+# 前の版のロック（フォルダ）や、記号リンクでないものがあれば止める（ln -s がフォルダの中にリンクを作って成功するのを防ぐ）
+if [ -e "$LOCK" ] && [ ! -L "$LOCK" ]; then echo "ロックの場所 $LOCK に記号リンクでないものがある。オーナーが確かめて消してから起動する" >&2; exit 75; fi
+if ! ln -s "$$" "$LOCK" 2>/dev/null || [ "$(readlink "$LOCK" 2>/dev/null)" != "$$" ]; then
   owner="$(readlink "$LOCK" 2>/dev/null || true)"
   if [[ "$owner" =~ ^[0-9]+$ ]] && kill -0 "$owner" 2>/dev/null; then echo "launcher はもう動いている（pid ${owner}）" >&2; exit 75; fi
   echo "持ち主のいないロック（pid ${owner:-不明}）がある。前の launcher が落ちた。オーナーが確かめて $LOCK を消してから起動する" >&2; exit 75

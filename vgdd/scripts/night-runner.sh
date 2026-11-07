@@ -120,6 +120,8 @@ depends_merged() { # ticket → 0 なら depends_on がすべて merged
   return 0
 }
 returns_of() { grep -c 'gate-runner: status → in_progress' "$1" 2>/dev/null || true; }
+# p0.4.10：裁判所と同じ数え方（§6 の決まった形の行）。取り消し・Z3 の出来事との照合は裁判所が行う（ここは「起動しない」側に倒すための目安）
+gate_returns_of() { awk '/^## 6\. 記録[ \t]*$/{s=1;next} s && /^- [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9][+-][0-9][0-9][0-9][0-9] gate-runner: status → in_progress/{n++} END{print n+0}' "$1" 2>/dev/null || echo 99; }
 
 # ---- 止める条件（1つでも当たれば新しい票を取らない） ---------------------------------------------------
 free_gb() { df -g "$REPO" | awk 'NR==2 {print $4}'; }
@@ -229,10 +231,10 @@ precheck() { # task, wt → 0 なら申請へ。stdout に理由
 # ---- 票を review にして main にコミット（§2 は触らない） --------------------------------------------------
 mark_review() { # task, head, note
   # p0.4.10：複数の runner（起動の窓口からの票）が同じ main の checkout を書くので、票の書き換えとコミットを1つのロックで1つずつ行い、コミットは票のパスだけに限る
-  local lk="$Z3/launch/.main-commit.lock" i
+  local lk="$Z3/launch/.main-commit.lock" i got=0
   mkdir -p "$Z3/launch"
-  for i in $(seq 1 120); do mkdir "$lk" 2>/dev/null && break; sleep 1; done
-  [ -d "$lk" ] || { note "${1}: main のコミットのロックを取れない"; return 1; }
+  for i in $(seq 1 120); do if mkdir "$lk" 2>/dev/null; then got=1; break; fi; sleep 1; done
+  [ "$got" -eq 1 ] || { note "${1}: main のコミットのロックを取れない（他の runner が使っている）"; return 1; }   # 取れなければ書かない。他者のロックは消さない
   local t; t="$(ticket_path "$1")"
   sed -i '' -E "2,/^---\$/ s/^status: .*/status: review/" "$t"   # p0.3.1c：front matter の中だけを書き換える（本文の status: に触れない。OBS-041）
   printf '\n- %s night-runner: 作業員の実装を前検査で確認（HEAD %s）。status → review で再申請（%s）\n' "$(ts)" "${2:0:7}" "$3" >> "$t"
@@ -273,7 +275,7 @@ run_lane() { # task
   while [ "$attempt" -le "$MAX_ATTEMPTS" ]; do
     if [ -f "$Z3/STOP" ]; then lane_ev fail "$task"; note "${task}: Kernel の停止中。次の試行をしない"; return; fi   # p0.4.10：試行ごとに停止を見る
     # p0.4.10：差し戻しの上限（3回。裁判所と同じ数え方の票の §6 の行）に達していれば、次の作業員を起動しない
-    if [ "$(returns_of "$(ticket_path "$task")")" -ge 3 ]; then lane_ev fail "$task"; note "${task}: 差し戻しが上限 3 回に達した。次の作業員を起動しない（人の判断へ）"; return; fi
+    if [ "$(gate_returns_of "$(ticket_path "$task")")" -ge 3 ]; then lane_ev fail "$task"; note "${task}: 差し戻しが上限 3 回に達した。次の作業員を起動しない（人の判断へ）"; return; fi
     local rc=0; run_worker "$task" "$wt" "$attempt" "$extra" || rc=$?   # p0.3.1c：set -e のもとで非0を受け取る（以前は非0でレーンが黙って終わった。OBS-040）
     [ "$rc" -eq 2 ] && return
     [ "$rc" -eq 3 ] && { lane_ev fail "$task"; return; }
