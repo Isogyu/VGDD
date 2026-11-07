@@ -1,7 +1,7 @@
 ---
 id: T-040
 title: 票の再生で、代表の3枚だけでなく記録のある全票を選べるようにし、記録の分類の印と絞り込みを付ける
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -114,3 +114,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 1. 印は記録の当時の分類で数える。取り消した差し戻しも数に入る（再生の区画の注記「後の訂正や取り消しは含みません」と同じ扱い）
 
 - 2026-11-08T00:04:20+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-08T01:29:43+0900 release: status → merged（main=591367a91bde。夜間の判定に合格した候補 57391c199f0d を、オーナーが朝に承認して統合）
