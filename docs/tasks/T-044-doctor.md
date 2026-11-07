@@ -1,7 +1,7 @@
 ---
 id: T-044
 title: 読み取りだけの導入診断（scripts/doctor.mjs）を足す。必要なコマンド・版・設定・保護・写しの一致を、秘密を出さずに確かめる
-status: review
+status: blocked
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -85,3 +85,5 @@ held の後、立法補佐が候補で `node scripts/doctor.mjs` と `--json` �
 - W44 の報告：HEAD `a61c0c087bee953295b62f9b2b2177cda64724c7`、7e255de の上に1コミット。衝突はない。`node --test scripts/doctor.test.mjs` は 21 件合格、test は 977 件（49 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:880` の `stopsDir` で差分の外）
 - 行政の長の確認（試験は再実行していない）：`git diff 085b534 a61c0c0 -- scripts` は空。差分は A0 の2つだけ（+956）
 - **確かめていない**：前の記録と同じ（macOS 以外の OS、本物の Z3 と `.env.local`、Node 22・23）。§3 で立法補佐が held の候補で確かめる
+
+- 2026-11-08T03:34:42+0900 gate-runner: status → blocked（司法（codex）が同じ申請で通算 3 回使えなかった。差し戻しではない。オーナーが司法の環境を確かめてから再申請する）

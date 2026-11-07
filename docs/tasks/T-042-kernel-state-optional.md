@@ -1,7 +1,7 @@
 ---
 id: T-042
 title: Kernel の写しの読み取りを、予算・実行・受け入れの新しい項目（任意）にも対応させる（新旧の両方の写しを読める）
-status: review
+status: blocked
 requirements: [A0, A1, A2, A3, A4]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -93,3 +93,5 @@ held の後、立法補佐が候補で `/governance` を開き、提出記録・
 - W43 の報告：HEAD `7570579e21c2c7a200d333e85ed3aaa8646c805f`、7e255de の上に1コミット。衝突はない。test は 992 件（49 ファイル）合格、typecheck 合格、lint はエラー 0（警告 1 件は `vgdd/conformance/run.mjs:880` の `stopsDir` で差分の外）
 - 行政の長の確認（試験は再実行していない）：`git diff d39d51f 7570579 -- src/lib` は空。差分は A0 の2つだけ（+352 / -2）
 - **確かめていない**：前の記録と同じ（画面、`npm run build`、0〜99 年のほかの値、書く側の形）。§3 で立法補佐が held の候補で確かめる
+
+- 2026-11-08T03:30:17+0900 gate-runner: status → blocked（司法（codex）が同じ申請で通算 3 回使えなかった。差し戻しではない。オーナーが司法の環境を確かめてから再申請する）
