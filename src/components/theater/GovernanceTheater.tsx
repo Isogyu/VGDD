@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Replay } from "@/lib/governance-replay-schema";
 // 写しの generated_at は +09:00 の形なので、写し用の formatJst で整形する（null は「—」）
 import { formatJst as formatSnapshotJst } from "@/lib/kernel-state-schema";
+import { pendingSummaryText, stopBannerText } from "@/lib/theater-banner";
 import { loadTheaterData, type TheaterData, type TheaterSource } from "@/lib/theater-data";
 import { GUIDE_STEPS } from "@/lib/theater-guide";
 import {
@@ -153,12 +154,24 @@ export default function GovernanceTheater() {
   const stageFocus =
     guideStep !== null ? GUIDE_STEPS[guideStep].focus : currentEvent ? focusFor(currentEvent) : null;
   const lastGuideStep = GUIDE_STEPS.length - 1;
+  // 帯と件数は、判断待ちの欄（DecisionPanel）に渡すものと同じ、今表示している data から作る（T-038 A2）
+  const stopBanner = stopBannerText(data?.state ?? null);
+  const pendingSummary = pendingSummaryText(data?.state ?? null, data?.invariants ?? null);
 
   return (
     <>
     <TheaterShell
       header={
         <div className="flex flex-col gap-1">
+          {stopBanner !== null && (
+            // 見出しの区画の先頭に、横幅いっぱいの停止の帯。1行で収まる余白と文字の大きさ。狭い画面では折り返す
+            <p
+              role="status"
+              className="w-full min-w-0 break-words rounded border border-red-500 bg-red-950 px-3 py-1 text-sm font-bold text-red-100"
+            >
+              {stopBanner}
+            </p>
+          )}
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
             <div className="min-w-0">
               <h1 className="text-xl font-semibold">VGDD Governance Kernel</h1>
@@ -202,14 +215,23 @@ export default function GovernanceTheater() {
               )}
             </div>
           </div>
-          <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-200">
-            <Fact label="見ている記録" value={sourceLabel(source)} />
-            <Fact label="Kernel の写しの書き出し" value={formatSnapshotJst(data?.generated_at ?? null)} />
-            {source === "live" && <Fact label="最後の取得" value={lastFetchedAt ?? "—"} />}
-            <Fact label="公開イベント" value={sectionStatus(data?.replay)} />
-            <Fact label="Kernel の写し" value={sectionStatus(data?.state)} />
-            <Fact label="不変条件の写し" value={sectionStatus(data?.invariants)} />
-          </dl>
+          {/* 取得の状態の項目の並びと、その後の判断待ちの件数を同じ行に並べる（狭い画面では折り返す） */}
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs">
+            <dl className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-200">
+              <Fact label="見ている記録" value={sourceLabel(source)} />
+              <Fact label="Kernel の写しの書き出し" value={formatSnapshotJst(data?.generated_at ?? null)} />
+              {source === "live" && <Fact label="最後の取得" value={lastFetchedAt ?? "—"} />}
+              <Fact label="公開イベント" value={sectionStatus(data?.replay)} />
+              <Fact label="Kernel の写し" value={sectionStatus(data?.state)} />
+              <Fact label="不変条件の写し" value={sectionStatus(data?.invariants)} />
+            </dl>
+            {pendingSummary !== null && (
+              // 下の「判断待ちと次の担当」の欄へのページ内リンク
+              <a href="#decisions" className="font-semibold text-amber-200 underline hover:text-amber-100">
+                {pendingSummary}
+              </a>
+            )}
+          </div>
           {source === "live" && fetchFailed && (
             <p className="text-xs text-slate-200">
               最新の取得で一部または全部を取得できませんでした。取得できなかった項目は前の表示のままです
@@ -272,7 +294,8 @@ export default function GovernanceTheater() {
       <div className="min-w-0">
         <LawComparison />
       </div>
-      <div className="min-w-0">
+      {/* 見出しの判断待ちの件数のリンク先（T-038 A2） */}
+      <div id="decisions" className="min-w-0">
         <DecisionPanel
           state={data?.state ?? null}
           invariants={data?.invariants ?? null}
