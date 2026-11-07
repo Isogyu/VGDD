@@ -11,7 +11,7 @@ time_limit_min: 120
 security_review: false         # URL の値は決まった値の中から選ぶだけ。外へ送らない
 unattended: false
 branch: worktree-agent-a3d1c57c14eee089f
-worker: W35（積み直しは W37）
+worker: W37
 files_allowed:
   - src/lib/theater-start.ts                          # 新設：URL の値を検証する純粋関数
   - src/lib/theater-start.test.ts                     # 新設
