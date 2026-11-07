@@ -116,3 +116,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 
 1. 役割の表の文は、`.claude/agents/*.md` の定義（worker・tester は Opus と worktree、judge・constitutional-review は Sonnet でツールなし）から立法補佐が書いた。行政の長のモデルは定義がないので「指定なし」にした
 2. `(main)` の集計は agent_type のない記録のまとめで、役職を見分けていない。表では「メインのセッション」とし、注記で行政の長だけの件数ではないと書いた
+
+- 2026-11-07T22:06:01+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
