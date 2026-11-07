@@ -1,7 +1,7 @@
 ---
 id: T-033
 title: 統治シアターの下に「判例の比較」と「判断待ちと次の担当」の欄を足す（統治シアター U5・U6）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-64]   # 記録用。司法には渡さない
@@ -133,3 +133,5 @@ held の後、release の前に、立法補佐が held の候補を一時的な�
 2. 機能凍結（11/8 09:00）までに統合できなければ、この票は見送り、提出には含めない
 
 - 2026-11-07T20:13:03+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-07T20:29:21+0900 release: status → merged（main=4a1c47ea0b21。夜間の判定に合格した候補 e20f5c1b9026 を、オーナーが朝に承認して統合）
