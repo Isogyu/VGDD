@@ -67,9 +67,10 @@ function tickets() {
     const id = front(body, 'id'); if (!TASK_RE.test(id)) continue;
     const deps = front(body, 'depends_on').replace(/[[\]\s]/g, '').split(',').filter((d) => TASK_RE.test(d));
     // p0.4.13：受け入れの前に出す確かめ方（§3）と、§6 の「確かめていない」の行（票は公開のリポジトリの文。長さを限る）
-    const sec3 = ((body.match(/^## 3\.[^\n]*\n([\s\S]*?)(?=^## \d|(?![\s\S]))/m) || [])[1] || '').trim().slice(0, 800);
+    const sec3all = ((body.match(/^## 3\.[^\n]*\n([\s\S]*?)(?=^## \d|(?![\s\S]))/m) || [])[1] || '').trim();
+    const sec3 = sec3all.length > 800 ? `${sec3all.slice(0, 800)}…（以下省略。票の §3 を見る）` : sec3all;
     const sec6 = ((body.match(/^## 6\.[^\n]*\n([\s\S]*)$/m) || [])[1] || '');
-    const unverified = sec6.split('\n').filter((l) => /確かめていない|未確認|確かめきれていない/.test(l)).slice(-3).map((l) => l.replace(/^[-\s]+/, '').slice(0, 300));
+    const unverified = sec6.split('\n').filter((l) => /確かめていない|未確認|確かめきれていない/.test(l)).slice(-3).map((l) => { const t = l.replace(/^[-\s]+/, ''); return t.length > 300 ? `${t.slice(0, 300)}…（省略）` : t; });
     out.push({ id, rel, title: front(body, 'title').slice(0, 80), status: front(body, 'status'), deps, sec3, unverified });
   }
   return out.sort((a, b) => a.id.localeCompare(b.id));

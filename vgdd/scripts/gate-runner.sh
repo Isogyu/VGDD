@@ -442,6 +442,14 @@ write_kernel_state() {
 # p0.4.13（OBS-064 ③）：裁判所は1つだけ動かす。配置の後に古い裁判所が残り、2つが同じ申請を処理して held と記録を二重に書いた。
 #   Z3 の .gate-runner.lock に自分の pid を書く。持ち主が生きていて gate-runner.sh として動いていれば起動しない（終了 75）。
 #   持ち主がいなければ（落ちた）引き継ぐ。終わるとき、自分のロックだけを外す
+# Codex の監査（major）：錠を書かない古い版の裁判所が残っていても見抜けるよう、同じスクリプトのファイル（絶対パス）を動かしている
+#   ほかのプロセスがあれば起動しない（自分と、自分の子のサブシェルは除く）
+SELF_PATH="$(cd "$(dirname "$0")" && pwd -P)/$(basename "$0")"
+for gp in $(pgrep -f -- "$SELF_PATH" 2>/dev/null || true); do
+  [ "$gp" = "$$" ] && continue
+  [ "$(ps -o ppid= -p "$gp" 2>/dev/null | tr -d ' ')" = "$$" ] && continue
+  echo "同じ gate-runner（pid ${gp}）が動いている。二重に起動しない（配置の前に古い裁判所を止める）" >&2; exit 75
+done
 GLOCK="$Z3/.gate-runner.lock"
 if ! mkdir "$GLOCK" 2>/dev/null; then
   gop="$(cat "$GLOCK/pid" 2>/dev/null || true)"

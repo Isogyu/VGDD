@@ -448,6 +448,13 @@ function groupG() {
     const fx2l = gateFixture('gl2');
     fs.mkdirSync(path.join(fx2l.z3, '.gate-runner.lock'), { recursive: true }); write(path.join(fx2l.z3, '.gate-runner.lock/pid'), '999996\n');
     const g2l = runGate(fx2l, 'APPROVED');
+    // G-L3（Codex の監査 major）：錠を書かない古い版の裁判所（同じスクリプトのファイルを動かすプロセス）が残っていれば、錠がなくても起動しない
+    const fx3l = gateFixture('gl3');
+    const selfPath = fs.realpathSync(path.join(IMPL.bin, 'gate-runner.sh'));
+    const old = sh('bash', ['-c', `(exec -a "bash ${selfPath} --hold" sleep 30) >/dev/null 2>&1 & echo $!`]).stdout.trim();
+    const g3l = runGate(fx3l, 'APPROVED');
+    try { process.kill(Number(old)); } catch { /* 終わっている */ }
+    record('G', 'G-L3', '錠を書かない古い版の裁判所（同じスクリプトを動かすプロセス）が残っていれば、錠がなくても起動しない（終了 75）', g3l.code === 75 && !g3l.judged && !g3l.inMain, `exit ${g3l.code}`);
     record('G', 'G-L2', '持ち主のいない裁判所のロックは引き継いで処理し（記録を残す）、終わるときに外す', g2l.inMain && g2l.events.some((e) => e.type === 'gate_lock_taken_over') && !fs.existsSync(path.join(fx2l.z3, '.gate-runner.lock')), `inMain=${g2l.inMain} lock=${fs.existsSync(path.join(fx2l.z3, '.gate-runner.lock'))}`); }
   g = runGate(gateFixture('g4', { afterApprove: (fx, id) => commitTicket(fx, id, { section2: '- A1. `src/lib/a.ts` の `v` が 2 か 3 になる' }) }), 'APPROVED');
   record('G', 'G4', '承認の後に main で受け入れ条件を変えると、承認が外れて blocked', !g.inMain && !g.judged && g.status === 'blocked' && g.events.some((e) => /承認されていない/.test(e.reason || '')), `status=${g.status} judged=${g.judged}`);
