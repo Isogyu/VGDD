@@ -1461,6 +1461,8 @@ let f = formsOf(html); const ap = f.find((x) => x.action === 'approve' && x.task
 out.approveForm = !!ap;
 out.noOrigin = (await req('POST', '/action', { headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(ap).toString() })).status;
 out.badOrigin = (await post(ap, { origin: 'http://evil.example' })).status;
+out.nullOrigin = (await post(ap, { origin: 'null' })).status;
+out.refPolicy = (await req('GET', '/', { headers: { Cookie: cookie } })).headers['referrer-policy'];
 out.badCsrf = (await post(ap, { csrf: '0'.repeat(64) })).status;
 out.callsAfterRejects = fs.existsSync(z + '/calls.log') ? fs.readFileSync(z + '/calls.log', 'utf8') : '';
 out.stale = msg(await post({ ...ap, target: 'sha256:' + '0'.repeat(64) }));
@@ -1522,6 +1524,10 @@ p.kill(); console.log(JSON.stringify(out));
   record('OC', 'OC7', '受け入れ：統合のコミットに結び付けて Z3 に記録し、受け入れ済みの票には受け入れの操作を出さない',
     o.acceptTarget === mergeSha && /成功/.test(o.accept1) && o.acceptance.includes(`"merge":"${mergeSha}"`) && o.acceptance.includes('"task":"T-991"') && o.acceptedGone, JSON.stringify({ t: o.acceptTarget, a: o.accept1 }));
   record('OC', 'OC8', '受け付けた後に結果のない操作の ID（途中で窓口が終わった）は、結果が不明として実行し直さない', /結果が不明/.test(o.unknown) && o.callsStop === 2, JSON.stringify({ u: o.unknown, stops: o.callsStop }));
+  // OC13（p0.4.12a）：ブラウザは Referrer-Policy が no-referrer の画面からのフォームの送信で Origin を null にする（Fetch の仕様）。窓口の画面は
+  //   same-origin を返し、本物のブラウザの送信に同じ Origin が付くようにする。Origin が null の送信は拒む
+  record('OC', 'OC13', '画面の Referrer-Policy は same-origin（no-referrer ではブラウザが Origin を null にして正しい操作を拒んでしまう）。Origin が null の送信は拒む',
+    o.refPolicy === 'same-origin' && o.nullOrigin === 403, JSON.stringify({ rp: o.refPolicy, n: o.nullOrigin }));
   record('OC', 'OC12', 'ロック：持ち主の動いていないロックは取り残しとして出し、消さずに実行しない。ほかの操作のロックの間も停止は実行できる。再開は点検だけで --accept-main を渡さない',
     /ロックが残っている/.test(o.staleLock) && /動いていない/.test(o.staleLock) && /成功/.test(o.stopWhileBusy) && o.stoppedWhileBusy && o.noAcceptMain && /成功/.test(o.resume) && !/accept-main/.test(o.resumeArgs), JSON.stringify({ l: o.staleLock, s: o.stopWhileBusy, r: o.resumeArgs }));
   record('OC', 'OC9', 'スクリプトが失敗したら失敗と出し、成功にしない（停止の失敗で STOP はなく、結果の記録は ok: false）',
