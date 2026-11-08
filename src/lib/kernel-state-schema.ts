@@ -18,6 +18,74 @@ const verdictEntrySchema = z
   .object({ judge: Verdict, codex: Verdict, security: Verdict, at: Iso })
   .strict();
 
+// ---------- T-042：任意の3項目（budget・runs・acceptance）だけに使う検証 ----------
+// 今の Count（上限 100 万）と Iso は流用しない。文字列は period_id・until・票の ID だけ。
+
+/** 新しい3項目の「数」：0 以上 Number.MAX_SAFE_INTEGER 以下の整数 */
+const SafeCount = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER);
+const SafeLimit = SafeCount.nullable();
+
+/** タイムゾーン付きの日時（秒まで必須、小数秒は任意、Z か ±HH:MM） */
+const OFFSET_DATETIME = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(?:Z|([+-])(\d{2}):(\d{2}))$/;
+
+/** 暦の上で有効な日時か（2月30日・25時・オフセット +24:00 などを拒む） */
+function isValidOffsetDateTime(s: string): boolean {
+  const m = OFFSET_DATETIME.exec(s);
+  if (m === null) return false;
+  const [year, month, day, hour, minute, second] = m.slice(1, 7).map(Number);
+  if (month < 1 || month > 12) return false;
+  // 0〜99 年を 1900 年代として扱わないよう、setUTCFullYear で年を正しく置く
+  const last = new Date(0);
+  last.setUTCFullYear(year, month, 0);
+  const daysInMonth = last.getUTCDate();
+  if (day < 1 || day > daysInMonth) return false;
+  if (hour > 23 || minute > 59 || second > 59) return false;
+  if (m[7] !== undefined) {
+    if (Number(m[8]) > 23 || Number(m[9]) > 59) return false;
+  }
+  return !Number.isNaN(Date.parse(s));
+}
+
+const OffsetDateTime = z.string().max(40).refine(isValidOffsetDateTime);
+
+const usedLimitSchema = z.object({ used: SafeCount, limit: SafeLimit }).strict();
+
+const budgetSchema = z
+  .object({
+    period_id: z.string().min(1).max(40),
+    until: OffsetDateTime.nullable(),
+    tokens: z
+      .object({ settled: SafeCount, reserved: SafeCount, unknown_runs: SafeCount, limit: SafeLimit })
+      .strict(),
+    judge_calls: usedLimitSchema,
+    attempts: usedLimitSchema,
+    workers: z.object({ active: SafeCount, limit: SafeLimit }).strict(),
+  })
+  .strict();
+
+const runsSchema = z
+  .object({
+    requested: SafeCount,
+    reserved: SafeCount,
+    started: SafeCount,
+    exited: SafeCount,
+    settled: SafeCount,
+    cancelled: SafeCount,
+    liveness_unknown: SafeCount,
+    usage_unknown: SafeCount,
+  })
+  .strict();
+
+const acceptanceSchema = z
+  .object({
+    accepted_count: SafeCount,
+    pending_count: SafeCount,
+    accepted: z.array(TaskId).max(500),
+    pending: z.array(TaskId).max(500),
+  })
+  .strict()
+  .refine((a) => a.accepted_count >= a.accepted.length && a.pending_count >= a.pending.length);
+
 // verdicts.by_task は (2) で別に扱うので、ここには持たない
 const kernelStateSchema = z
   .object({
@@ -62,14 +130,22 @@ const kernelStateSchema = z
       .strict()
       .refine((c) => c.passed <= c.total)
       .nullable(),
+    // T-042：任意。書かれていなければ undefined（鍵も作らない）
+    budget: budgetSchema.optional(),
+    runs: runsSchema.optional(),
+    acceptance: acceptanceSchema.optional(),
   })
   .strict();
 
 export type VerdictValue = z.infer<typeof Verdict>;
 export type VerdictEntry = z.infer<typeof verdictEntrySchema>;
 type KernelStateBase = z.infer<typeof kernelStateSchema>;
+/** T-042：任意の3項目の型（KernelState・KernelStateWire には任意の項目として入る） */
+export type KernelBudget = z.infer<typeof budgetSchema>;
+export type KernelRuns = z.infer<typeof runsSchema>;
+export type KernelAcceptance = z.infer<typeof acceptanceSchema>;
 
-/** 検証を通った Kernel の状態。verdicts.by_task だけ Map（鍵は T-NNN の票の ID） */
+/** 検証を通った Kernel の状態。verdicts.by_task だけ Map（鍵は T-NNN の票の ID）。budget・runs・acceptance は任意 */
 export type KernelState = Omit<KernelStateBase, "verdicts"> & {
   verdicts: { count: number; by_task: ReadonlyMap<string, VerdictEntry> };
 };
