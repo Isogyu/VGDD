@@ -539,10 +539,11 @@
       "precedents": [
         "OC17",
         "OC18",
-        "OC19"
+        "OC19",
+        "G-D1"
       ],
-      "tests_total": 526,
-      "prev_failed": 3,
+      "tests_total": 527,
+      "prev_failed": 4,
       "obs": []
     }
   ]

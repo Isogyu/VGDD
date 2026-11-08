@@ -455,6 +455,10 @@ function groupG() {
     const g3l = runGate(fx3l, 'APPROVED');
     try { process.kill(Number(old)); } catch { /* 終わっている */ }
     record('G', 'G-L3', '錠を書かない古い版の裁判所（同じスクリプトを動かすプロセス）が残っていれば、錠がなくても起動しない（終了 75）', g3l.code === 75 && !g3l.judged && !g3l.inMain, `exit ${g3l.code}`);
+    const fxd = gateFixture('gd1');
+    const gd = runGate(fxd, 'APPROVED', [], { STUB_CODEX_VERDICT: 'CHANGES_REQUIRED' });
+    const de = gd.events.find((e) => e.type === 'disagreement');
+    record('G', 'G-D1', '判定が分かれたとき、裁判所は不一致の記録に申請の完全な SHA と候補の SHA を残す（窓口が裁定の対象を推し量らない）', !!de && de.request_full === fxd.head && /^[0-9a-f]{12}$/.test(de.candidate || ''), JSON.stringify(de || null).slice(0, 200));
     record('G', 'G-L2', '持ち主のいない裁判所のロックは引き継いで処理し（記録を残す）、終わるときに外す', g2l.inMain && g2l.events.some((e) => e.type === 'gate_lock_taken_over') && !fs.existsSync(path.join(fx2l.z3, '.gate-runner.lock')), `inMain=${g2l.inMain} lock=${fs.existsSync(path.join(fx2l.z3, '.gate-runner.lock'))}`); }
   g = runGate(gateFixture('g4', { afterApprove: (fx, id) => commitTicket(fx, id, { section2: '- A1. `src/lib/a.ts` の `v` が 2 か 3 になる' }) }), 'APPROVED');
   record('G', 'G4', '承認の後に main で受け入れ条件を変えると、承認が外れて blocked', !g.inMain && !g.judged && g.status === 'blocked' && g.events.some((e) => /承認されていない/.test(e.reason || '')), `status=${g.status} judged=${g.judged}`);
@@ -1436,6 +1440,7 @@ function groupOC() {
   write(path.join(repo, 'docs/tasks/T-991-done.md'), tk('T-991', 'merged').replace('## 1. 目的', '## 1. 目的') + '\n## 3. 開発用テスト\n\n画面 /governance を開き、表の割合を確かめる（試験の確かめ方）\n\n## 6. 記録\n\n- **確かめていない**：375px の幅（試験の未確認）\n');
   write(path.join(repo, 'docs/tasks/T-993-returned.md'), tk('T-993', 'in_progress'));
   write(path.join(repo, 'docs/tasks/T-995-split.md'), tk('T-995', 'blocked'));
+  write(path.join(repo, 'docs/tasks/T-997-oldsplit.md'), tk('T-997', 'blocked'));
   write(path.join(repo, 'docs/tasks/T-992-held.md'), tk('T-992', 'review'));
   write(path.join(repo, 'merge-requests/launch/.gitkeep'), '');
   sh('git', ['-C', repo, 'init', '-q', '-b', 'main']);
@@ -1458,8 +1463,9 @@ function groupOC() {
   write(path.join(z, 'approved-T-992'), '');   // held の票は承認済み
   write(path.join(z, 'approved-T-993'), '');
   write(path.join(z, 'approved-T-995'), '');
+  write(path.join(z, 'approved-T-997'), '');
   { const reqSha = sh('git', ['-C', repo, 'rev-parse', 'HEAD']).stdout.trim(); const c12 = reqSha.slice(0, 12);
-    fs.appendFileSync(path.join(z, 'evidence/gate_events.jsonl'), [{ ts: '2026-11-08T10:41:00+0900', type: 'candidate', task: 'T-995', request: c12, main: 'x', candidate: c12 }, { ts: '2026-11-08T10:42:00+0900', type: 'disagreement', task: 'T-995', judge: 'APPROVED', codex: 'CHANGES_REQUIRED', judge_major: 0, codex_major: 1 }].map((x) => JSON.stringify(x)).join('\n') + '\n');
+    fs.appendFileSync(path.join(z, 'evidence/gate_events.jsonl'), [{ ts: '2026-11-08T10:30:00+0900', type: 'candidate', task: 'T-995', request: 'a'.repeat(12), main: 'x', candidate: 'a'.repeat(12) }, { ts: '2026-11-08T10:42:00+0900', type: 'disagreement', task: 'T-995', judge: 'APPROVED', codex: 'CHANGES_REQUIRED', judge_major: 0, codex_major: 1, request_full: reqSha, candidate: c12 }, { ts: '2026-11-08T10:43:00+0900', type: 'disagreement', task: 'T-997', judge: 'APPROVED', codex: 'CHANGES_REQUIRED', judge_major: 0, codex_major: 1 }].map((x) => JSON.stringify(x)).join('\n') + '\n');
     fs.mkdirSync(path.join(z, 'evidence/verdicts'), { recursive: true });
     write(path.join(z, `evidence/verdicts/T-995-${c12}.json`), JSON.stringify({ final_verdict: 'APPROVED', judge_parse_ok: true, reason_text: '理由の本文（試験）' }));
     write(path.join(z, `evidence/verdicts/T-995-${c12}-codex-judge.json`), JSON.stringify({ final_verdict: 'CHANGES_REQUIRED', parse_ok: true, codex: { findings: [{ reason: '指摘の理由の本文（試験）' }] } })); }
@@ -1533,7 +1539,8 @@ out.overrunDisabled = !!st3 && st3.disabled && /予算の超過あり/.test(html
 { const tp = (await req('GET', '/t/T-995', { headers: { Cookie: cookie } })).body;
   out.tPage = /判断待ち（重大な不一致）/.test(tp) && /まだ main に統合されていない/.test(tp) && /Claude judge/.test(tp) && /<b class="ok">合格<\\/b>/.test(tp) && /<b class="ng">差し戻し<\\/b>/.test(tp) && !/理由の本文（試験）/.test(tp) && !tp.includes(TOKEN) && !/\\/Users\\/|vgdd-conf-oc/.test(tp);
   const rf = formsOf(tp).find((x) => x.action === 'rule');
-  out.ruleTarget = rf?.target;
+  out.ruleTarget = rf?.target; out.expectSha = (await new Promise((res) => res(spawnSync('git', ['-C', repo, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim())));
+  const t97 = (await req('GET', '/t/T-997', { headers: { Cookie: cookie } })).body; const r97 = formsOf(t97).find((x) => x.action === 'rule'); out.oldFormat = !!r97 && r97.disabled && /完全な SHA がない/.test(t97);
   const rr = await post({ ...rf, back: '/t/T-995' });
   out.ruleMsg = msg(rr); out.ruleBack = (rr.headers.location || '').split('?')[0];
   out.ruleCall = (fs.readFileSync(z + '/calls.log', 'utf8').match(/rule.sh T-995 [0-9a-f]{40} merge /g) || []).length;
@@ -1590,8 +1597,8 @@ p.kill(); console.log(JSON.stringify(out));
   record('OC', 'OC16', '予算の超過があれば、開始のボタンを理由（予算の超過あり）つきで押せなくする', o.overrunDisabled, String(o.overrunDisabled));
   record('OC', 'OC17', '票の画面（/t/T-NNN）：重大な不一致を「判断待ち（重大な不一致）」と出し、未統合の帯と judge・Codex の結論を同じ並びで出す。理由の本文・合言葉・パスは出さない',
     o.tPage && o.inbox === 200 && o.env === 200 && o.noTask === 404, JSON.stringify({ t: o.tPage, i: o.inbox, e: o.env, n: o.noTask }));
-  record('OC', 'OC18', '裁定：重大な不一致の申請の完全な SHA を rule.sh に渡して記録し（裁定だけでは統合しない）、その後は「裁定済み（再申請待ち）」と出して裁定のボタンを出さない。結果は元の票の画面に戻る',
-    /^[0-9a-f]{40}$/.test(o.ruleTarget || '') && /成功/.test(o.ruleMsg) && /裁定だけでは統合しない|統合は統合の操作で/.test(o.ruleMsg) && o.ruleCall === 1 && o.ruledStage && o.ruleBack === '/t/T-995', JSON.stringify({ t: o.ruleTarget, m: o.ruleMsg, n: o.ruleCall, s: o.ruledStage, b: o.ruleBack }));
+  record('OC', 'OC18', '裁定：裁判所が不一致の記録に残した申請の完全な SHA（候補の記録がない経路・古い候補の記録があっても、その SHA）だけを rule.sh に渡して記録し（完全な SHA のない古い記録では押せない）（裁定だけでは統合しない）、その後は「裁定済み（再申請待ち）」と出して裁定のボタンを出さない。結果は元の票の画面に戻る',
+    o.ruleTarget === o.expectSha && o.oldFormat && /成功/.test(o.ruleMsg) && /裁定だけでは統合しない|統合は統合の操作で/.test(o.ruleMsg) && o.ruleCall === 1 && o.ruledStage && o.ruleBack === '/t/T-995', JSON.stringify({ t: o.ruleTarget, m: o.ruleMsg, n: o.ruleCall, s: o.ruledStage, b: o.ruleBack }));
   record('OC', 'OC19', '操作の後の戻り先は窓口の中の決まった場所だけ（外のサイトの URL は / に置き換える）', o.evilBack === '/', o.evilBack);
   record('OC', 'OC12', 'ロック：持ち主の動いていないロックは取り残しとして出し、消さずに実行しない。ほかの操作のロックの間も停止は実行できる。再開は点検だけで --accept-main を渡さない',
     /ロックが残っている/.test(o.staleLock) && /動いていない/.test(o.staleLock) && /成功/.test(o.stopWhileBusy) && o.stoppedWhileBusy && o.noAcceptMain && /成功/.test(o.resume) && !/accept-main/.test(o.resumeArgs), JSON.stringify({ l: o.staleLock, s: o.stopWhileBusy, r: o.resumeArgs }));

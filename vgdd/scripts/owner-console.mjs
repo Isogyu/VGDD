@@ -148,12 +148,12 @@ function verdictOf(file, flag) {
   try { const d = JSON.parse(fs.readFileSync(file, 'utf8')); if (d[flag] !== true) return '使えなかった'; return d.final_verdict === 'APPROVED' ? '合格' : d.final_verdict === 'CHANGES_REQUIRED' ? '差し戻し' : '不明'; } catch { return null; }
 }
 function verdictsFor(evs) {
-  const c = [...evs].reverse().find((e) => e.type === 'candidate' || e.type === 'held');
-  if (!c || !/^[0-9a-f]{12}/.test(c.candidate || '')) return null;
+  const c = [...evs].reverse().find((e) => (e.type === 'candidate' || e.type === 'held' || e.type === 'disagreement') && /^[0-9a-f]{12}/.test(e.candidate || ''));
+  if (!c) return null;
   const c12 = c.candidate.slice(0, 12); const V = path.join(EV, 'verdicts');
   return { judge: verdictOf(path.join(V, `${c.task}-${c12}.json`), 'judge_parse_ok'), codex: verdictOf(path.join(V, `${c.task}-${c12}-codex-judge.json`), 'parse_ok'), security: verdictOf(path.join(V, `${c.task}-${c12}-codex-security.json`), 'parse_ok'), request: c.request };
 }
-function fullSha(prefix) { if (!/^[0-9a-f]{7,40}$/.test(prefix || '')) return null; const r = git('rev-parse', '--verify', '--quiet', `${prefix}^{commit}`); const v = (r.stdout || '').trim(); return SHA_RE.test(v) ? v : null; }
+// 裁定の対象は、裁判所が不一致の記録に残した申請の完全な SHA だけを使う（短い SHA から推し量らない。参照名と取り違えない。Codex の監査 major）
 
 // 票ごとの工程・次の担当・操作できるか（できなければ理由）
 function view() {
@@ -187,13 +187,14 @@ function view() {
       r.note = '判定ではない。審査の環境（予算・Codex・認証）を確かめ、行政の長が申請し直す';
     } else if (t.status === 'blocked' && (lastJ?.type === 'disagreement' || (lastJ?.type === 'rejected' && /分かれた/.test(lastJ.reason || '')))) {
       // p0.4.14：重大な不一致。裁定は申請の SHA に結び付き、裁定だけでは統合しない（再申請 → 審査の記録の照合 → 統合待ち → 統合の操作）
-      const req = fullSha(r.verdicts?.request);
+      const dis = [...tev].reverse().find((e) => e.type === 'disagreement');
+      const req = dis && SHA_RE.test(dis.request_full || '') ? dis.request_full : null;
       const ruled = req && jsonl(path.join(EV, 'rulings.jsonl')).some((x) => x.task === t.id && x.sha === req && x.decision === 'merge');
       if (ruled) { r.stage = '裁定済み（行政の長の再申請待ち）'; r.next = '行政の長'; r.note = '同じ申請を出し直すと、裁判所が審査の記録を照合して統合待ちにする。裁定だけでは統合しない'; }
       else {
       r.stage = '判断待ち（重大な不一致）'; r.next = 'オーナー';
       r.decision = true;
-      r.actions.push({ action: 'rule', label: `${t.id} は統合してよいと裁定する（申請 ${req ? req.slice(0, 7) : '—'}。裁定だけでは統合しない）`, target: req, why: req ? null : '申請の SHA を確かめられない' });
+      r.actions.push({ action: 'rule', label: `${t.id} は統合してよいと裁定する（申請 ${req ? req.slice(0, 7) : '—'}。裁定だけでは統合しない）`, target: req, why: req ? null : '裁判所の記録に申請の完全な SHA がない（p0.4.14 より前の記録）。端末で rule.sh を使う' });
       }
     } else if (t.status === 'blocked') { r.stage = '判断待ち（止まった票）'; r.next = 'オーナー'; }
     else if (launchBusy(st)) { r.stage = '実装中（作業員）'; r.next = 'AI'; }

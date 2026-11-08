@@ -340,7 +340,8 @@ process_request() {
     local jsev csev
     jsev="$(jq -r '[.judge.findings[]? | select(.severity=="critical" or .severity=="major")] | length' "$jfile" 2>/dev/null || echo 0)"
     csev="$(jq -r '[.codex.findings[]? | select(.severity=="critical" or .severity=="major")] | length' "$cfile" 2>/dev/null || echo 0)"
-    log_event "disagreement" "$task" "\"judge\":\"$jv\",\"codex\":\"$cv\",\"judge_major\":$jsev,\"codex_major\":$csev"
+    # p0.4.14：オーナーの操作の窓口が裁定の対象を推し量らずに固定できるよう、申請の完全な SHA と候補の SHA（判定のファイルの名前）を残す（Codex の監査 major）
+    log_event "disagreement" "$task" "\"judge\":\"$jv\",\"codex\":\"$cv\",\"judge_major\":$jsev,\"codex_major\":$csev,\"request_full\":\"$actual\",\"candidate\":\"${candidate:0:12}\""
     if [ "$jsev" -gt 0 ] || [ "$csev" -gt 0 ]; then
       # p0.3.1：オーナーの裁定（Z3 の rulings.jsonl。行政は書けない）が、この票のこの申請の SHA について「統合」なら、理由を記録して進める（D-59①）。
       #   裁定は申請の SHA に結び付く（後から差し替えた申請には効かない）。監査の不合格・セキュリティ審査の不合格・保護パスには効かない
