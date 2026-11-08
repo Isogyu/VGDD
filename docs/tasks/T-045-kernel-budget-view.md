@@ -1,7 +1,7 @@
 ---
 id: T-045
 title: 統治の画面の Kernel の区画に、予算の使用・実行の状態・受け入れの件数を出す（写しに項目がなければ「写しにない」と出す）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -82,3 +82,5 @@ held の後、立法補佐が候補で `/governance` を開き、(1) 今の写�
 ## 6. 記録
 
 - 09:4x 立法補佐が起草。写しの書く側（`kernel-state.mjs` が台帳から3項目を出す）は法律の改正 L3 で、この票の範囲の外。L3 が配置されるまで、本番の画面は「写しにない」を出す
+
+- 2026-11-08T11:01:27+0900 night-runner: 作業員の実装を前検査で確認（HEAD be05511）。status → review で再申請（試行 1）
