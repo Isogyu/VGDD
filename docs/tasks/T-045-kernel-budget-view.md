@@ -1,7 +1,7 @@
 ---
 id: T-045
 title: 統治の画面の Kernel の区画に、予算の使用・実行の状態・受け入れの件数を出す（写しに項目がなければ「写しにない」と出す）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -88,3 +88,5 @@ held の後、立法補佐が候補で `/governance` を開き、(1) 今の写�
 - 2026-11-08T11:03:47+0900 gate-runner: judge と Codex が minor の指摘で分かれた。厳しい側の指摘を残して統合（judge=APPROVED, codex=CHANGES_REQUIRED）
 
 - 2026-11-08T11:03:48+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=CHANGES_REQUIRED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-08T12:23:56+0900 release: status → merged（main=94491d992195。夜間の判定に合格した候補 071d136126e9 を、オーナーが朝に承認して統合）
