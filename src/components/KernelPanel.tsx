@@ -12,6 +12,7 @@ import {
   type KernelState,
   type VerdictValue,
 } from "@/lib/kernel-state-schema";
+import KernelBudget from "@/components/KernelBudget";
 
 type LoadState =
   | { kind: "loading" }
@@ -292,6 +293,7 @@ export default function KernelPanel() {
         )}
       </div>
 
+      <KernelBudget state={state} />
       {/* 8. 注意 */}
       <p className="text-xs text-zinc-500">生のログは公開していない。ここにあるのは裁判所が書き出した件数と結論だけ</p>
     </section>
