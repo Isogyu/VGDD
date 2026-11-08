@@ -1,7 +1,7 @@
 ---
 id: T-044
 title: 読み取りだけの導入診断（scripts/doctor.mjs）を足す。必要なコマンド・版・設定・保護・写しの一致を、秘密を出さずに確かめる
-status: in_progress
+status: review
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -112,3 +112,5 @@ held の後、立法補佐が候補で `node scripts/doctor.mjs` と `--json` �
   - **直すこと1（A1 の新しい文）**：`--repo` そのものを最初に1回 lstat で確かめる。記号リンク・フォルダでないもの・存在しない・読めないのどれかなら、その下を読まずに、その下を読む項目（4 `.claude/settings.json`・5 `vgdd/settings.v2.json`・7 写しの一致・8 `.env.local`）をすべて `fail`、文は固定の「リポジトリの場所を読めない」にする。7 は `--z3` がフォルダのときだけこの fail にし、`--z3` がフォルダでなければ今のまま `skip`。7 はファイルごとに並べず、1項目にする。今は8の `.env.local` が、存在しない `--repo` で ok「ない」になり、記号リンクの `--repo` で 7 が warn になっているので、どちらもこの fail に変える。1〜3 と 6 は変えない
   - **直すこと2（A1-7）**：`--repo` がフォルダのとき、原本が「ない」場合は、途中のフォルダ（`vgdd`・`vgdd/scripts`・`vgdd/hooks`）がない場合も含めて、`fail` でなく `warn`「配置済みの写しが原本と違う：<許可リストのファイル名>」にする。c032936 の `copyCompareItem` は「ない」を warn にしているように読めるが、`checkParents` が `unreadable` を返す場合（途中が `ENOTDIR` 以外の失敗）と合わせて、原本と写しの両側で、ない→warn・読めない（権限）→fail になっているかを確かめ、合わない所を直す。試験も足す（`vgdd/scripts/` ごとない合成の `--repo` と、1ファイルだけない場合に warn で、fail がないこと）
   - **試験**：上の2点を試験に足す（`--repo` が存在しない・記号リンク・通常のファイルの3通りで、4・5・7・8 が「リポジトリの場所を読めない」の fail になり、7 が `--z3` なしなら skip、終了コードが 1、出力に一時フォルダのパスが出ないこと）。`npm run -s test`・`typecheck`・`lint` を通す。`node --test scripts/doctor.test.mjs` も動かして報告に書く（判定の条件ではない）
+
+- 2026-11-08T13:36:31+0900 night-runner: 作業員の実装を前検査で確認（HEAD 8d2c6b4）。status → review で再申請（試行 1）
