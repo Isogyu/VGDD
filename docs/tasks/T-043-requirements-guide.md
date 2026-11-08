@@ -1,7 +1,7 @@
 ---
 id: T-043
 title: 初心者向けの要件確認（/requirements）を足す。固定の質問・回答・未解決の事項・受け入れ条件の候補を LLM から独立したデータで持ち、票の下書きの文を出す
-status: blocked
+status: review
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -119,3 +119,4 @@ held の後、立法補佐が候補で確かめる（build は作業員の sandb
 - **確かめていない**：ブラウザでの実際の操作（3つの場面で表示が戻るか、React が effect を動かし直して abort するか、開発時の StrictMode での見え方）。3つの場面が `open()` を通ることは、コードの構造で保っているだけで、試験していない。ほかに、前の記録と同じもの（実サーバーでの API と `GET /api/governance/kernel`、375px、`npm run build`）。§3 で立法補佐が held の候補で確かめる
 
 - 2026-11-08T03:37:10+0900 gate-runner: status → blocked（司法（codex）が同じ申請で通算 3 回使えなかった。差し戻しではない。オーナーが司法の環境を確かめてから再申請する）
+- 09:2x blocked の原因は、Codex の司法が書き終えた判定を予算の窓口が中断と取り違えた不具合（OBS-062。p0.4.10a で直り、09:12 に配置）で、判定ではない（立法補佐の案内による。そのときの中身は judge・Codex とも APPROVED だったが、採用はされていない）。コードは変えず、HEAD `7b8b493` のまま申請し直す。承認は 23:50:01 のまま（09:19:39 の Kernel の写しの `approvals[].current` で確かめた）

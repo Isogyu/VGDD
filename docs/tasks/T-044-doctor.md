@@ -1,7 +1,7 @@
 ---
 id: T-044
 title: 読み取りだけの導入診断（scripts/doctor.mjs）を足す。必要なコマンド・版・設定・保護・写しの一致を、秘密を出さずに確かめる
-status: blocked
+status: in_progress
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -87,3 +87,13 @@ held の後、立法補佐が候補で `node scripts/doctor.mjs` と `--json` �
 - **確かめていない**：前の記録と同じ（macOS 以外の OS、本物の Z3 と `.env.local`、Node 22・23）。§3 で立法補佐が held の候補で確かめる
 
 - 2026-11-08T03:34:42+0900 gate-runner: status → blocked（司法（codex）が同じ申請で通算 3 回使えなかった。差し戻しではない。オーナーが司法の環境を確かめてから再申請する）
+- 09:2x blocked の原因は、Codex の司法が書き終えた判定を予算の窓口が中断と取り違えた不具合（OBS-062。p0.4.10a で直り、09:12 に配置）で、判定ではない。ただし、そのときの判定の中身（立法補佐が Z3 で読んだ。採用はされていない）は judge APPROVED・Codex CHANGES_REQUIRED（major 1・minor 1）で、このまま申請すると major の不一致で止まる。§2 は変えずに直してから申請する。承認は 01:33:53 のまま（09:19:39 の Kernel の写しの `approvals[].current` で確かめた）。status を in_progress に戻し、起動の窓口（`merge-requests/launch/T-044.json`）で作業員を起動する
+- **次の作業員への引き継ぎ（行政の長）**：
+  - **出発点**：前の実装はコミット `a61c0c087bee953295b62f9b2b2177cda64724c7`（2ファイル、+956。test・typecheck・lint・`node --test scripts/doctor.test.mjs` 21 件は合格していた）。`git show a61c0c0:scripts/doctor.mjs` と `git show a61c0c0:scripts/doctor.test.mjs` で読み、Write で同じ内容を置いてから、下の2点を直してよい。ほかの判断（§6 の上の「補った解釈」(1)〜(4)）は変えない
+  - **直すこと1（major、A1）**：`readLimited` の lstat と `O_NOFOLLOW` は、末尾のファイルしか守らない。親の要素（たとえば `--repo` の下の `.claude`・`vgdd`・`vgdd/scripts`・`vgdd/hooks`、`--z3` の下の `bin`・`hooks`・`evidence`）が記号リンクだと、その先の中身を通常のファイルとして読んでしまう。直し方は次のとおり。
+    - 読む・比べる・有無を見るファイルごとに、`--repo` か `--z3` から末尾のファイルまでの間の各要素を lstat で確かめる。
+    - 要素が記号リンクか、フォルダでなければ、中身を読まずに固定の結果にする。項目の結果は、末尾のファイルが記号リンクのときと同じにする。
+    - `--repo`・`--z3` そのものの扱い（`--z3` がフォルダでなければ warn で、7 は skip）は今のまま。その上の要素（`/var` → `/private/var` など、OS の記号リンク）は確かめない。
+    - 試験も足す。合成の `--repo` で `.claude` と `vgdd/scripts` を記号リンクにした場合、合成の `--z3` で `bin`・`hooks` を記号リンクにした場合に、リンクの先の中身を読まないこと（リンクの先に置いた合成の秘密の文字列と、正しい中身のどちらでも、結果が「一致」や ok にならないこと）を確かめる。
+  - **直すこと2（minor、A1-2）**：`findOnPath` は、PATH の空の要素と相対のディレクトリを無条件に外している。§2 に「PATH は絶対パスに限る」という決まりはないので、shell と同じ探し方に合わせる。空の要素は今のフォルダとして扱い、相対のディレクトリは今のフォルダ（`process.cwd()`。試験では引数で渡す）から解く。存在を調べるだけで、実行しない・パスを出さないのは今のまま。試験も足す（空の要素と相対のディレクトリで見つかること）。
+  - **試験**：`node --test scripts/doctor.test.mjs` が通ることも、`npm run -s test`・`typecheck`・`lint` とあわせて確かめて、報告に書く（司法の入力には差分と決定論的監査しか渡らない）
