@@ -32,11 +32,15 @@ undo() { # before, merged
     echo "  ! HEAD がこの実行の統合のコミットではないため、取り消さない。main に統合が残っている可能性がある。kernel-stop.sh で止めて、オーナーが確かめる" >&2
   fi
 }
+# p0.4.12：--expect-request <SHA> T-NNN（オーナーの操作の窓口）：最新の held の申請の SHA が画面に出した値と違えば統合しない（票は1つだけ）
+EXPECT_REQ=""
+if [ "${1:-}" = "--expect-request" ]; then EXPECT_REQ="${2:-}"; shift 2; [[ "$EXPECT_REQ" =~ ^[0-9a-f]{40}$ ]] && [ $# -eq 1 ] || { echo "--expect-request は完全な SHA と票1つ" >&2; exit 64; }; fi
 for task in "$@"; do
   [ ! -f "$Z3/STOP" ] || { echo "Kernel が停止した。${task} 以降は統合しない" >&2; exit 70; }   # p0.4.0：票ごとに停止を見る（Codex の指摘 #6）
   rec="$(jq -c --arg t "$task" 'select(.task==$t)' "$Z3/evidence/held.jsonl" | tail -n 1)"
   [ -n "$rec" ] || { echo "✗ ${task}：夜間の合格の記録がない" >&2; exit 1; }
   req="$(printf '%s' "$rec" | jq -r .request)"; cand="$(printf '%s' "$rec" | jq -r .candidate)"
+  [ -z "$EXPECT_REQ" ] || [ "$req" = "$EXPECT_REQ" ] || { echo "✗ ${task}：画面に出した申請と最新の held の申請が違う。統合しない（画面を開き直して確かめる）" >&2; exit 65; }
   # p0.4.3（Codex の指摘 #3）：p0.4.2 までの held は、Codex の判定の欠落を SKIPPED として合格にしえた。版の印（law）のない held と、
   #   --no-codex で起動していないのに Codex が APPROVED／CHANGES_REQUIRED でない held は統合しない（昼に申請し直す）
   if [ "$(printf '%s' "$rec" | jq -r '.law // empty')" != "p0.4.3" ]; then echo "✗ ${task}：前の版（p0.4.2 以前）か未知の版の夜間の合格の記録。司法の成立を確かめられないので統合しない。昼に申請し直す" >&2; exit 1; fi

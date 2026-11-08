@@ -250,6 +250,12 @@ function groupC2() {
   const chk = digest(fx2, 'main', 'docs/tasks/T-911-probe.md', ['--check', ledger2]);
   const ev = fs.existsSync(path.join(fx2.z3, 'evidence/gate_events.jsonl')) ? fs.readFileSync(path.join(fx2.z3, 'evidence/gate_events.jsonl'), 'utf8') : '';
   record('C2', 'P3', '承認すると Z3 に記録され、照合が合格になり、出来事にも残る', r.status === 0 && chk.code === 0 && /"type":"spec_approved"/.test(ev), `exit ${r.status} check ${chk.code}`);
+  // P4（p0.4.12）：オーナーの操作の窓口が渡す画面の指紋（--expect）が今の仕様と違えば、本物の approve-spec.sh は承認しない
+  const nBefore = fs.readFileSync(ledger2, 'utf8').split('\n').filter(Boolean).length;
+  r = ap('--yes', '--expect', 'sha256:' + '0'.repeat(64));
+  const nAfter = fs.readFileSync(ledger2, 'utf8').split('\n').filter(Boolean).length;
+  const rOk = ap('--yes', '--expect', digest(fx2, 'main', 'docs/tasks/T-911-probe.md').out);
+  record('C2', 'P4', '本物の approve-spec.sh：--expect の指紋が今の仕様と違えば承認せず終了 65、合えば承認する', r.status === 65 && nBefore === nAfter && rOk.status === 0, `exit ${r.status}/${rOk.status} lines ${nBefore}→${nAfter}`);
 }
 
 // ---- C3 独立司法 --------------------------------------------------------------------------
@@ -377,7 +383,7 @@ if [ "$mode" = security ]; then [ -z "\${STUB_SECURITY_NOFILE:-}" ] || exit 69; 
 printf '{"final_verdict":"%s","parse_ok":true,"codex":{"findings":[]}}\\n' "\${STUB_CODEX_VERDICT:-\${STUB_VERDICT:-CHANGES_REQUIRED}}" > "$out/$task-$(git rev-parse HEAD | cut -c1-12)-codex-$mode.json"
 `;
 // 実装の指紋（kernel-state.mjs の implSha と同じ並び）。run.mjs --record が残し、状態の写しが稼働中の Z3 と照合する
-const IMPL_FILES = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh', 'ledger.mjs', 'metered.sh', 'budget-set.sh', 'night-runner.sh', 'review-constitution.sh', 'approve-spec.sh', 'kernel-stop.sh', 'kernel-resume.sh', 'launcher.sh', 'prior-record.mjs', 'launch-intake.mjs'];
+const IMPL_FILES = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh', 'ledger.mjs', 'metered.sh', 'budget-set.sh', 'night-runner.sh', 'review-constitution.sh', 'approve-spec.sh', 'kernel-stop.sh', 'kernel-resume.sh', 'launcher.sh', 'prior-record.mjs', 'launch-intake.mjs', 'owner-console.mjs'];
 const implShaFor = (bin, policy) => sha256hex(IMPL_FILES.map((f) => path.join(bin, f)).concat([policy, path.join(path.dirname(policy), 'verify-chain.mjs')]).map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return '<なし>'; } }).join('\n--\n'));
 const POLICY_LINE = (/^(p\d+\.\d+)\./.exec(CAPS.kernel_version) || [])[1] || null;
 function gateFixture(name, { approve = true, change = { 'src/lib/a.ts': 'export const v = 2;\n' }, stop = false, afterApprove = null, ticket = {}, approveExtra = { policy_line: POLICY_LINE } } = {}) {
@@ -1078,6 +1084,13 @@ function groupL() {
   const head1 = git(L.fx.main, 'rev-parse', 'main');
   r = L.run();
   record('L', 'L2', 'すでに統合済みの票をもう一度 release しても何もしない（取り消さない）', r.status === 0 && /統合済み/.test(r.stdout) && git(L.fx.main, 'rev-parse', 'main') === head1, `exit ${r.status}`);
+  // L16（p0.4.12）：画面の申請の SHA（--expect-request）が最新の held と違えば、本物の release.sh は統合しない。合えば統合する
+  L = releaseFixture('l16');
+  const envL = { ...process.env, ...UTF8, VGDD_Z3_DIR: L.fx.z3, VGDD_REPO: L.fx.main };
+  r = sh('bash', [path.join(IMPL.bin, 'release.sh'), '--expect-request', 'd'.repeat(40), L.id], { env: envL, cwd: L.fx.main, timeout: 120000 });
+  const afterWrong = git(L.fx.main, 'rev-parse', 'main');
+  const rGood = sh('bash', [path.join(IMPL.bin, 'release.sh'), '--expect-request', L.req, L.id], { env: envL, cwd: L.fx.main, timeout: 120000 });
+  record('L', 'L16', '本物の release.sh：--expect-request の申請の SHA が最新の held と違えば統合せず終了 65、合えば統合する', r.status === 65 && afterWrong === L.before && rGood.status === 0 && git(L.fx.main, 'rev-parse', 'main') !== L.before, `exit ${r.status}/${rGood.status}`);
   L = releaseFixture('l3', { otherCandidate: true });
   r = L.run();
   record('L', 'L3', '入る変更が夜に判定した候補と違えば統合せず、main を元に戻す', r.status === 1 && /判定した変更と違う/.test(r.stderr) && git(L.fx.main, 'rev-parse', 'main') === L.before, `exit ${r.status}`);
@@ -1389,6 +1402,139 @@ function groupB() {
 }
 
 // ---- W 起動の窓口と前の試行の記録（p0.4.10。SPEC §5-4） ------------------------------------------------
+// ---- OC オーナーの操作の窓口（p0.4.12、D-68。SPEC §10） ---------------------------------------------
+//   偽の Kernel のスクリプト（承認・統合・停止・再開・指紋）を置いた試験用の Z3 と git の写しで、窓口を実際に起動し、HTTP で操作する。
+//   本物の司法・作業員は使わない（窓口が既存のスクリプトに決まった引数で渡すこと、本人確認・重複の防止・対象の固定・失敗の扱いを試す）
+function groupOC() {
+  const consoleFile = path.join(IMPL.bin, 'owner-console.mjs');
+  if (!fs.existsSync(consoleFile)) { record('OC', 'OC0', 'オーナーの操作の窓口（owner-console.mjs）が実装にある', false, 'ない'); return; }
+  record('OC', 'OC0', 'オーナーの操作の窓口（owner-console.mjs）が実装にある', true);
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'vgdd-conf-oc-')));
+  const repo = path.join(base, 'app'); const z = path.join(base, 'z3');
+  fs.mkdirSync(path.join(repo, 'docs/tasks'), { recursive: true }); fs.mkdirSync(path.join(repo, 'merge-requests/launch'), { recursive: true });
+  const tk = (id, status, extra = '') => `---\nid: ${id}\ntitle: 試験の票 ${id}\nstatus: ${status}\nrequirements: [A1]\nrequirements_source: ticket\ndepends_on: []\nfiles_allowed:\n  - src/x.ts\n${extra}---\n\n## 1. 目的\n\n試験\n\n## 2. 受け入れ条件\n\n- A1. 試験\n`;
+  write(path.join(repo, 'docs/tasks/T-990-probe.md'), tk('T-990', 'ready'));
+  write(path.join(repo, 'docs/tasks/T-991-done.md'), tk('T-991', 'merged'));
+  write(path.join(repo, 'docs/tasks/T-992-held.md'), tk('T-992', 'review'));
+  write(path.join(repo, 'merge-requests/launch/.gitkeep'), '');
+  sh('git', ['-C', repo, 'init', '-q', '-b', 'main']);
+  sh('git', ['-C', repo, 'add', '-A']); sh('git', ['-C', repo, '-c', 'user.name=Isogyu', '-c', 'user.email=i@x', 'commit', '-q', '-m', '票']);
+  sh('git', ['-C', repo, '-c', 'user.name=gate-runner', '-c', 'user.email=g@x', 'commit', '-q', '--allow-empty', '-m', 'gate-runner: T-991 を統合（試験）']);
+  const mergeSha = sh('git', ['-C', repo, 'rev-parse', 'HEAD']).stdout.trim();
+  fs.mkdirSync(path.join(z, 'bin'), { recursive: true }); fs.mkdirSync(path.join(z, 'evidence'), { recursive: true }); fs.mkdirSync(path.join(z, 'console'), { recursive: true });
+  for (const f of ['owner-console.mjs', 'ledger.mjs', 'kernel-state.mjs']) if (fs.existsSync(path.join(IMPL.bin, f))) fs.copyFileSync(path.join(IMPL.bin, f), path.join(z, 'bin', f));
+  write(path.join(z, 'console/acceptance_since'), '0\n');   // 試験では統合のコミットをすべて受け入れの対象にする
+  write(path.join(z, 'budget/limits.json'), JSON.stringify({ schema: 'vgdd.budget-limits.v1', period_id: 'pOC', until: '2099-01-01T00:00:00+09:00', tokens_total: 100000, tokens_per_ticket: 50000, tokens_per_run: 20000, judge_calls: 10, workers: 3, attempts_per_ticket: 4, set_at: '2026-11-08T00:00:00+09:00' }) + '\n');
+  const D = 'sha256:' + 'a'.repeat(64);
+  // 偽の指紋：--check は z3/approved-<票> があれば 0、なければ 3。指紋は固定
+  write(path.join(z, 'bin/spec-digest.mjs'), `import fs from 'node:fs';import path from 'node:path';const a=process.argv;const t=a[a.indexOf('--ticket')+1];const id=path.basename(t).slice(0,5);\nif(a.includes('--check')){process.exit(fs.existsSync(${JSON.stringify(z)}+'/approved-'+id)?0:3);}console.log('${D}');\n`);
+  const stub = (name, body) => { write(path.join(z, 'bin', name), `#!/bin/bash\necho "${name} $* REPO=$VGDD_REPO" >> '${path.join(z, 'calls.log')}'\n${body}\n`); fs.chmodSync(path.join(z, 'bin', name), 0o755); };
+  stub('approve-spec.sh', `touch '${z}/approved-'"$1"; exit 0`);
+  stub('release.sh', 'exit 0');
+  stub('kernel-stop.sh', `[ -f '${z}/stop-fails' ] && { echo "失敗の理由（試験）" >&2; exit 1; }; printf '%s\\n' "$1" > '${z}/STOP'; exit 0`);
+  stub('kernel-resume.sh', `rm -f '${z}/STOP'; exit 0`);
+  write(path.join(z, 'approved-T-992'), '');   // held の票は承認済み
+  write(path.join(z, 'evidence/held.jsonl'), JSON.stringify({ ts: '2026-11-08T10:00:00+0900', task: 'T-992', request: 'b'.repeat(40), candidate: 'c'.repeat(40), judge: 'APPROVED', codex: 'APPROVED', security: 'APPROVED' }) + '\n');
+  // 運転の台本（非同期の HTTP を別のプロセスで動かし、結果を JSON で返す）
+  const driver = path.join(base, 'driver.mjs');
+  write(driver, `
+import { spawn } from 'node:child_process'; import http from 'node:http'; import fs from 'node:fs';
+const [consoleFile, repo, z] = process.argv.slice(2);
+const p = spawn('node', [consoleFile, '--repo', repo, '--z3', z, '--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });
+const url = await new Promise((res, rej) => { let b=''; p.stdout.on('data', (c) => { b += c; const m = b.match(/(http:\\/\\/127\\.0\\.0\\.1:\\d+)\\/login\\?t=([0-9a-f]{64})/); if (m) res(m); }); setTimeout(() => rej(new Error('no url')), 15000); });
+const BASE = url[1]; const TOKEN = url[2]; const host = BASE.slice(7);
+const req = (method, pth, { headers = {}, body = null } = {}) => new Promise((res) => { const r = http.request(BASE + pth, { method, headers: { Host: host, ...headers } }, (rs) => { let d=''; rs.on('data', (c) => d += c); rs.on('end', () => res({ status: rs.statusCode, headers: rs.headers, body: d })); }); r.on('error', (e) => res({ status: -1, body: String(e) })); if (body) r.write(body); r.end(); });
+const out = {};
+out.noCookie = (await req('GET', '/')).status;
+out.wrongToken = (await req('GET', '/login?t=' + '0'.repeat(64))).status;
+out.badHost = (await req('GET', '/login?t=' + TOKEN, { headers: { Host: 'localhost:' + host.split(':')[1] } })).status;
+const login = await req('GET', '/login?t=' + TOKEN);
+out.login = login.status; const cookie = (login.headers['set-cookie'] || [''])[0].split(';')[0];
+out.cookieFlags = (login.headers['set-cookie'] || [''])[0];
+out.reuse = (await req('GET', '/login?t=' + TOKEN)).status;
+const page = async () => (await req('GET', '/', { headers: { Cookie: cookie } })).body;
+const formsOf = (html) => [...html.matchAll(/<form[\\s\\S]*?<\\/form>/g)].map((m) => { const g = (n) => (m[0].match(new RegExp('name="' + n + '" value="([^"]*)"')) || [])[1]; return { csrf: g('csrf'), action_id: g('action_id'), action: g('action'), task: g('task'), target: g('target'), disabled: /<button disabled/.test(m[0]) }; });
+const post = (f, { origin = BASE, csrf } = {}) => req('POST', '/action', { headers: { Cookie: cookie, Origin: origin, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ ...f, csrf: csrf ?? f.csrf }).toString() });
+const msg = (r) => decodeURIComponent(((r.headers.location || '').split('m=')[1] || ''));
+let html = await page(); out.page1 = html.length; out.pageHasToken = html.includes(TOKEN); out.pageHasPath = /\\/Users\\/|vgdd-conf-oc/.test(html);
+let f = formsOf(html); const ap = f.find((x) => x.action === 'approve' && x.task === 'T-990');
+out.approveForm = !!ap;
+out.noOrigin = (await req('POST', '/action', { headers: { Cookie: cookie, 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(ap).toString() })).status;
+out.badOrigin = (await post(ap, { origin: 'http://evil.example' })).status;
+out.badCsrf = (await post(ap, { csrf: '0'.repeat(64) })).status;
+out.callsAfterRejects = fs.existsSync(z + '/calls.log') ? fs.readFileSync(z + '/calls.log', 'utf8') : '';
+out.stale = msg(await post({ ...ap, target: 'sha256:' + '0'.repeat(64) }));
+out.approve1 = msg(await post(ap));
+out.approve2 = msg(await post(ap));
+out.callsApprove = (fs.readFileSync(z + '/calls.log', 'utf8').match(/approve-spec.sh T-990 --yes --expect ${D} /g) || []).length;
+out.repoPassed = fs.readFileSync(z + '/calls.log', 'utf8').includes('REPO=' + fs.realpathSync(repo));
+fs.writeFileSync(z + '/STOP', '試験の停止\\n');
+html = await page(); f = formsOf(html); out.startWhileStopped = !!f.find((x) => x.action === 'start' && x.task === 'T-990');
+out.startStoppedPost = msg(await post({ csrf: f[0].csrf, action_id: 'e'.repeat(32), action: 'start', task: 'T-990', target: '${D}' }));
+fs.unlinkSync(z + '/STOP');
+html = await page(); f = formsOf(html); const st = f.find((x) => x.action === 'start' && x.task === 'T-990');
+out.startForm = !!st && !st.disabled;
+out.start1 = msg(await post(st));
+out.launchFile = fs.existsSync(repo + '/merge-requests/launch/T-990.json') ? fs.readFileSync(repo + '/merge-requests/launch/T-990.json', 'utf8') : null;
+out.start2 = msg(await post({ ...st, action_id: 'f'.repeat(32) }));
+html = await page(); f = formsOf(html); const rl = f.find((x) => x.action === 'release' && x.task === 'T-992');
+out.releaseForm = !!rl; out.releaseTarget = rl?.target;
+out.releaseWrong = msg(await post({ ...rl, target: 'd'.repeat(40) }));
+out.release1 = msg(await post(rl));
+out.callsRelease = (fs.readFileSync(z + '/calls.log', 'utf8').match(/release.sh --expect-request ${'b'.repeat(40)} T-992 /g) || []).length;
+const ac = f.find((x) => x.action === 'accept' && x.task === 'T-991');
+out.acceptTarget = ac?.target; out.accept1 = msg(await post(ac));
+out.acceptance = fs.existsSync(z + '/evidence/acceptance.jsonl') ? fs.readFileSync(z + '/evidence/acceptance.jsonl', 'utf8') : '';
+html = await page(); out.acceptedGone = !formsOf(html).some((x) => x.action === 'accept' && x.task === 'T-991');
+const unk = '9'.repeat(32); fs.appendFileSync(z + '/console/owner_actions.jsonl', JSON.stringify({ action_id: unk, phase: 'received', action: 'stop' }) + '\\n');
+// 取り残されたロック（持ち主が動いていない）では実行せず理由を出す。生きている持ち主のロックの間も、停止は別のロックで実行できる
+fs.mkdirSync(z + '/console/.action.lock'); fs.writeFileSync(z + '/console/.action.lock/pid', '999999\\n');
+html = await page(); f = formsOf(html); const rl2 = f.find((x) => x.action === 'release');
+out.staleLock = rl2 ? msg(await post(rl2)) : 'no-form';
+fs.writeFileSync(z + '/console/.action.lock/pid', process.pid + '\\n');
+const sp0 = f.find((x) => x.action === 'stop'); out.stopWhileBusy = msg(await post(sp0)); out.stoppedWhileBusy = fs.existsSync(z + '/STOP');
+fs.rmSync(z + '/console/.action.lock', { recursive: true });
+html = await page(); out.noAcceptMain = !/accept_main/.test(html);
+f = formsOf(html); const rs = f.find((x) => x.action === 'resume'); out.resume = msg(await post(rs)); out.resumeArgs = (fs.readFileSync(z + '/calls.log', 'utf8').match(/kernel-resume.sh[^\\n]*/) || [''])[0];
+out.unknown = msg(await post({ csrf: f[0].csrf, action_id: unk, action: 'stop', task: '', target: '' }));
+fs.writeFileSync(z + '/stop-fails', '');
+html = await page(); f = formsOf(html); const sp = f.find((x) => x.action === 'stop');
+out.stopFail = msg(await post(sp));
+out.stopFileAfterFail = fs.existsSync(z + '/STOP');
+out.callsStop = (fs.readFileSync(z + '/calls.log', 'utf8').match(/kernel-stop.sh/g) || []).length;   // 停止の成功1回（ロックの間）＋失敗1回
+out.arbitrary = msg(await post({ csrf: f[0].csrf, action_id: '8'.repeat(32), action: 'shell', task: 'T-990', target: 'rm -rf /' }));
+out.actionsLog = fs.readFileSync(z + '/console/owner_actions.jsonl', 'utf8');
+p.kill(); console.log(JSON.stringify(out));
+`);
+  const r = sh('node', [driver, path.join(z, 'bin/owner-console.mjs'), repo, z], { encoding: 'utf8', timeout: 180000 });
+  let o = null; try { o = JSON.parse((r.stdout || '').trim().split('\n').pop()); } catch { /* なし */ }
+  if (!o) { record('OC', 'OC1', '窓口を試験の環境で起動し、操作できる', false, `${(r.stderr || '').slice(0, 300)} ${(r.stdout || '').slice(0, 200)}`); return; }
+  record('OC', 'OC1', '本人確認：セッションのない要求は 401、違う合言葉は 403、合言葉は1回だけ使え（二度目は 403）、Cookie は HttpOnly・SameSite=Strict。画面に合言葉とパスを出さない',
+    o.noCookie === 401 && o.wrongToken === 403 && o.login === 303 && o.reuse === 403 && /HttpOnly/.test(o.cookieFlags) && /SameSite=Strict/.test(o.cookieFlags) && o.page1 > 0 && !o.pageHasToken && !o.pageHasPath, JSON.stringify({ n: o.noCookie, w: o.wrongToken, l: o.login, r: o.reuse, t: o.pageHasToken, p: o.pageHasPath }));
+  record('OC', 'OC2', 'Host が 127.0.0.1:<ポート> でない要求は、合言葉が正しくても拒む（DNS の付け替え）', o.badHost === 403, `status=${o.badHost}`);
+  record('OC', 'OC3', '操作は Origin が同じで CSRF トークンが合うときだけ受け付け、拒んだ要求ではスクリプトを1回も呼ばない', o.approveForm && o.noOrigin === 403 && o.badOrigin === 403 && o.badCsrf === 403 && o.callsAfterRejects === '', JSON.stringify({ no: o.noOrigin, bad: o.badOrigin, csrf: o.badCsrf, calls: o.callsAfterRejects }));
+  record('OC', 'OC4', '対象の固定と重複の防止：画面の後に変わった指紋では承認しない。同じ操作の ID の二度目は実行せず前の結果を返す（承認のスクリプトは --yes と画面の指紋 --expect つきで1回だけ）。子にリポジトリの場所（VGDD_REPO）を渡す',
+    /未実行/.test(o.stale) && /対象が変わった/.test(o.stale) && /成功/.test(o.approve1) && /すでに実行/.test(o.approve2) && o.callsApprove === 1 && o.repoPassed, JSON.stringify({ s: o.stale, a1: o.approve1, a2: o.approve2, n: o.callsApprove, repo: o.repoPassed }));
+  record('OC', 'OC5', '開始：停止中は開始の操作を出さず、送られても実行しない。承認済みなら決まった形の起動の申請（{"task":"T-NNN"}）を置き、申請が残っている間の二度目は拒む',
+    !o.startWhileStopped && /未実行/.test(o.startStoppedPost) && o.startForm && /成功/.test(o.start1) && o.launchFile === '{"task":"T-990"}\n' && /未実行/.test(o.start2) && /申請がすでにある/.test(o.start2), JSON.stringify({ ws: o.startWhileStopped, sp: o.startStoppedPost, s1: o.start1, f: o.launchFile, s2: o.start2 }));
+  record('OC', 'OC6', '統合：held の申請の SHA を対象に固定し、違う SHA では実行しない。合えば release.sh に画面の申請の SHA（--expect-request）と票の ID を渡す',
+    o.releaseForm && o.releaseTarget === 'b'.repeat(40) && /未実行/.test(o.releaseWrong) && /成功/.test(o.release1) && o.callsRelease === 1, JSON.stringify({ t: o.releaseTarget, w: o.releaseWrong, r: o.release1, n: o.callsRelease }));
+  record('OC', 'OC7', '受け入れ：統合のコミットに結び付けて Z3 に記録し、受け入れ済みの票には受け入れの操作を出さない',
+    o.acceptTarget === mergeSha && /成功/.test(o.accept1) && o.acceptance.includes(`"merge":"${mergeSha}"`) && o.acceptance.includes('"task":"T-991"') && o.acceptedGone, JSON.stringify({ t: o.acceptTarget, a: o.accept1 }));
+  record('OC', 'OC8', '受け付けた後に結果のない操作の ID（途中で窓口が終わった）は、結果が不明として実行し直さない', /結果が不明/.test(o.unknown) && o.callsStop === 2, JSON.stringify({ u: o.unknown, stops: o.callsStop }));
+  record('OC', 'OC12', 'ロック：持ち主の動いていないロックは取り残しとして出し、消さずに実行しない。ほかの操作のロックの間も停止は実行できる。再開は点検だけで --accept-main を渡さない',
+    /ロックが残っている/.test(o.staleLock) && /動いていない/.test(o.staleLock) && /成功/.test(o.stopWhileBusy) && o.stoppedWhileBusy && o.noAcceptMain && /成功/.test(o.resume) && !/accept-main/.test(o.resumeArgs), JSON.stringify({ l: o.staleLock, s: o.stopWhileBusy, r: o.resumeArgs }));
+  record('OC', 'OC9', 'スクリプトが失敗したら失敗と出し、成功にしない（停止の失敗で STOP はなく、結果の記録は ok: false）',
+    /失敗/.test(o.stopFail) && !/成功/.test(o.stopFail) && !o.stopFileAfterFail && /"phase":"done","ok":false/.test(o.actionsLog), JSON.stringify({ s: o.stopFail }));
+  record('OC', 'OC10', '決まった種類のほかの操作（任意のコマンド）は受け付けず、何も実行しない', /知らない操作/.test(o.arbitrary) && !/shell/.test(fs.existsSync(path.join(z, 'calls.log')) ? fs.readFileSync(path.join(z, 'calls.log'), 'utf8') : ''), o.arbitrary);
+  // 写しの受け入れの件数（公開の写しには票の ID と件数だけ。SHA を出さない）
+  const out = path.join(base, 'ks/kernel-state.json');
+  const k = sh('node', [path.join(z, 'bin/kernel-state.mjs'), '--repo', repo, '--z3', z, '--out', out], { encoding: 'utf8' });
+  let ks = null; try { ks = JSON.parse(fs.readFileSync(out, 'utf8')); } catch { /* なし */ }
+  record('OC', 'OC11', '状態の写しに受け入れの件数と票の ID を出し、統合のコミットの SHA は出さない',
+    k.status === 0 && ks?.acceptance?.accepted_count === 1 && ks.acceptance.accepted[0] === 'T-991' && ks.acceptance.pending_count === 0 && !JSON.stringify(ks.acceptance).includes(mergeSha.slice(0, 8)), JSON.stringify(ks?.acceptance ?? null));
+}
+
 function groupW() {
   const pr = path.join(IMPL.bin, 'prior-record.mjs');
   const la = path.join(IMPL.bin, 'launcher.sh');
@@ -1603,6 +1749,7 @@ try {
   groupL();
   groupB();
   groupW();
+  groupOC();
   groupINV();
   groupMeta();
   groupInvMeta();
