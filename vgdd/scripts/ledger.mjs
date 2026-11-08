@@ -273,6 +273,16 @@ export function cancel({ run }) {
   });
 }
 
+// p0.4.11：状態の写し（kernel-state.mjs）が予算と実行の件数を、同じ時点の台帳から作るための読み取り（追記と同じロックの下で1回）。
+//   返すのは上限と、実行の状態の一覧（台帳から作り直した派生物）。書き込みはしない
+export function snapshot() {
+  return withLock(() => {
+    const events = readLedger();
+    let limits = null; try { limits = readLimits(); } catch { /* 上限がなければ null */ }
+    return { limits, runs: deriveRuns(events) };
+  });
+}
+
 export function status() {
   return withLock(() => statusUnlocked());   // 追記と同じロックで読む（古い head と新しい台帳を組み合わせて破損と誤報しない）
 }

@@ -441,10 +441,11 @@
       "precedents": [
         "ST18",
         "ST19",
-        "ST20"
+        "ST20",
+        "ST21"
       ],
-      "tests_total": 500,
-      "prev_failed": 1,
+      "tests_total": 501,
+      "prev_failed": 3,
       "obs": []
     }
   ]

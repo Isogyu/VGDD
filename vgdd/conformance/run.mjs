@@ -878,14 +878,25 @@ function groupST() {
       && !('acceptance' in (k18.j || {})),
     JSON.stringify({ budget: B, runs: R }).slice(0, 400));
   record('ST', 'ST19', '台帳の集計の項目に、実行の ID・票の ID・pid・要求の ID を出さない',
-    k18.r.status === 0 && ![a1, a2, a3, a4, 'T-981', 'T-982', 'ks1', String(process.pid), '999998', '999999'].some((x) => x && JSON.stringify({ b: k18.j?.budget, r: k18.j?.runs }).includes(x)));
+    k18.r.status === 0 && !!k18.j?.budget && !!k18.j?.runs && ![a1, a2, a3, a4, 'T-981', 'T-982', 'ks1', String(process.pid), '999998', '999999'].some((x) => x && JSON.stringify({ b: k18.j?.budget, r: k18.j?.runs }).includes(x)));
   const z20a = ksZ(null); const k20a = ksRun(z20a);   // 上限の設定がない
   const z20b = ksZ({}); ksL(z20b, 'begin', '--kind', 'judge', '--task', 'T-983', '--req', 'ks5', '--tokens', '10');
   fs.appendFileSync(path.join(z20b, 'budget/ledger.jsonl'), '{"type":"begin","broken":\n'); const k20b = ksRun(z20b);   // 台帳の破損
   const z20c = ksZ({ period_id: 'x'.repeat(41) }); const k20c = ksRun(z20c);   // 形の合わない期間の名前
-  record('ST', 'ST20', '上限の設定がない・台帳が壊れている・期間の名前の形が合わないときは、budget・runs を出さず（0 を作り足さず）、ほかの項目の写しは書く',
-    [k20a, k20b, k20c].every((k) => k.r.status === 0 && k.j?.schema === 'vgdd.kernel-state.v1' && !('budget' in k.j) && !('runs' in k.j)),
-    [k20a, k20b, k20c].map((k) => `rc=${k.r.status} budget=${k.j ? 'budget' in k.j : '-'}`).join(' / '));
+  const z20d = ksZ({ until: '2099-02-30T00:00:00+09:00' }); const k20d = ksRun(z20d);   // 暦にない終わりの時刻（Codex の監査 major 1）
+  const z20e = ksZ({ until: '2099-01-01T24:00:00Z' }); const k20e = ksRun(z20e);
+  const ks20 = [k20a, k20b, k20c, k20d, k20e];
+  record('ST', 'ST20', '上限の設定がない・台帳が壊れている・期間の名前の形が合わない・終わりの時刻が暦にない（2月30日・24時）ときは、budget・runs を出さず（0 を作り足さず）、ほかの項目の写しは書く',
+    ks20.every((k) => k.r.status === 0 && k.j?.schema === 'vgdd.kernel-state.v1' && !('budget' in k.j) && !('runs' in k.j)),
+    ks20.map((k) => `rc=${k.r.status} budget=${k.j ? 'budget' in k.j : '-'}`).join(' / '));
+  // ST21 期間を変えた後：前の期間で動いている作業員は、今の期間の集計（作業員の数・試行・実行の件数）に入らない（Codex の監査 major 3。起動の判断は別に全期間で数える）
+  const z21 = ksZ({ period_id: 'pOld' });
+  const o1 = rid(ksL(z21, 'begin', '--kind', 'worker', '--task', 'T-984', '--req', 'ks6', '--tokens', '100')); ksL(z21, 'started', '--run', o1, '--pid', String(process.pid));
+  write(path.join(z21, 'budget/limits.json'), JSON.stringify({ schema: 'vgdd.budget-limits.v1', period_id: 'pNew', until: '2099-01-01T00:00:00+09:00', tokens_total: 100000, tokens_per_ticket: 50000, tokens_per_run: 20000, judge_calls: 10, workers: 3, attempts_per_ticket: 4, set_at: '2026-11-08T01:00:00+09:00' }) + '\n');
+  const k21 = ksRun(z21);
+  record('ST', 'ST21', '期間を変えた後、前の期間で動いている作業員は今の期間の作業員の数・試行・実行の件数に入らない',
+    k21.r.status === 0 && k21.j?.budget?.period_id === 'pNew' && k21.j.budget.workers.active === 0 && k21.j.budget.attempts.used === 0 && k21.j?.runs?.requested === 0 && k21.j.runs.started === 0,
+    JSON.stringify({ b: k21.j?.budget, r: k21.j?.runs }).slice(0, 300));
 }
 
 // ---- K 停止と再開 -------------------------------------------------------------------------------

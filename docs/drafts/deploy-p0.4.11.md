@@ -4,10 +4,10 @@
 > **T-042 の統合の後に配置する**。T-042 より前の画面は、写しに `budget`・`runs` があると写し全体を拒み、Kernel の区画が「読めませんでした」になる。
 
 1. **順番を確かめる**：`cd ~/tsubuyaki-worklog/app && git log --oneline main | grep -m1 'T-042'` に T-042 の統合（gate-runner または release）があること。`grep -c 'budget: budgetSchema.optional()' src/lib/kernel-state-schema.ts` が 1
-2. **止める**：`~/tsubuyaki-z3/bin/kernel-stop.sh "p0.4.11 の配置"`。gate-runner を Ctrl-C で止める（launcher は止めなくてよい。写す物に含まれない）
+2. **止める**：`~/tsubuyaki-z3/bin/kernel-stop.sh "p0.4.11 の配置"`。gate-runner を Ctrl-C で止める。ledger.mjs も写すので、作業員が動いていないこと（`pgrep -fl "metered.sh|night-runner.sh"` が空）を確かめる。launcher は止めなくてよい
 3. **写す**（kernel-state.mjs は gate-runner が周回ごとに起動する node のファイル）：
    ```bash
-   cd ~/tsubuyaki-worklog/app && cp -p vgdd/scripts/kernel-state.mjs ~/tsubuyaki-z3/bin/
+   cd ~/tsubuyaki-worklog/app && cp -p vgdd/scripts/{kernel-state.mjs,ledger.mjs} ~/tsubuyaki-z3/bin/
    ```
 4. **配置済みの版を確かめる**（`exit=0` でなければ再開しない）：
    ```bash
