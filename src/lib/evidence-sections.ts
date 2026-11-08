@@ -10,13 +10,13 @@ export type EvidenceSection = {
   defaultOpen: boolean;
 };
 
-/** 画面に並べる順。最初に開いておくのは「統治の数字」だけ */
+/** 画面に並べる順。最初はすべて開いておく（T-047） */
 export const EVIDENCE_SECTIONS: readonly EvidenceSection[] = [
-  { key: "map", title: "統治の全体図", defaultOpen: false },
-  { key: "kernel", title: "Kernel の状態", defaultOpen: false },
-  { key: "invariants", title: "不変条件と承認待ち", defaultOpen: false },
-  { key: "history", title: "法律が判例で育った歴史", defaultOpen: false },
+  { key: "map", title: "統治の全体図", defaultOpen: true },
+  { key: "kernel", title: "Kernel の状態", defaultOpen: true },
+  { key: "invariants", title: "不変条件と承認待ち", defaultOpen: true },
+  { key: "history", title: "法律が判例で育った歴史", defaultOpen: true },
   { key: "numbers", title: "統治の数字", defaultOpen: true },
-  { key: "board", title: "票の盤", defaultOpen: false },
-  { key: "fate", title: "票1枚の運命", defaultOpen: false },
+  { key: "board", title: "票の盤", defaultOpen: true },
+  { key: "fate", title: "票1枚の運命", defaultOpen: true },
 ];
