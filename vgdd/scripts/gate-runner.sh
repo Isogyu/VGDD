@@ -439,6 +439,21 @@ write_kernel_state() {
   [ "$KSTATE_FAILED" -eq 1 ] || log_event "kernel_state_unwritten" "-" "\"script\":$([ -f "$BIN/kernel-state.mjs" ] && echo true || echo false)"
   KSTATE_FAILED=1; return 0
 }
+# p0.4.13（OBS-064 ③）：裁判所は1つだけ動かす。配置の後に古い裁判所が残り、2つが同じ申請を処理して held と記録を二重に書いた。
+#   Z3 の .gate-runner.lock に自分の pid を書く。持ち主が生きていて gate-runner.sh として動いていれば起動しない（終了 75）。
+#   持ち主がいなければ（落ちた）引き継ぐ。終わるとき、自分のロックだけを外す
+GLOCK="$Z3/.gate-runner.lock"
+if ! mkdir "$GLOCK" 2>/dev/null; then
+  gop="$(cat "$GLOCK/pid" 2>/dev/null || true)"
+  if [[ "$gop" =~ ^[0-9]+$ ]] && kill -0 "$gop" 2>/dev/null && ps -p "$gop" -o command= 2>/dev/null | grep -q 'gate-runner\.sh'; then
+    echo "別の gate-runner（pid ${gop}）が動いている。二重に起動しない" >&2; exit 75
+  fi
+  echo "前の gate-runner のロック（pid ${gop:-不明}）は持ち主がいない。引き継ぐ" >&2
+  log_event "gate_lock_taken_over" "-" "\"prev_pid\":\"$(printf '%s' "${gop}" | tr -cd '0-9')\""
+fi
+echo "$$" > "$GLOCK/pid"
+trap '[ "$(cat "$GLOCK/pid" 2>/dev/null)" = "$$" ] && rm -f "$GLOCK/pid" && rmdir "$GLOCK" 2>/dev/null; true' EXIT
+
 preflight
 
 echo "gate-runner 起動: repo=$REPO interval=${INTERVAL}s codex=$([ "$NO_CODEX" -eq 1 ] && echo off || echo on)"

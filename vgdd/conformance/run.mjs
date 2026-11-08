@@ -437,6 +437,18 @@ function groupG() {
   record('G', 'G2', '仕様が承認済みでも、司法が差し戻せば main に入らない', !g.inMain && g.judged && g.status === 'in_progress', `status=${g.status} inMain=${g.inMain}`);
   g = runGate(gateFixture('g3'), 'APPROVED');
   record('G', 'G3', '仕様が承認済みで、監査と司法が合格なら統合される（陽性の対照）', g.inMain && g.status === 'merged' && g.events.some((e) => e.type === 'merged'), `status=${g.status} inMain=${g.inMain} ${g.code ? g.out : ''}`);
+  // G-L1・G-L2（p0.4.13、OBS-064 ③）：裁判所は1つだけ。持ち主が生きている gate-runner のロックがあれば起動しない（終了 75、司法も統合もしない）。
+  //   持ち主のいないロックは引き継ぎ（gate_lock_taken_over を記録）、終わるときに外す
+  { const fxl = gateFixture('gl1');
+    const fake = sh('bash', ['-c', '(exec -a gate-runner.sh sleep 30) >/dev/null 2>&1 & echo $!']).stdout.trim();
+    fs.mkdirSync(path.join(fxl.z3, '.gate-runner.lock'), { recursive: true }); write(path.join(fxl.z3, '.gate-runner.lock/pid'), `${fake}\n`);
+    const gl = runGate(fxl, 'APPROVED');
+    try { process.kill(Number(fake)); } catch { /* 終わっている */ }
+    record('G', 'G-L1', '動いている gate-runner のロックがあれば、二つ目の裁判所は起動せず（終了 75）、司法も統合もしない', gl.code === 75 && !gl.judged && !gl.inMain && /二重に起動しない/.test(gl.out), `exit ${gl.code} judged=${gl.judged}`);
+    const fx2l = gateFixture('gl2');
+    fs.mkdirSync(path.join(fx2l.z3, '.gate-runner.lock'), { recursive: true }); write(path.join(fx2l.z3, '.gate-runner.lock/pid'), '999996\n');
+    const g2l = runGate(fx2l, 'APPROVED');
+    record('G', 'G-L2', '持ち主のいない裁判所のロックは引き継いで処理し（記録を残す）、終わるときに外す', g2l.inMain && g2l.events.some((e) => e.type === 'gate_lock_taken_over') && !fs.existsSync(path.join(fx2l.z3, '.gate-runner.lock')), `inMain=${g2l.inMain} lock=${fs.existsSync(path.join(fx2l.z3, '.gate-runner.lock'))}`); }
   g = runGate(gateFixture('g4', { afterApprove: (fx, id) => commitTicket(fx, id, { section2: '- A1. `src/lib/a.ts` の `v` が 2 か 3 になる' }) }), 'APPROVED');
   record('G', 'G4', '承認の後に main で受け入れ条件を変えると、承認が外れて blocked', !g.inMain && !g.judged && g.status === 'blocked' && g.events.some((e) => /承認されていない/.test(e.reason || '')), `status=${g.status} judged=${g.judged}`);
   g = runGate(gateFixture('g5', { stop: true }), 'APPROVED');
@@ -1414,7 +1426,8 @@ function groupOC() {
   fs.mkdirSync(path.join(repo, 'docs/tasks'), { recursive: true }); fs.mkdirSync(path.join(repo, 'merge-requests/launch'), { recursive: true });
   const tk = (id, status, extra = '') => `---\nid: ${id}\ntitle: 試験の票 ${id}\nstatus: ${status}\nrequirements: [A1]\nrequirements_source: ticket\ndepends_on: []\nfiles_allowed:\n  - src/x.ts\n${extra}---\n\n## 1. 目的\n\n試験\n\n## 2. 受け入れ条件\n\n- A1. 試験\n`;
   write(path.join(repo, 'docs/tasks/T-990-probe.md'), tk('T-990', 'ready'));
-  write(path.join(repo, 'docs/tasks/T-991-done.md'), tk('T-991', 'merged'));
+  write(path.join(repo, 'docs/tasks/T-991-done.md'), tk('T-991', 'merged').replace('## 1. 目的', '## 1. 目的') + '\n## 3. 開発用テスト\n\n画面 /governance を開き、表の割合を確かめる（試験の確かめ方）\n\n## 6. 記録\n\n- **確かめていない**：375px の幅（試験の未確認）\n');
+  write(path.join(repo, 'docs/tasks/T-993-returned.md'), tk('T-993', 'in_progress'));
   write(path.join(repo, 'docs/tasks/T-992-held.md'), tk('T-992', 'review'));
   write(path.join(repo, 'merge-requests/launch/.gitkeep'), '');
   sh('git', ['-C', repo, 'init', '-q', '-b', 'main']);
@@ -1434,11 +1447,13 @@ function groupOC() {
   stub('kernel-stop.sh', `[ -f '${z}/stop-fails' ] && { echo "失敗の理由（試験）" >&2; exit 1; }; printf '%s\\n' "$1" > '${z}/STOP'; exit 0`);
   stub('kernel-resume.sh', `rm -f '${z}/STOP'; exit 0`);
   write(path.join(z, 'approved-T-992'), '');   // held の票は承認済み
+  write(path.join(z, 'approved-T-993'), '');
+  write(path.join(z, 'launch/T-993.log'), '[2026-11-08T10:00:00+0900] night-runner 起動 run_id=x\n[2026-11-08T10:21:15+0900] T-993: 同じ重い指摘で続けて差し戻された。自動修正を止めて人へ戻す\n');
   write(path.join(z, 'evidence/held.jsonl'), JSON.stringify({ ts: '2026-11-08T10:00:00+0900', task: 'T-992', request: 'b'.repeat(40), candidate: 'c'.repeat(40), judge: 'APPROVED', codex: 'APPROVED', security: 'APPROVED' }) + '\n');
   // 運転の台本（非同期の HTTP を別のプロセスで動かし、結果を JSON で返す）
   const driver = path.join(base, 'driver.mjs');
   write(driver, `
-import { spawn } from 'node:child_process'; import http from 'node:http'; import fs from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process'; import http from 'node:http'; import fs from 'node:fs';
 const [consoleFile, repo, z] = process.argv.slice(2);
 const p = spawn('node', [consoleFile, '--repo', repo, '--z3', z, '--port', '0'], { stdio: ['ignore', 'pipe', 'pipe'] });
 const url = await new Promise((res, rej) => { let b=''; p.stdout.on('data', (c) => { b += c; const m = b.match(/(http:\\/\\/127\\.0\\.0\\.1:\\d+)\\/login\\?t=([0-9a-f]{64})/); if (m) res(m); }); setTimeout(() => rej(new Error('no url')), 15000); });
@@ -1485,9 +1500,21 @@ out.releaseWrong = msg(await post({ ...rl, target: 'd'.repeat(40) }));
 out.release1 = msg(await post(rl));
 out.callsRelease = (fs.readFileSync(z + '/calls.log', 'utf8').match(/release.sh --expect-request ${'b'.repeat(40)} T-992 /g) || []).length;
 const ac = f.find((x) => x.action === 'accept' && x.task === 'T-991');
+out.checkShown = /確かめ方（票の §3）/.test(html) && /表の割合を確かめる（試験の確かめ方）/.test(html) && /375px の幅（試験の未確認）/.test(html);
 out.acceptTarget = ac?.target; out.accept1 = msg(await post(ac));
 out.acceptance = fs.existsSync(z + '/evidence/acceptance.jsonl') ? fs.readFileSync(z + '/evidence/acceptance.jsonl', 'utf8') : '';
 html = await page(); out.acceptedGone = !formsOf(html).some((x) => x.action === 'accept' && x.task === 'T-991');
+out.returnedStage = /T-993：判断待ち（自動修正を止めて人へ戻した）/.test(html);
+out.returnedNoStart = !formsOf(html).some((x) => x.action === 'start' && x.task === 'T-993');
+fs.appendFileSync(z + '/evidence/spec_approvals.jsonl', JSON.stringify({ ts: '2026-11-08T11:00:00+0900', task: 'T-993', digest: 'x' }) + '\\n');
+html = await page(); out.returnedStartAfterApprove = formsOf(html).some((x) => x.action === 'start' && x.task === 'T-993');
+// 超過：1回の予約を超えた作業員の実行を台帳に入れる → 開始のボタンを理由つきで押せなくする
+{ const L = (...a) => spawnSync('node', [z + '/bin/ledger.mjs', ...a], { encoding: 'utf8', env: { ...process.env, VGDD_Z3_DIR: z } });
+  const run = L('begin', '--kind', 'worker', '--task', 'T-994', '--req', 'ov1', '--tokens', '10').stdout.trim(); L('started', '--run', run, '--pid', '999997');
+  fs.writeFileSync(z + '/usage.json', JSON.stringify({ usage: { input_tokens: 50, output_tokens: 50 } }));
+  L('finish', '--run', run, '--code', '0', '--usage-file', z + '/usage.json', '--format', 'claude'); }
+html = await page(); const st3 = formsOf(html).find((x) => x.action === 'start' && x.task === 'T-993');
+out.overrunDisabled = !!st3 && st3.disabled && /予算の超過あり/.test(html);
 const unk = '9'.repeat(32); fs.appendFileSync(z + '/console/owner_actions.jsonl', JSON.stringify({ action_id: unk, phase: 'received', action: 'stop' }) + '\\n');
 // 取り残されたロック（持ち主が動いていない）では実行せず理由を出す。生きている持ち主のロックの間も、停止は別のロックで実行できる
 fs.mkdirSync(z + '/console/.action.lock'); fs.writeFileSync(z + '/console/.action.lock/pid', '999999\\n');
@@ -1528,6 +1555,10 @@ p.kill(); console.log(JSON.stringify(out));
   //   same-origin を返し、本物のブラウザの送信に同じ Origin が付くようにする。Origin が null の送信は拒む
   record('OC', 'OC13', '画面の Referrer-Policy は same-origin（no-referrer ではブラウザが Origin を null にして正しい操作を拒んでしまう）。Origin が null の送信は拒む',
     o.refPolicy === 'same-origin' && o.nullOrigin === 403, JSON.stringify({ rp: o.refPolicy, n: o.nullOrigin }));
+  record('OC', 'OC14', '窓口が自動修正を止めて人へ戻した票は「判断待ち」として出し、開始の操作を出さない。人へ戻した後に仕様を承認し直せば開始できる',
+    o.returnedStage && o.returnedNoStart && o.returnedStartAfterApprove, JSON.stringify({ s: o.returnedStage, n: o.returnedNoStart, a: o.returnedStartAfterApprove }));
+  record('OC', 'OC15', '受け入れの前に、票の §3（確かめ方）と §6 の「確かめていない」の行を出す', o.checkShown, String(o.checkShown));
+  record('OC', 'OC16', '予算の超過があれば、開始のボタンを理由（予算の超過あり）つきで押せなくする', o.overrunDisabled, String(o.overrunDisabled));
   record('OC', 'OC12', 'ロック：持ち主の動いていないロックは取り残しとして出し、消さずに実行しない。ほかの操作のロックの間も停止は実行できる。再開は点検だけで --accept-main を渡さない',
     /ロックが残っている/.test(o.staleLock) && /動いていない/.test(o.staleLock) && /成功/.test(o.stopWhileBusy) && o.stoppedWhileBusy && o.noAcceptMain && /成功/.test(o.resume) && !/accept-main/.test(o.resumeArgs), JSON.stringify({ l: o.staleLock, s: o.stopWhileBusy, r: o.resumeArgs }));
   record('OC', 'OC9', 'スクリプトが失敗したら失敗と出し、成功にしない（停止の失敗で STOP はなく、結果の記録は ok: false）',

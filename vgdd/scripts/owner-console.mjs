@@ -66,7 +66,11 @@ function tickets() {
     const body = git('show', `main:${rel}`).stdout || '';
     const id = front(body, 'id'); if (!TASK_RE.test(id)) continue;
     const deps = front(body, 'depends_on').replace(/[[\]\s]/g, '').split(',').filter((d) => TASK_RE.test(d));
-    out.push({ id, rel, title: front(body, 'title').slice(0, 80), status: front(body, 'status'), deps });
+    // p0.4.13：受け入れの前に出す確かめ方（§3）と、§6 の「確かめていない」の行（票は公開のリポジトリの文。長さを限る）
+    const sec3 = ((body.match(/^## 3\.[^\n]*\n([\s\S]*?)(?=^## \d|(?![\s\S]))/m) || [])[1] || '').trim().slice(0, 800);
+    const sec6 = ((body.match(/^## 6\.[^\n]*\n([\s\S]*)$/m) || [])[1] || '');
+    const unverified = sec6.split('\n').filter((l) => /確かめていない|未確認|確かめきれていない/.test(l)).slice(-3).map((l) => l.replace(/^[-\s]+/, '').slice(0, 300));
+    out.push({ id, rel, title: front(body, 'title').slice(0, 80), status: front(body, 'status'), deps, sec3, unverified });
   }
   return out.sort((a, b) => a.id.localeCompare(b.id));
 }
@@ -110,6 +114,20 @@ function budget() {
   } catch { return null; }
 }
 const stopped = () => fs.existsSync(path.join(Z3, 'STOP'));
+// p0.4.13（OBS-064 ②）：窓口（night-runner --launch）が自動修正を止めて人へ戻した票。最後の「人へ戻す」の記録より後に仕様の承認がなければ、
+//   開始できない「判断待ち」とする（同じ指摘で差し戻され続けた票を、§2 を直さずに起こし直さない）
+const isoNorm = (v) => String(v || '').replace(/([+-]\d{2})(\d{2})$/, '$1:$2');
+function returnedAt(task) {
+  let at = null;
+  try {
+    for (const l of fs.readFileSync(path.join(Z3, 'launch', `${task}.log`), 'utf8').split('\n')) {
+      const m = l.match(/^\[([^\]]+)\] .*人へ戻す/); if (m) { const t = Date.parse(isoNorm(m[1])); if (!Number.isNaN(t)) at = t; }
+    }
+  } catch { /* 記録なし */ }
+  if (at === null) return null;
+  const approvedAfter = jsonl(path.join(EV, 'spec_approvals.jsonl')).some((a) => a.task === task && Date.parse(isoNorm(a.ts)) > at);
+  return approvedAfter ? null : at;
+}
 function activeRuns(b) { return b ? (b.runs?.launching ?? 0) + (b.runs?.started ?? 0) : null; }
 
 // 票ごとの工程・次の担当・操作できるか（できなければ理由）
@@ -140,13 +158,17 @@ function view() {
     } else if (t.status === 'blocked') { r.stage = '判断待ち（止まった票）'; r.next = 'オーナー'; }
     else if (launchBusy(st)) { r.stage = '実装中（作業員）'; r.next = 'AI'; }
     else if (t.status === 'review') { r.stage = '審査中'; r.next = 'AI（司法）'; }
-    else if (['ready', 'in_progress'].includes(t.status)) {
+    else if (['ready', 'in_progress'].includes(t.status) && returnedAt(t.id) !== null) {
+      r.stage = '判断待ち（自動修正を止めて人へ戻した）'; r.next = 'オーナー';
+      r.note = '同じ重い指摘で続けて差し戻された。票の §2 を直して仕様を承認し直すと、開始できる';
+    } else if (['ready', 'in_progress'].includes(t.status)) {
       r.stage = '開始待ち'; r.next = 'オーナー';
       const notMerged = t.deps.filter((d) => byId.get(d)?.status !== 'merged');
       let why = null;
       if (notMerged.length) why = `依存の票が未統合：${notMerged.join('・')}`;
       else if (!b) why = '予算の台帳を読めない';
       else if (b.until && Date.now() >= Date.parse(b.until)) why = '予算の期間が終わった';
+      else if (b.overrun) why = '予算の超過あり（期間を変えるまで、作業員も司法も起動しない）';
       else if (b.workers?.limit !== null && b.workers?.active >= b.workers?.limit) why = '作業員の同時の数が上限';
       else if (fs.existsSync(path.join(REPO, 'merge-requests/launch', `${t.id}.json`))) why = '起動の申請がすでにある（窓口の受け取り待ち）';
       r.actions.push({ action: 'start', label: `${t.id} を開始する（作業員を起こし、審査・自動修正まで進める）`, target: digestOf(t.rel), why });
@@ -269,6 +291,8 @@ function page(s, flash) {
   const v = view();
   const form = (a, task, extra = '') => `<form method="post" action="/action" style="display:inline"><input type="hidden" name="csrf" value="${esc(s.csrf)}"><input type="hidden" name="action_id" value="${crypto.randomBytes(16).toString('hex')}"><input type="hidden" name="action" value="${esc(a.action)}"><input type="hidden" name="task" value="${esc(task || '')}"><input type="hidden" name="target" value="${esc(a.target || '')}">${extra}<button ${a.why ? 'disabled' : ''}>${esc(a.label)}</button>${a.why ? ` <small>（できない理由：${esc(a.why)}）</small>` : ''}</form>`;
   const waiting = v.rows.filter((r) => r.next === 'オーナー');
+  // p0.4.13：受け入れの前の確かめ方（票の §3）と、まだ確かめていない範囲（§6）。公開の画面は /governance など（Next.js のアプリ）
+  const check = (r) => `<div style="border-left:3px solid #888;padding-left:8px;margin:4px 0"><small><b>確かめ方（票の §3）</b></small><pre style="white-space:pre-wrap;margin:2px 0">${esc(r.sec3 || '（票に §3 がない）')}</pre>${r.unverified?.length ? `<small><b>まだ確かめていない範囲（票の §6）</b></small><ul>${r.unverified.map((u) => `<li><small>${esc(u)}</small></li>`).join('')}</ul>` : '<small>§6 に「確かめていない」の記録はない</small>'}<br><small>画面の確認は、アプリ（npm run dev など）を開いて行う。受け入れは「確かめた」という記録で、確かめた中身は保証しない</small></div>`;
   const b = v.b;
   const usage = (u, l) => (l === null || l === undefined ? `${u}（上限なし）` : `${u} ／ ${l}`);
   const stopLine = v.stop
@@ -280,10 +304,10 @@ function page(s, flash) {
 <p><small>取得 ${esc(jst(v.at))}（30 秒ごとに取り直す）。この画面はオーナーだけのもの。公開の画面は /governance（読むだけ）</small></p>
 ${flash ? `<div class="flash" role="status">${esc(flash)}</div>` : ''}
 <h2>判断待ち（${waiting.length} 件）</h2>
-<ul>${waiting.map((r) => `<li>${esc(r.id)}：${esc(r.stage)} — ${esc(r.title)}<br>${r.actions.map((a) => form(a, r.id)).join(' ')}</li>`).join('') || '<li>なし</li>'}</ul>
+<ul>${waiting.map((r) => `<li>${esc(r.id)}：${esc(r.stage)} — ${esc(r.title)}${r.note ? `<br><small>${esc(r.note)}</small>` : ''}${r.actions.some((a) => a.action === 'accept') ? check(r) : ''}<br>${r.actions.map((a) => form(a, r.id)).join(' ')}</li>`).join('') || '<li>なし</li>'}</ul>
 <h2>停止と再開</h2>${stopLine}
 <h2>予算（期間 ${esc(b?.period_id ?? '—')}、${esc(b?.until ?? '—')} まで）</h2>
-${b ? `<p>トークン（精算済み＋予約中）：${esc(usage(b.tokens.settled + b.tokens.reserved, b.tokens.limit))}。利用量を読めなかった実行 ${esc(b.tokens.unknown_runs)} 件は予約の全量で数えている<br>司法の呼び出し：${esc(usage(b.judge_calls.used, b.judge_calls.limit))}　作業員（同時）：${esc(usage(b.workers.active, b.workers.limit))}</p>` : '<p><b>予算の台帳を読めない</b>（開始はできない）</p>'}
+${b?.overrun ? '<p><b>予算の超過あり</b>：1回の予約を超えた実行がある。期間を変える（budget-set.sh）まで、作業員も司法も起動しない</p>' : ''}${b ? `<p>トークン（精算済み＋予約中）：${esc(usage(b.tokens.settled + b.tokens.reserved, b.tokens.limit))}。利用量を読めなかった実行 ${esc(b.tokens.unknown_runs)} 件は予約の全量で数えている<br>司法の呼び出し：${esc(usage(b.judge_calls.used, b.judge_calls.limit))}　作業員（同時）：${esc(usage(b.workers.active, b.workers.limit))}</p>` : '<p><b>予算の台帳を読めない</b>（開始はできない）</p>'}
 <p><small>契約の利用枠の残りは読めない。推定費用は出さない</small></p>
 <h2>票</h2>
 <table><thead><tr><th>票</th><th>工程</th><th>次の担当</th><th>題</th></tr></thead><tbody>
