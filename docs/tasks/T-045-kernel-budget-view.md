@@ -84,3 +84,7 @@ held の後、立法補佐が候補で `/governance` を開き、(1) 今の写�
 - 09:4x 立法補佐が起草。写しの書く側（`kernel-state.mjs` が台帳から3項目を出す）は法律の改正 L3 で、この票の範囲の外。L3 が配置されるまで、本番の画面は「写しにない」を出す
 
 - 2026-11-08T11:01:27+0900 night-runner: 作業員の実装を前検査で確認（HEAD be05511）。status → review で再申請（試行 1）
+
+- 2026-11-08T11:03:47+0900 gate-runner: judge と Codex が minor の指摘で分かれた。厳しい側の指摘を残して統合（judge=APPROVED, codex=CHANGES_REQUIRED）
+
+- 2026-11-08T11:03:48+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=CHANGES_REQUIRED）。夜間のため統合せず、朝のオーナーの承認を待つ）
