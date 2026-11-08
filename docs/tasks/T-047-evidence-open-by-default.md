@@ -62,3 +62,5 @@ held の後、立法補佐かオーナーが候補で `/governance` を開き（
 - 18:1x 行政の長が起草（オーナーの承認前）。調べの根拠：`src/lib/evidence-sections.ts:15-23`（6つが `defaultOpen: false`）、7a506e3（T-041）。凍結（14:00）の後の起草なので、入れるかはオーナーの判断。締切の前に入らなければ、録画では各区画の見出しを押して開く
 
 - 2026-11-08T18:33:47+0900 night-runner: 作業員の実装を前検査で確認（HEAD 8b0df59）。status → review で再申請（試行 1）
+
+- 2026-11-08T18:36:25+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
