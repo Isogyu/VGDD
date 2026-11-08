@@ -1,12 +1,12 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-08T10:40:23.355+09:00",
+  "generated_at": "2026-11-08T12:24:31.335+09:00",
   "totals": {
     "tickets": 46,
-    "merged": 44,
+    "merged": 45,
     "rejected": 42,
     "blocked": 0,
-    "disagreements": 17
+    "disagreements": 18
   },
   "tickets": [
     {
@@ -417,11 +417,11 @@
     {
       "id": "T-045",
       "title": "統治の画面の Kernel の区画に、予算の使用・実行の状態・受け入れの件数を出す（写しに項目がなければ「写しにない」と出す）",
-      "status": "ready",
+      "status": "merged",
       "estimate_h": 1.5,
       "returns": 0,
-      "merged_at": null,
-      "disagreements": 0
+      "merged_at": "2026-11-08T12:23:56+0900",
+      "disagreements": 1
     }
   ]
 }
