@@ -139,6 +139,22 @@ describe("KernelBudget", () => {
     expect(onlyBudget).toContain("この写しには受け入れの記録がない");
   });
 
+  it("2つの表の caption と thead の class に text-xs を含めない（T-046 A2）", () => {
+    const html = render({ budget: BUDGET, runs: RUNS });
+    const captions = [...html.matchAll(/<caption\b[^>]*>/g)].map((m) => m[0]);
+    const theads = [...html.matchAll(/<thead\b[^>]*>/g)].map((m) => m[0]);
+    expect(captions).toHaveLength(2);
+    expect(theads).toHaveLength(2);
+    for (const tag of [...captions, ...theads]) {
+      const cls = /class="([^"]*)"/.exec(tag)?.[1] ?? "";
+      expect(cls.split(/\s+/)).not.toContain("text-xs");
+    }
+    // 表そのものは text-sm のまま（caption と thead はこれを受け継ぐ）
+    const tables = [...html.matchAll(/<table\b[^>]*>/g)].map((m) => m[0]);
+    expect(tables).toHaveLength(2);
+    for (const tag of tables) expect(tag).toContain("text-sm");
+  });
+
   it("固定の注記の文", () => {
     expect(FIXED_NOTE).toBe(
       "契約の利用枠（サブスクリプション）の残りは読めない。推定費用は出さない。数えるのは Kernel の窓口を通った呼び出しだけで、行政の長・立法補佐・オーナーのメインの会話は含まない",
