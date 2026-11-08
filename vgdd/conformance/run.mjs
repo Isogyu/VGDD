@@ -850,6 +850,42 @@ function groupST() {
   g = runGate(gateFixture('st7', { change: { 'src/lib/a.ts': 'export const v = 2;\n', 'docs/governance/kernel-state.json': '{"approvals":[]}\n' } }), 'APPROVED');
   record('ST', 'ST7', '作業員の差分に状態の写しが含まれれば、司法の前に保護パスとして blocked',
     !g.inMain && !g.judged && g.status === 'blocked' && g.events.some((e) => /保護パス/.test(e.reason || '')), `status=${g.status} judged=${g.judged}`);
+
+  // ST18〜ST20（p0.4.11、L3 の一部）：状態の写しに予算の台帳の集計（budget・runs）を出す。形は T-042（画面の検証）と同じ。
+  //   数と期間の名前と終わりの時刻だけ（実行の ID・票の ID・pid を出さない）。台帳・上限が読めなければ項目を出さない（0 を作り足さない）
+  const ksZ = (limits) => {
+    const z = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'vgdd-conf-ks-')));
+    fs.mkdirSync(path.join(z, 'bin'), { recursive: true }); fs.mkdirSync(path.join(z, 'evidence'), { recursive: true });
+    for (const f of ['kernel-state.mjs', 'ledger.mjs']) if (fs.existsSync(path.join(IMPL.bin, f))) fs.copyFileSync(path.join(IMPL.bin, f), path.join(z, 'bin', f));
+    if (limits) write(path.join(z, 'budget/limits.json'), JSON.stringify({ schema: 'vgdd.budget-limits.v1', period_id: 'pKS', until: '2099-01-01T00:00:00+09:00', tokens_total: 100000, tokens_per_ticket: 50000, tokens_per_run: 20000, judge_calls: 10, workers: 3, attempts_per_ticket: 4, set_at: '2026-11-08T00:00:00+09:00', ...limits }) + '\n');
+    return z;
+  };
+  const ksL = (z, ...a) => sh('node', [path.join(z, 'bin/ledger.mjs'), ...a], { env: { ...process.env, VGDD_Z3_DIR: z } });
+  const ksRun = (z) => { const out = path.join(z, 'out/kernel-state.json'); const r = sh('node', [path.join(z, 'bin/kernel-state.mjs'), '--repo', fx.main, '--z3', z, '--out', out], { env: { ...process.env, VGDD_Z3_DIR: '' } }); let j = null; try { j = JSON.parse(fs.readFileSync(out, 'utf8')); } catch { /* なし */ } return { r, j, text: (() => { try { return fs.readFileSync(out, 'utf8'); } catch { return ''; } })() }; };
+  const z18 = ksZ({});
+  const rid = (o) => (o.stdout || '').trim();
+  const a1 = rid(ksL(z18, 'begin', '--kind', 'worker', '--task', 'T-981', '--req', 'ks1', '--tokens', '1000')); ksL(z18, 'started', '--run', a1, '--pid', String(process.pid));   // 生きている作業員
+  const a2 = rid(ksL(z18, 'begin', '--kind', 'judge', '--task', 'T-981', '--req', 'ks2', '--tokens', '300')); ksL(z18, 'started', '--run', a2, '--pid', '999998'); ksL(z18, 'finish', '--run', a2, '--code', '0', '--format', 'none');   // 利用量の不明 → 予約の全量
+  const a3 = rid(ksL(z18, 'begin', '--kind', 'codex', '--task', 'T-981', '--req', 'ks3', '--tokens', '200')); ksL(z18, 'cancel', '--run', a3);
+  const a4 = rid(ksL(z18, 'begin', '--kind', 'worker', '--task', 'T-982', '--req', 'ks4', '--tokens', '500')); ksL(z18, 'started', '--run', a4, '--pid', '999999');   // 生死が不明
+  const k18 = ksRun(z18);
+  const B = k18.j?.budget; const R = k18.j?.runs;
+  record('ST', 'ST18', '状態の写しに、今の期間の予算の集計（トークン・司法・試行・作業員）と実行の状態ごとの件数を、T-042 の形で出す',
+    k18.r.status === 0 && !!B && B.period_id === 'pKS' && B.until === '2099-01-01T00:00:00+09:00' && B.tokens.settled === 800 && B.tokens.reserved === 1000 && B.tokens.unknown_runs === 2 && B.tokens.limit === 100000
+      && B.judge_calls.used === 1 && B.judge_calls.limit === 10 && B.attempts.used === 2 && B.attempts.limit === null && B.workers.active === 1 && B.workers.limit === 3
+      && Object.keys(B).join() === 'period_id,until,tokens,judge_calls,attempts,workers' && Object.keys(B.tokens).join() === 'settled,reserved,unknown_runs,limit'
+      && !!R && R.requested === 4 && R.reserved === 0 && R.started === 1 && R.exited === 1 && R.settled === 1 && R.cancelled === 1 && R.liveness_unknown === 1 && R.usage_unknown === 2
+      && !('acceptance' in (k18.j || {})),
+    JSON.stringify({ budget: B, runs: R }).slice(0, 400));
+  record('ST', 'ST19', '台帳の集計の項目に、実行の ID・票の ID・pid・要求の ID を出さない',
+    k18.r.status === 0 && ![a1, a2, a3, a4, 'T-981', 'T-982', 'ks1', String(process.pid), '999998', '999999'].some((x) => x && JSON.stringify({ b: k18.j?.budget, r: k18.j?.runs }).includes(x)));
+  const z20a = ksZ(null); const k20a = ksRun(z20a);   // 上限の設定がない
+  const z20b = ksZ({}); ksL(z20b, 'begin', '--kind', 'judge', '--task', 'T-983', '--req', 'ks5', '--tokens', '10');
+  fs.appendFileSync(path.join(z20b, 'budget/ledger.jsonl'), '{"type":"begin","broken":\n'); const k20b = ksRun(z20b);   // 台帳の破損
+  const z20c = ksZ({ period_id: 'x'.repeat(41) }); const k20c = ksRun(z20c);   // 形の合わない期間の名前
+  record('ST', 'ST20', '上限の設定がない・台帳が壊れている・期間の名前の形が合わないときは、budget・runs を出さず（0 を作り足さず）、ほかの項目の写しは書く',
+    [k20a, k20b, k20c].every((k) => k.r.status === 0 && k.j?.schema === 'vgdd.kernel-state.v1' && !('budget' in k.j) && !('runs' in k.j)),
+    [k20a, k20b, k20c].map((k) => `rc=${k.r.status} budget=${k.j ? 'budget' in k.j : '-'}`).join(' / '));
 }
 
 // ---- K 停止と再開 -------------------------------------------------------------------------------

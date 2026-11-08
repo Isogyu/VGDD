@@ -426,6 +426,26 @@
       "tests_total": 497,
       "prev_failed": 3,
       "obs": []
+    },
+    {
+      "version": "p0.4.11",
+      "date": "2026-11-08",
+      "title": "Kernel の状態の写しに予算の台帳の集計（予算・実行の状態）を出す",
+      "fixed": [
+        "予算の台帳（p0.4.9）の使用量と実行の状態は Z3 の中だけにあり、統治の画面から見えなかった（写しに数と期間だけを出す。読めなければ項目を出さず、0 を作り足さない）"
+      ],
+      "found_by": [
+        "owner",
+        "legislative"
+      ],
+      "precedents": [
+        "ST18",
+        "ST19",
+        "ST20"
+      ],
+      "tests_total": 500,
+      "prev_failed": 1,
+      "obs": []
     }
   ]
 }
