@@ -1,7 +1,7 @@
 ---
 id: T-044
 title: 読み取りだけの導入診断（scripts/doctor.mjs）を足す。必要なコマンド・版・設定・保護・写しの一致を、秘密を出さずに確かめる
-status: in_progress
+status: review
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -97,3 +97,5 @@ held の後、立法補佐が候補で `node scripts/doctor.mjs` と `--json` �
     - 試験も足す。合成の `--repo` で `.claude` と `vgdd/scripts` を記号リンクにした場合、合成の `--z3` で `bin`・`hooks` を記号リンクにした場合に、リンクの先の中身を読まないこと（リンクの先に置いた合成の秘密の文字列と、正しい中身のどちらでも、結果が「一致」や ok にならないこと）を確かめる。
   - **直すこと2（minor、A1-2）**：`findOnPath` は、PATH の空の要素と相対のディレクトリを無条件に外している。§2 に「PATH は絶対パスに限る」という決まりはないので、shell と同じ探し方に合わせる。空の要素は今のフォルダとして扱い、相対のディレクトリは今のフォルダ（`process.cwd()`。試験では引数で渡す）から解く。存在を調べるだけで、実行しない・パスを出さないのは今のまま。試験も足す（空の要素と相対のディレクトリで見つかること）。
   - **試験**：`node --test scripts/doctor.test.mjs` が通ることも、`npm run -s test`・`typecheck`・`lint` とあわせて確かめて、報告に書く（司法の入力には差分と決定論的監査しか渡らない）
+
+- 2026-11-08T10:05:06+0900 night-runner: 作業員の実装を前検査で確認（HEAD c7b7379）。status → review で再申請（試行 1）
