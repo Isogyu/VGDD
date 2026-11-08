@@ -27,7 +27,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFile, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -92,7 +92,7 @@ function heldOf(task) {
 }
 function mergeCommitOf(task) {
   // 裁判所（gate-runner）の名で main に入った、この票の統合のコミット（最新）
-  const r = git('log', 'main', '--format=%H%x09%an%x09%ct%x09%s', '-n', '2000');
+  const r = git('log', 'main', '--format=%H%x09%an%x09%ct%x09%s', '-n', '5000');
   for (const line of (r.stdout || '').split('\n')) {
     const [sha, an, ct, subj] = line.split('\t');
     if (an === 'gate-runner' && SHA_RE.test(sha || '') && (subj || '').startsWith(`gate-runner: ${task} を統合`)) return { sha, at: Number(ct) };
@@ -160,29 +160,45 @@ function view() {
 function actionLog() { return jsonl(ACTIONS); }
 function appendAction(o) { fs.appendFileSync(ACTIONS, JSON.stringify({ ts: new Date().toISOString(), ...o }) + '\n', { mode: 0o600 }); }
 const short = (s) => String(s || '').replaceAll(os.homedir(), '~').replace(/[^\S\n]+/g, ' ').trim().split('\n').slice(-4).join(' / ').slice(0, 400);
+// 子は非同期で動かす（統合の実行中も画面と停止を使える。Codex の監査 major）。リポジトリの場所は VGDD_REPO で固定して渡す（同 critical：
+//   既存のスクリプトは cwd ではなく VGDD_REPO か既定の場所を使うため、渡さないと別のリポジトリの票を扱いうる）
 function run(file, argv, timeoutMs) {
-  try {
-    const out = execFileSync(path.join(HERE, file), argv, { cwd: REPO, encoding: 'utf8', timeout: timeoutMs, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, VGDD_Z3_DIR: Z3 } });
-    return { ok: true, rc: 0, msg: short(out) };
-  } catch (e) {
-    return { ok: false, rc: Number.isInteger(e.status) ? e.status : null, msg: e.signal ? `時間切れ・中断（${e.signal}）` : short(`${e.stdout || ''}\n${e.stderr || ''}`) };
+  return new Promise((resolve) => {
+    execFile(path.join(HERE, file), argv, { cwd: REPO, encoding: 'utf8', timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, VGDD_Z3_DIR: Z3, VGDD_REPO: REPO } }, (e, out, err) => {
+      if (!e) return resolve({ ok: true, rc: 0, msg: short(out) });
+      resolve({ ok: false, rc: Number.isInteger(e.code) ? e.code : null, msg: e.killed || e.signal ? `時間切れ・中断（${e.signal || 'timeout'}）` : short(`${out || ''}\n${err || ''}`) });
+    });
+  });
+}
+// ロック：停止はほかの操作と別のロック（統合の実行中でも止められる）。ロックには自分の pid を書く。取れないとき、持ち主の pid が
+//   生きていなければ「取り残し」と出し、自動では消さない（オーナーが確かめて退ける。Codex の監査 major）
+const lockDir = (kind) => path.join(CONSOLE_DIR, kind === 'stop' ? '.stop.lock' : '.action.lock');
+function lock(kind) {
+  const d = lockDir(kind);
+  try { fs.mkdirSync(d); fs.writeFileSync(path.join(d, 'pid'), `${process.pid}\n`); return null; } catch (e) {
+    if (e.code !== 'EEXIST') return `ロックを取れない（${e.code}）`;
+    const pid = Number((() => { try { return fs.readFileSync(path.join(d, 'pid'), 'utf8').trim(); } catch { return ''; } })());
+    if (pid === process.pid) return 'ほかの操作を実行中。終わってから操作する';
+    return alive(pid) ? 'ほかの窓口の操作を実行中。終わってから操作する' : `前の操作のロックが残っている（持ち主の pid ${pid || '不明'} は動いていない）。端末で確かめてから ${d.replace(os.homedir(), '~')} を退ける`;
   }
 }
-function lock() { try { fs.mkdirSync(path.join(CONSOLE_DIR, '.action.lock')); return true; } catch { return false; } }
-function unlock() { try { fs.rmdirSync(path.join(CONSOLE_DIR, '.action.lock')); } catch { /* なし */ } }
+function unlock(kind) { const d = lockDir(kind); try { fs.rmSync(path.join(d, 'pid'), { force: true }); fs.rmdirSync(d); } catch { /* なし */ } }
 
-function perform(f) {
+async function perform(f) {
   const { action, task, target, action_id: aid } = f;
   if (!AID_RE.test(aid || '')) return { ok: false, msg: '操作の ID の形が違う' };
-  const prev = actionLog().filter((a) => a.action_id === aid);
-  if (prev.some((a) => a.phase === 'done')) { const d = prev.find((a) => a.phase === 'done'); return { ok: d.ok, msg: `同じ操作はすでに実行した（前の結果：${d.ok ? '成功' : '失敗'}。${d.msg || ''}）`, dup: true }; }
-  if (prev.length) return { ok: false, msg: 'この操作は受け付けた後に結果が記録されていない（結果が不明）。状態を見てから、新しく操作する', dup: true };
   if (!['approve', 'start', 'release', 'stop', 'resume', 'accept'].includes(action)) return { ok: false, msg: '知らない操作' };
   const needsTask = !['stop', 'resume'].includes(action);
   if (needsTask && !TASK_RE.test(task || '')) return { ok: false, msg: '票の ID の形が違う' };
-  if (!lock()) return { ok: false, msg: 'ほかの操作を実行中。終わってから操作する' };
+  const kind = action === 'stop' ? 'stop' : 'action';
+  const lk = lock(kind); if (lk) return { ok: false, msg: lk };
   try {
-    // 実行の直前に、今の状態で確かめ直す（画面を出した後の変化）
+    // 重複の照合はロックの中で（複数の窓口のプロセスでも、古い履歴のまま実行しない。Codex の監査 major）
+    const prev = actionLog().filter((a) => a.action_id === aid);
+    if (prev.length && prev.some((a) => a.phase === 'received' && (a.action !== action || (a.task || null) !== (needsTask ? task : null)))) return { ok: false, msg: '同じ操作の ID で別の操作が記録されている。実行しない', dup: true };
+    if (prev.some((a) => a.phase === 'done')) { const d = prev.find((a) => a.phase === 'done'); return { ok: d.ok, msg: `同じ操作はすでに実行した（前の結果：${d.ok ? '成功' : '失敗'}。${d.msg || ''}）`, dup: true }; }
+    if (prev.length) return { ok: false, msg: 'この操作は受け付けた後に結果が記録されていない（結果が不明）。状態を見てから、新しく操作する', dup: true };
+    // 実行の直前に、今の状態で確かめ直す（画面を出した後の変化）。承認と統合は、子のスクリプトにも対象を渡して、子の中でも照合させる
     const v = view(); const row = needsTask ? v.rows.find((r) => r.id === task) : null;
     if (needsTask && !row) return { ok: false, msg: '票が main にない' };
     let pre = null;
@@ -194,16 +210,20 @@ function perform(f) {
     } else if (action === 'stop' && v.stop) pre = 'すでに停止中';
     else if (action === 'resume' && !v.stop) pre = '停止していない';
     if (pre) return { ok: false, msg: pre };
-    appendAction({ action_id: aid, phase: 'received', action, task: task || null, target: target || null });
+    appendAction({ action_id: aid, phase: 'received', action, task: needsTask ? task : null, target: needsTask ? target : null });
     let res;
-    if (action === 'approve') res = run('approve-spec.sh', [task, '--yes', '--note', `owner-console ${aid}`], 60000);
-    else if (action === 'release') res = run('release.sh', [task], 600000);
-    else if (action === 'stop') res = run('kernel-stop.sh', [`Owner Console から停止（${aid.slice(0, 8)}）`], 30000);
-    else if (action === 'resume') res = run('kernel-resume.sh', [`Owner Console から再開（${aid.slice(0, 8)}）`, ...(f.accept_main === 'yes' ? ['--accept-main'] : [])], 120000);
-    else if (action === 'start') {
+    if (action === 'approve') res = await run('approve-spec.sh', [task, '--yes', '--expect', target, '--note', `owner-console ${aid}`], 60000);
+    else if (action === 'release') res = await run('release.sh', ['--expect-request', target, task], 600000);
+    else if (action === 'stop') res = await run('kernel-stop.sh', [`Owner Console から停止（${aid.slice(0, 8)}）`], 30000);
+    // 再開は点検だけ。停止の後に main に入ったコミットの受け入れ（--accept-main）は、対象の一覧を固定できないので窓口では行わない（端末で。Codex の監査 major）
+    else if (action === 'resume') {
+      res = await run('kernel-resume.sh', [`Owner Console から再開（${aid.slice(0, 8)}）`], 120000);
+      if (!res.ok && /accept-main/.test(res.msg)) res.msg = `${res.msg}（停止の後に main が進んだ。コミットを確かめて、端末で kernel-resume.sh … --accept-main を使う）`;
+    } else if (action === 'start') {
+      // 開始は票の ID だけを置く。窓口（launcher）は起動の時点の承認を確かめ直すので、画面の後に仕様が変わっても、承認のない仕様では起動しない
       try {
         const dir = path.join(REPO, 'merge-requests', 'launch');
-        for (const d of [path.join(REPO, 'merge-requests'), dir]) { const s = fs.lstatSync(d); if (!s.isDirectory()) throw new Error('申請の場所がフォルダでない（記号リンクを含む）'); }
+        for (const d of [path.join(REPO, 'merge-requests'), dir]) { const st = fs.lstatSync(d); if (!st.isDirectory()) throw new Error('申請の場所がフォルダでない（記号リンクを含む）'); }
         fs.writeFileSync(path.join(dir, `${task}.json`), JSON.stringify({ task }) + '\n', { flag: 'wx', mode: 0o644 });
         res = { ok: true, rc: 0, msg: '起動の申請を置いた（窓口が受け取り、作業員を起こす）' };
       } catch (e) { res = { ok: false, rc: null, msg: e.code === 'EEXIST' ? '起動の申請がすでにある' : `申請を置けなかった（${e.code || e.message}）` }; }
@@ -215,7 +235,7 @@ function perform(f) {
     }
     appendAction({ action_id: aid, phase: 'done', ok: res.ok, rc: res.rc, msg: res.msg });
     return res;
-  } finally { unlock(); }
+  } finally { unlock(kind); }
 }
 
 // ---------- HTTP ----------
@@ -242,7 +262,7 @@ function page(s, flash) {
   const b = v.b;
   const usage = (u, l) => (l === null || l === undefined ? `${u}（上限なし）` : `${u} ／ ${l}`);
   const stopLine = v.stop
-    ? `<p><b>停止中</b>（STOP を置いた）。動いている作業員・司法：${v.active === null ? '確かめられない' : v.active === 0 ? '0（止まったのを確かめた）' : `${v.active}（まだ動いている）`}</p>${form({ action: 'resume', label: '点検して再開する（証拠・設定・main を確かめ、合わなければ再開しない）', target: '' }, '', '<label><input type="checkbox" name="accept_main" value="yes"> 停止の後の main のコミットを確かめた（--accept-main）</label> ')}`
+    ? `<p><b>停止中</b>（STOP を置いた）。動いている作業員・司法：${v.active === null ? '確かめられない' : v.active === 0 ? '0（止まったのを確かめた）' : `${v.active}（まだ動いている）`}</p>${form({ action: 'resume', label: '点検して再開する（証拠・設定・main を確かめ、合わなければ再開しない。停止の後に main が進んだときの受け入れは端末で）', target: '' }, '')}`
     : `<p>動いている（停止していない）。動いている作業員・司法：${v.active ?? '—'}</p>${form({ action: 'stop', label: '全体を止める（新しい作業・審査・統合を止める。動いている処理は終わるまで残る）', target: '' }, '')}`;
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta http-equiv="refresh" content="30"><title>VGDD オーナーの操作</title>
 <style>body{font:14px/1.6 system-ui,sans-serif;margin:16px;max-width:1100px}table{border-collapse:collapse;width:100%}td,th{border-top:1px solid #ccc;padding:4px 6px;text-align:left;vertical-align:top}button{margin:2px 0}.flash{padding:8px;border:1px solid #888;margin:8px 0}small{color:#555}</style></head><body>
@@ -292,7 +312,7 @@ const server = http.createServer(async (req, res) => {
       const body = await readBody(req, 8192); if (body === null) return send(res, 413, '大きすぎる');
       const f = Object.fromEntries(new URLSearchParams(body));
       if (!eq(f.csrf || '', s.csrf)) return send(res, 403, 'CSRF トークンが違う');
-      const r = perform(f);
+      const r = await perform(f);
       return send(res, 303, '', { Location: `/?m=${encodeURIComponent(`${f.action || ''} ${f.task || ''}：${r.ok ? '成功' : '失敗・未実行'}。${r.msg}`)}` });
     }
     return send(res, 404, 'ない');

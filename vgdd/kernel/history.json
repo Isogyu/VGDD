@@ -472,10 +472,13 @@
         "OC8",
         "OC9",
         "OC10",
-        "OC11"
+        "OC11",
+        "OC12",
+        "P4",
+        "L16"
       ],
-      "tests_total": 513,
-      "prev_failed": 12,
+      "tests_total": 516,
+      "prev_failed": 15,
       "obs": []
     }
   ]
