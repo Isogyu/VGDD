@@ -340,7 +340,8 @@ process_request() {
     local jsev csev
     jsev="$(jq -r '[.judge.findings[]? | select(.severity=="critical" or .severity=="major")] | length' "$jfile" 2>/dev/null || echo 0)"
     csev="$(jq -r '[.codex.findings[]? | select(.severity=="critical" or .severity=="major")] | length' "$cfile" 2>/dev/null || echo 0)"
-    log_event "disagreement" "$task" "\"judge\":\"$jv\",\"codex\":\"$cv\",\"judge_major\":$jsev,\"codex_major\":$csev"
+    # p0.4.14：オーナーの操作の窓口が裁定の対象を推し量らずに固定できるよう、申請の完全な SHA と候補の SHA（判定のファイルの名前）を残す（Codex の監査 major）
+    log_event "disagreement" "$task" "\"judge\":\"$jv\",\"codex\":\"$cv\",\"judge_major\":$jsev,\"codex_major\":$csev,\"request_full\":\"$actual\",\"candidate\":\"${candidate:0:12}\""
     if [ "$jsev" -gt 0 ] || [ "$csev" -gt 0 ]; then
       # p0.3.1：オーナーの裁定（Z3 の rulings.jsonl。行政は書けない）が、この票のこの申請の SHA について「統合」なら、理由を記録して進める（D-59①）。
       #   裁定は申請の SHA に結び付く（後から差し替えた申請には効かない）。監査の不合格・セキュリティ審査の不合格・保護パスには効かない
@@ -439,6 +440,29 @@ write_kernel_state() {
   [ "$KSTATE_FAILED" -eq 1 ] || log_event "kernel_state_unwritten" "-" "\"script\":$([ -f "$BIN/kernel-state.mjs" ] && echo true || echo false)"
   KSTATE_FAILED=1; return 0
 }
+# p0.4.13（OBS-064 ③）：裁判所は1つだけ動かす。配置の後に古い裁判所が残り、2つが同じ申請を処理して held と記録を二重に書いた。
+#   Z3 の .gate-runner.lock に自分の pid を書く。持ち主が生きていて gate-runner.sh として動いていれば起動しない（終了 75）。
+#   持ち主がいなければ（落ちた）引き継ぐ。終わるとき、自分のロックだけを外す
+# Codex の監査（major）：錠を書かない古い版の裁判所が残っていても見抜けるよう、同じスクリプトのファイル（絶対パス）を動かしている
+#   ほかのプロセスがあれば起動しない（自分と、自分の子のサブシェルは除く）
+SELF_PATH="$(cd "$(dirname "$0")" && pwd -P)/$(basename "$0")"
+for gp in $(pgrep -f -- "$SELF_PATH" 2>/dev/null || true); do
+  [ "$gp" = "$$" ] && continue
+  [ "$(ps -o ppid= -p "$gp" 2>/dev/null | tr -d ' ')" = "$$" ] && continue
+  echo "同じ gate-runner（pid ${gp}）が動いている。二重に起動しない（配置の前に古い裁判所を止める）" >&2; exit 75
+done
+GLOCK="$Z3/.gate-runner.lock"
+if ! mkdir "$GLOCK" 2>/dev/null; then
+  gop="$(cat "$GLOCK/pid" 2>/dev/null || true)"
+  if [[ "$gop" =~ ^[0-9]+$ ]] && kill -0 "$gop" 2>/dev/null && ps -p "$gop" -o command= 2>/dev/null | grep -q 'gate-runner\.sh'; then
+    echo "別の gate-runner（pid ${gop}）が動いている。二重に起動しない" >&2; exit 75
+  fi
+  echo "前の gate-runner のロック（pid ${gop:-不明}）は持ち主がいない。引き継ぐ" >&2
+  log_event "gate_lock_taken_over" "-" "\"prev_pid\":\"$(printf '%s' "${gop}" | tr -cd '0-9')\""
+fi
+echo "$$" > "$GLOCK/pid"
+trap '[ "$(cat "$GLOCK/pid" 2>/dev/null)" = "$$" ] && rm -f "$GLOCK/pid" && rmdir "$GLOCK" 2>/dev/null; true' EXIT
+
 preflight
 
 echo "gate-runner 起動: repo=$REPO interval=${INTERVAL}s codex=$([ "$NO_CODEX" -eq 1 ] && echo off || echo on)"
