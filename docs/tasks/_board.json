@@ -1,10 +1,10 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-08T01:31:58.864+09:00",
+  "generated_at": "2026-11-08T10:34:57.548+09:00",
   "totals": {
-    "tickets": 45,
-    "merged": 42,
-    "rejected": 38,
+    "tickets": 46,
+    "merged": 43,
+    "rejected": 42,
     "blocked": 0,
     "disagreements": 17
   },
@@ -390,24 +390,33 @@
     {
       "id": "T-042",
       "title": "Kernel の写しの読み取りを、予算・実行・受け入れの新しい項目（任意）にも対応させる（新旧の両方の写しを読める）",
-      "status": "in_progress",
+      "status": "merged",
       "estimate_h": 1,
-      "returns": 1,
-      "merged_at": null,
+      "returns": 2,
+      "merged_at": "2026-11-08T10:34:44+0900",
       "disagreements": 0
     },
     {
       "id": "T-043",
       "title": "初心者向けの要件確認（/requirements）を足す。固定の質問・回答・未解決の事項・受け入れ条件の候補を LLM から独立したデータで持ち、票の下書きの文を出す",
-      "status": "in_progress",
+      "status": "review",
       "estimate_h": 3,
-      "returns": 1,
+      "returns": 2,
       "merged_at": null,
       "disagreements": 0
     },
     {
       "id": "T-044",
       "title": "読み取りだけの導入診断（scripts/doctor.mjs）を足す。必要なコマンド・版・設定・保護・写しの一致を、秘密を出さずに確かめる",
+      "status": "in_progress",
+      "estimate_h": 1.5,
+      "returns": 2,
+      "merged_at": null,
+      "disagreements": 0
+    },
+    {
+      "id": "T-045",
+      "title": "統治の画面の Kernel の区画に、予算の使用・実行の状態・受け入れの件数を出す（写しに項目がなければ「写しにない」と出す）",
       "status": "ready",
       "estimate_h": 1.5,
       "returns": 0,
