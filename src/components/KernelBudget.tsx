@@ -36,8 +36,8 @@ export default function KernelBudget({ state }: { state: KernelState }) {
             }`}
           </p>
           <table className="w-full text-left text-sm">
-            <caption className="mb-1 text-left text-xs text-zinc-500">予算の使用</caption>
-            <thead className="text-xs text-zinc-500">
+            <caption className="mb-1 text-left text-zinc-500">予算の使用</caption>
+            <thead className="text-zinc-500">
               <tr>
                 <th className="py-1 pr-3 font-medium">項目</th>
                 <th className="py-1 font-medium">使用 ／ 上限（割合）</th>
@@ -66,8 +66,8 @@ export default function KernelBudget({ state }: { state: KernelState }) {
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <caption className="mb-1 text-left text-xs text-zinc-500">実行の状態</caption>
-            <thead className="text-xs text-zinc-500">
+            <caption className="mb-1 text-left text-zinc-500">実行の状態</caption>
+            <thead className="text-zinc-500">
               <tr>
                 <th className="py-1 pr-3 font-medium">状態</th>
                 <th className="py-1 font-medium">件数</th>

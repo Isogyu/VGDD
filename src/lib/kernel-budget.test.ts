@@ -29,6 +29,11 @@ describe("usageRow", () => {
     expect(usageRow(30_000_000, null).text).toBe("30,000,000（上限なし）");
     expect(usageRow(15_000_000, 30_000_000).text).toBe("15,000,000 ／ 30,000,000（50%）");
   });
+  it("割合も3桁ごとに区切る（T-046 A1）", () => {
+    expect(usageRow(10, 1).text).toBe("10 ／ 1（1,000%）");
+    expect(usageRow(10, 1).percent).toBe(1000);
+    expect(usageRow(30_000_000, 30_000_000).text).toBe("30,000,000 ／ 30,000,000（100%）");
+  });
 });
 
 const BUDGET: KernelBudget = {

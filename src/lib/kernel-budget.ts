@@ -25,9 +25,9 @@ export function usageRow(used: number, limit: number | null): UsageRow {
   if (limit === 0) {
     return { used, limit, percent: null, text: `${fmt(used)} ／ 上限 0` };
   }
-  // 100 を超えてもそのまま出す
+  // 100 を超えてもそのまま出す。割合も数と同じく3桁ごとに区切る（T-046）
   const percent = Math.floor((used * 100) / limit);
-  return { used, limit, percent, text: `${fmt(used)} ／ ${fmt(limit)}（${percent}%）` };
+  return { used, limit, percent, text: `${fmt(used)} ／ ${fmt(limit)}（${fmt(percent)}%）` };
 }
 
 export type BudgetRow = { label: string; row: UsageRow };
