@@ -254,7 +254,9 @@ const SESSION_MS = 12 * 3600e3;
 let BASE = '';
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const eq = (a, b) => { const x = Buffer.from(String(a)); const y = Buffer.from(String(b)); return x.length === y.length && crypto.timingSafeEqual(x, y); };
-const HEAD = { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'", 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY' };
+// p0.4.12a：Referrer-Policy は same-origin（no-referrer にすると、ブラウザはフォームの送信の Origin を null にし、正しい操作がすべて「許されない Origin」になった。
+//   同じ窓口の中の送信だけ Origin が付き、ほかのサイトへの遷移には送り元を出さない）
+const HEAD = { 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'", 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'same-origin', 'Cache-Control': 'no-store', 'X-Frame-Options': 'DENY' };
 function send(res, code, body, extra = {}) { res.writeHead(code, { 'Content-Type': 'text/html; charset=utf-8', ...HEAD, ...extra }); res.end(body); }
 function sessionOf(req) {
   const m = (req.headers.cookie || '').match(/(?:^|;\s*)vgdd_console=([0-9a-f]{64})/);

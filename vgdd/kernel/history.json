@@ -480,6 +480,23 @@
       "tests_total": 516,
       "prev_failed": 15,
       "obs": []
+    },
+    {
+      "version": "p0.4.12a",
+      "date": "2026-11-08",
+      "title": "オーナーの操作の窓口の送り元の扱いを直し、ブラウザからの操作が拒まれる不具合を直す",
+      "fixed": [
+        "窓口の画面が Referrer-Policy: no-referrer を返していたため、ブラウザがフォームの送信の Origin を null にし、正しい操作がすべて拒まれた（same-origin にした。判例は試験の道具から Origin を付けて送っていて捕まえられなかった）"
+      ],
+      "found_by": [
+        "owner"
+      ],
+      "precedents": [
+        "OC13"
+      ],
+      "tests_total": 517,
+      "prev_failed": 1,
+      "obs": []
     }
   ]
 }
