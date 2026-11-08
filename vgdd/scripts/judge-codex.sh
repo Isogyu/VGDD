@@ -17,7 +17,7 @@
 # 前提: codex CLI がログイン済み（オーナーの契約。学習に使われない設定を 2026-11-03 に確認済み）。
 #       非対話実行は `codex exec`：プロンプトは標準入力（`-`）、既定で読み取り専用の sandbox、`--output-schema` で JSON に固定、
 #       `-o` で最終メッセージをファイルに、`--ephemeral` で記録を残さない、`--skip-git-repo-check`。
-#       モデルの指定は公式ページに記載がなかったため、CODEX_EXTRA_ARGS（例: "--model gpt-5-codex"）でオーナーが与える。
+#       モデルの指定は公式ページに記載がなかったため、CODEX_EXTRA_ARGS（例: "--model gpt-5-codex"）でオーナーが与える。p0.4.10a からはモデルの指定だけを許す。
 # 規則: 決定論的監査の不合格は LLM の判定で取り消せない（judge.sh と同じ上書き）。送る差分は合成データだけ。
 
 set -euo pipefail
@@ -76,6 +76,24 @@ if [ "$DRY" = "1" ]; then
   exit 0
 fi
 
+# p0.4.10a（Codex の2回目の監査 major）：窓口は kind=codex の呼び出しに限り、子が終わった後に残った子孫を片付けて成功として精算する。
+#   その前提の「読み取り専用」を実装で固定する：-s read-only を必ず渡し、追加の引数（CODEX_EXTRA_ARGS）はモデルの指定（--model 名前・-m 名前）だけを許す。
+#   ほかの引数（sandbox の変更・設定の上書き・承認の省略など）があれば Codex を呼ばずに終了 64（判定のファイルを書かない＝裁判所は「司法が使えない」として扱う）
+CODEX_ARGS=()
+if [ -n "${CODEX_EXTRA_ARGS:-}" ]; then
+  case "${CODEX_EXTRA_ARGS}" in *$'\n'*|*$'\r'*) echo "CODEX_EXTRA_ARGS に改行がある" >&2; exit 64 ;; esac   # read は1行目しか読まない（Codex の3回目の監査 minor）
+  read -r -a _xa <<< "${CODEX_EXTRA_ARGS}"
+  _i=0
+  while [ "${_i}" -lt "${#_xa[@]}" ]; do
+    case "${_xa[${_i}]}" in
+      --model|-m)
+        _n="${_xa[$((_i + 1))]:-}"
+        [[ "${_n}" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "CODEX_EXTRA_ARGS のモデルの名前が不正" >&2; exit 64; }
+        CODEX_ARGS+=("${_xa[${_i}]}" "${_n}"); _i=$((_i + 2)) ;;
+      *) echo "CODEX_EXTRA_ARGS に許されない引数（モデルの指定だけを許す）" >&2; exit 64 ;;
+    esac
+  done
+fi
 command -v codex >/dev/null || { echo "codex CLI が見つからない（オーナーの環境で実行する）" >&2; exit 69; }
 mkdir -p "$OUT_DIR"
 LAST="$(mktemp "$TMP_BASE/judge-codex-last.XXXXXX")"
@@ -84,7 +102,7 @@ LAST="$(mktemp "$TMP_BASE/judge-codex-last.XXXXXX")"
 METER="$(cd "$HERE" && pwd)/metered.sh"
 printf '%s' "$INPUT" | "$METER" codex "$TASK" "${VGDD_CODEX_TOKENS:-300000}" none -- codex exec - \
   --output-schema "$HERE/../schemas/verdict.schema.json" \
-  -o "$LAST" --ephemeral --skip-git-repo-check ${CODEX_EXTRA_ARGS:-} >/dev/null 2>"$OUT_DIR/.codex-stderr.log" && CLI_RC=0 || CLI_RC=$?   # p0.4.3：終了状態を残す
+  -s read-only -o "$LAST" --ephemeral --skip-git-repo-check ${CODEX_ARGS[@]+"${CODEX_ARGS[@]}"} >/dev/null 2>"$OUT_DIR/.codex-stderr.log" && CLI_RC=0 || CLI_RC=$?   # p0.4.3：終了状態を残す
 RAW="$(cat "$LAST" 2>/dev/null || true)"
 rm -f "$LAST"
 

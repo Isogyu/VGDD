@@ -296,14 +296,15 @@ function groupC3() {
   write(path.join(wj, 'src/lib/a.ts'), 'export const v = 2;\n'); git(wj, 'add', '-A'); git(wj, 'commit', '-q', '-m', '実装');
   const fake = path.join(fj.base, 'fakebin');
   write(path.join(fake, 'claude'), '#!/bin/bash\nprintf "%s" "$FAKE_OUT"; exit "${FAKE_RC:-0}"\n');
-  write(path.join(fake, 'codex'), '#!/bin/bash\nwhile [ $# -gt 0 ]; do [ "$1" = "-o" ] && { printf "%s" "$FAKE_OUT" > "$2"; shift; }; shift; done; exit "${FAKE_RC:-0}"\n');
+  write(path.join(fake, 'codex'), '#!/bin/bash\n[ -n "${FAKE_ARGS:-}" ] && printf "%s\\n" "$@" > "$FAKE_ARGS"\nwhile [ $# -gt 0 ]; do [ "$1" = "-o" ] && { printf "%s" "$FAKE_OUT" > "$2"; shift; }; shift; done; exit "${FAKE_RC:-0}"\n');
   fs.chmodSync(path.join(fake, 'claude'), 0o755); fs.chmodSync(path.join(fake, 'codex'), 0o755);
   const outDir = path.join(fj.base, 'verdicts'); fs.mkdirSync(outDir, { recursive: true });
   const okVerdict = JSON.stringify({ schema: 'vgdd.verdict.v1', verdict: 'APPROVED', deterministic_audits_passed: true, requirements: [], findings: [], summary: 'x' });
-  const realJudge = (script, extra, out, rc = 0) => {
+  let lastJudgeStatus = null;
+  const realJudge = (script, extra, out, rc = 0, extraEnv = {}) => {
     for (const f of fs.readdirSync(outDir)) fs.rmSync(path.join(outDir, f), { force: true });
-    sh('bash', [path.join(IMPL.bin, script), ...extra, '--ticket', 'docs/tasks/T-921-probe.md', '--base', 'main', '--task', 'T-921', '--out', outDir],
-      { cwd: wj, env: { ...process.env, ...UTF8, PATH: `${fake}:${process.env.PATH}`, FAKE_OUT: out, FAKE_RC: String(rc), VGDD_AUDIT_WRAP: '', VGDD_Z3_DIR: fj.z3 }, timeout: 120000 }); // p0.4.9：台帳は偽の Z3 に書く（本物の Z3 に触れない）
+    lastJudgeStatus = sh('bash', [path.join(IMPL.bin, script), ...extra, '--ticket', 'docs/tasks/T-921-probe.md', '--base', 'main', '--task', 'T-921', '--out', outDir],
+      { cwd: wj, env: { ...process.env, ...UTF8, PATH: `${fake}:${process.env.PATH}`, FAKE_OUT: out, FAKE_RC: String(rc), VGDD_AUDIT_WRAP: '', VGDD_Z3_DIR: fj.z3, ...extraEnv }, timeout: 120000 }).status; // p0.4.9：台帳は偽の Z3 に書く（本物の Z3 に触れない）
     const f = fs.readdirSync(outDir).find((x) => x.endsWith('.json'));
     try { return JSON.parse(fs.readFileSync(path.join(outDir, f), 'utf8')); } catch { return null; }
   };
@@ -340,6 +341,22 @@ function groupC3() {
   record('C3', 'J12', '本物の judge.sh：全体を ```json で囲んだだけの正しい判定は成り立つ（陽性の対照）', !!fenced && fenced.judge_parse_ok === true, fenced ? '' : '記録がない');
   const goodC = realJudge('judge-codex.sh', [], okVerdict, 0);
   record('C3', 'X6', '本物の judge-codex.sh：形の正しい判定は成り立つ（陽性の対照）', !!goodC && goodC.parse_ok === true, goodC ? '' : '記録がない');
+  // X10・X11（p0.4.10a、Codex の2回目の監査 major）：Codex の司法は読み取り専用で固定する。窓口が kind=codex の子孫を片付けて成功にする前提
+  const argsLog = path.join(fj.base, 'codex-args.txt');
+  const readArgs = () => { try { return fs.readFileSync(argsLog, 'utf8').split('\n'); } catch { return null; } };
+  fs.rmSync(argsLog, { force: true });
+  const modelOk = realJudge('judge-codex.sh', [], okVerdict, 0, { FAKE_ARGS: argsLog, CODEX_EXTRA_ARGS: '--model gpt-x.1' });
+  const a10 = readArgs() || [];
+  const si = a10.indexOf('-s');
+  record('C3', 'X10', '本物の judge-codex.sh：Codex に必ず -s read-only を渡し、モデルの指定（--model 名前）は通す（陽性の対照）',
+    !!modelOk && modelOk.parse_ok === true && si >= 0 && a10[si + 1] === 'read-only' && a10.includes('--model') && a10.includes('gpt-x.1'), `args=${a10.filter(Boolean).slice(1).join(' ')}`);
+  const bad = ['--sandbox danger-full-access', '-c sandbox_mode=danger-full-access', '--full-auto', '--dangerously-bypass-approvals-and-sandbox', '--model', '--model a;b', '--model gpt-x.1\n--sandbox danger-full-access'].map((x) => {
+    fs.rmSync(argsLog, { force: true });
+    const rec = realJudge('judge-codex.sh', [], okVerdict, 0, { FAKE_ARGS: argsLog, CODEX_EXTRA_ARGS: x });
+    return { x, rec, called: readArgs() !== null, status: lastJudgeStatus };
+  });
+  record('C3', 'X11', '本物の judge-codex.sh：CODEX_EXTRA_ARGS にモデルの指定以外（sandbox の変更・改行の後の引数など）があれば Codex を呼ばず、判定の記録を書かず終了 64（司法が使えない）',
+    bad.every((b) => !b.called && b.rec === null && b.status === 64), bad.filter((b) => b.called || b.rec !== null || b.status !== 64).map((b) => `${JSON.stringify(b.x)} exit=${b.status}`).join(' | ') || '');
 }
 
 // ---- G 裁判所の場面 ---------------------------------------------------------------------------
@@ -1278,6 +1295,26 @@ function groupB() {
     'bash', meter, 'judge', 'T-976', '10', 'none', '--', 'sh', '-c', 'stty sane </dev/tty >/dev/null 2>&1; echo done'], { env: env(z), input: '', timeout: 60000 });
   const ptyOut = (ptyRun.stdout || '').replace(/\r/g, '');
   record('B', 'B29', '端末（pty）の上の窓口でも、端末の設定を変えようとする子が止まらずに終わり、精算される（子は端末を持たない新しいセッション）', /done/.test(ptyOut) && /RC 0/.test(ptyOut) && st(z)?.runs.finished === 1, `${ptyOut.trim().split('\n').slice(-2).join(' / ')} rc=${ptyRun.status}`);
+
+  // B30 Codex の呼び出しで、子が自分で終わった後に同じプロセス群の子孫が残っても、中断にしない（p0.4.10a、OBS-062。Codex の notify の処理が残り、司法が毎回「使えない」になった不具合の再現）
+  //   子孫は片付け（TERM を無視する子孫も KILL で）、精算と終了コードは子のもの（0 と 3）、出力は渡す。作業員（kind=worker）は従来どおり中断（陰性の対照。Codex の監査 major）
+  const b30 = (kind, code, ignoreTerm = false) => {
+    const zz = mk({ workers: 2, tokens_total: 100000, tokens_per_ticket: 100000 });
+    const pidf = path.join(zz, 'grandchild.pid');
+    // TERM を無視する孫は、trap を置いた後に自分の pid を書き（合図）、親はそれを待ってから終わる（Codex の2回目の監査 minor：競合で KILL の経路を通らないことを防ぐ）
+    const gc = ignoreTerm ? `sh -c 'trap "" TERM; echo $$ > "$0"; exec sleep 30' '${pidf}' >/dev/null 2>&1 & while [ ! -s '${pidf}' ]; do sleep 0.05; done;` : `sleep 30 >/dev/null 2>&1 & echo $! > '${pidf}';`;
+    const r = sh('bash', [meter, kind, 'T-977', '10', 'none', '--', 'sh', '-c', `${gc} echo done; exit ${code}`], { env: env(zz), input: '', timeout: 60000 });
+    let gpid = 0; try { gpid = Number(fs.readFileSync(pidf, 'utf8').trim()); } catch {}
+    let alive = false; if (gpid > 0) { try { process.kill(gpid, 0); alive = true; } catch { alive = false; } }
+    const fin = (() => { try { return fs.readFileSync(path.join(zz, 'budget/ledger.jsonl'), 'utf8').split('\n').filter((l) => l.includes('"type":"finish"')).map((l) => JSON.parse(l)); } catch { return []; } })();
+    return { r, gpid, alive, fin, s: st(zz) };
+  };
+  const okRun = (x, c) => x.r.status === c && /done/.test(x.r.stdout) && !/interrupted/.test(x.r.stderr) && /descendants_reaped/.test(x.r.stderr) && x.gpid > 0 && !x.alive && x.fin.length === 1 && x.fin[0].exit_code === c && x.s?.runs.finished === 1;
+  const b30a = b30('codex', 0); const b30b = b30('codex', 3); const b30c = b30('codex', 0, true); const b30w = b30('worker', 0);
+  const fmt = (x) => `rc=${x.r.status} err=${(x.r.stderr || '').trim().replace(/\n/g, ' ')} alive=${x.alive} fin=${x.fin.map((f) => f.exit_code).join(',')} active=${x.s?.workers.active}`;
+  record('B', 'B30', 'Codex の呼び出しで子が終わった後に同じプロセス群の子孫が残っても中断にせず、子孫を片付けてから子の終了コード（0・3）で精算し、出力を渡す（TERM を無視する子孫も KILL で片付ける）',
+    okRun(b30a, 0) && okRun(b30b, 3) && okRun(b30c, 0), [b30a, b30b, b30c].map(fmt).join(' / '));
+  record('B', 'B31', '作業員（kind=worker）の呼び出しで子孫が残れば、従来どおり中断（終了 75・精算 143・出力を渡さない・作業員の枠を返す）', b30w.r.status === 75 && /interrupted/.test(b30w.r.stderr) && !/done/.test(b30w.r.stdout) && !b30w.alive && b30w.fin.length === 1 && b30w.fin[0].exit_code === 143 && b30w.s?.workers.active === 0, fmt(b30w));
 
   // B24 本物の judge.sh：予算で拒まれたら CLI を起動せず判定は成り立たない。上限の中なら成り立つ（陽性の対照）
   const fx = fixture('b24'); commitTicket(fx, 'T-971', {});
