@@ -240,7 +240,7 @@ function page(s, flash) {
   const form = (a, task, extra = '') => `<form method="post" action="/action" style="display:inline"><input type="hidden" name="csrf" value="${esc(s.csrf)}"><input type="hidden" name="action_id" value="${crypto.randomBytes(16).toString('hex')}"><input type="hidden" name="action" value="${esc(a.action)}"><input type="hidden" name="task" value="${esc(task || '')}"><input type="hidden" name="target" value="${esc(a.target || '')}">${extra}<button ${a.why ? 'disabled' : ''}>${esc(a.label)}</button>${a.why ? ` <small>（できない理由：${esc(a.why)}）</small>` : ''}</form>`;
   const waiting = v.rows.filter((r) => r.next === 'オーナー');
   const b = v.b;
-  const use = (u, l) => (l === null || l === undefined ? `${u}（上限なし）` : `${u} ／ ${l}`);
+  const usage = (u, l) => (l === null || l === undefined ? `${u}（上限なし）` : `${u} ／ ${l}`);
   const stopLine = v.stop
     ? `<p><b>停止中</b>（STOP を置いた）。動いている作業員・司法：${v.active === null ? '確かめられない' : v.active === 0 ? '0（止まったのを確かめた）' : `${v.active}（まだ動いている）`}</p>${form({ action: 'resume', label: '点検して再開する（証拠・設定・main を確かめ、合わなければ再開しない）', target: '' }, '', '<label><input type="checkbox" name="accept_main" value="yes"> 停止の後の main のコミットを確かめた（--accept-main）</label> ')}`
     : `<p>動いている（停止していない）。動いている作業員・司法：${v.active ?? '—'}</p>${form({ action: 'stop', label: '全体を止める（新しい作業・審査・統合を止める。動いている処理は終わるまで残る）', target: '' }, '')}`;
@@ -253,7 +253,7 @@ ${flash ? `<div class="flash" role="status">${esc(flash)}</div>` : ''}
 <ul>${waiting.map((r) => `<li>${esc(r.id)}：${esc(r.stage)} — ${esc(r.title)}<br>${r.actions.map((a) => form(a, r.id)).join(' ')}</li>`).join('') || '<li>なし</li>'}</ul>
 <h2>停止と再開</h2>${stopLine}
 <h2>予算（期間 ${esc(b?.period_id ?? '—')}、${esc(b?.until ?? '—')} まで）</h2>
-${b ? `<p>トークン（精算済み＋予約中）：${esc(use(b.tokens.settled + b.tokens.reserved, b.tokens.limit))}。利用量を読めなかった実行 ${esc(b.tokens.unknown_runs)} 件は予約の全量で数えている<br>司法の呼び出し：${esc(use(b.judge_calls.used, b.judge_calls.limit))}　作業員（同時）：${esc(use(b.workers.active, b.workers.limit))}</p>` : '<p><b>予算の台帳を読めない</b>（開始はできない）</p>'}
+${b ? `<p>トークン（精算済み＋予約中）：${esc(usage(b.tokens.settled + b.tokens.reserved, b.tokens.limit))}。利用量を読めなかった実行 ${esc(b.tokens.unknown_runs)} 件は予約の全量で数えている<br>司法の呼び出し：${esc(usage(b.judge_calls.used, b.judge_calls.limit))}　作業員（同時）：${esc(usage(b.workers.active, b.workers.limit))}</p>` : '<p><b>予算の台帳を読めない</b>（開始はできない）</p>'}
 <p><small>契約の利用枠の残りは読めない。推定費用は出さない</small></p>
 <h2>票</h2>
 <table><thead><tr><th>票</th><th>工程</th><th>次の担当</th><th>題</th></tr></thead><tbody>
