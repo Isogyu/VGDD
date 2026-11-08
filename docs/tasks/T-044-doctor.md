@@ -1,7 +1,7 @@
 ---
 id: T-044
 title: 読み取りだけの導入診断（scripts/doctor.mjs）を足す。必要なコマンド・版・設定・保護・写しの一致を、秘密を出さずに確かめる
-status: review
+status: in_progress
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -103,3 +103,5 @@ held の後、立法補佐が候補で `node scripts/doctor.mjs` と `--json` �
 - 2026-11-08T10:08:14+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
 
 - 2026-11-08T10:12:24+0900 night-runner: 作業員の実装を前検査で確認（HEAD c032936）。status → review で再申請（試行 2）
+
+- 2026-11-08T10:21:12+0900 gate-runner: status → in_progress（セキュリティ審査が差し戻し）
