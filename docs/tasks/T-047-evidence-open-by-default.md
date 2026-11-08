@@ -1,7 +1,7 @@
 ---
 id: T-047
 title: 公開の /governance の「証拠」の7つの区画を、最初からすべて開いておく（T-041 で閉じた6つが「なくなった」と見えるため）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [T-041]   # 記録用。司法には渡さない
@@ -64,3 +64,5 @@ held の後、立法補佐かオーナーが候補で `/governance` を開き（
 - 2026-11-08T18:33:47+0900 night-runner: 作業員の実装を前検査で確認（HEAD 8b0df59）。status → review で再申請（試行 1）
 
 - 2026-11-08T18:36:25+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-08T18:38:59+0900 release: status → merged（main=92a610cbc88c。夜間の判定に合格した候補 bfcf6b40ba39 を、オーナーが朝に承認して統合）
