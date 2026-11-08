@@ -1,7 +1,7 @@
 ---
 id: T-042
 title: Kernel の写しの読み取りを、予算・実行・受け入れの新しい項目（任意）にも対応させる（新旧の両方の写しを読める）
-status: in_progress
+status: review
 requirements: [A0, A1, A2, A3, A4]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -98,3 +98,4 @@ held の後、立法補佐が候補で `/governance` を開き、提出記録・
 - 09:2x blocked の原因は、Codex の司法が書き終えた判定を予算の窓口が中断と取り違えた不具合（OBS-062。p0.4.10a で直り、09:12 に配置）で、判定ではない（立法補佐の案内による。そのときの中身は judge・Codex とも APPROVED だったが、採用はされていない）。コードは変えず、HEAD `7570579` のまま申請し直す。承認は 01:56:51 のまま（09:19:39 の Kernel の写しの `approvals[].current` で確かめた）
 
 - 2026-11-08T09:22:18+0900 gate-runner: status → in_progress（決定論的な監査（test/typecheck/lint）が不合格）
+- 10:1x 09:22 の不合格の原因は、04:09 から main の `vgdd/kernel/history.json` が公開の要約の形を超え、アプリの試験2件が落ちていたこと（2e5c5b5 で直った）で、実装でも §2 でもない。この差し戻しは、オーナーの承認で取り消し済み（annulments.jsonl。オーナーが知らせた）。行政の長が、今の main（b621094）で `npm run -s test` が 977 件合格すること、HEAD `7570579` が今の main と衝突しないこと（`git merge-tree`）を確かめた。コードは変えず、HEAD `7570579` のまま申請し直す
