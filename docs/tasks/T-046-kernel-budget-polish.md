@@ -1,7 +1,7 @@
 ---
 id: T-046
 title: 予算の表の割合にも3桁ごとの区切りを付け、表の見出しと列名の文字を表と同じ大きさにする（T-045 の Codex の minor 2件）
-status: ready
+status: review
 requirements: [A0, A1, A2, A3]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-68]   # 記録用。司法には渡さない
@@ -59,3 +59,5 @@ held の後、オーナーの操作の窓口の画面から統合し、受け入
 ## 6. 記録
 
 - 12:3x 立法補佐が起草
+
+- 2026-11-08T13:08:30+0900 night-runner: 作業員の実装を前検査で確認（HEAD ec4c30e）。status → review で再申請（試行 1）
