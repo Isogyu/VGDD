@@ -163,7 +163,7 @@ export default function GovernanceView() {
         <p className="text-sm text-zinc-600 dark:text-zinc-300">
           題材のアプリ（つぶやき業務ログ）を AI のチームが開発したときの、実運用の集計・票の記録・検証結果。Kernel の写しは自動で取り直し、ほかの区画は画面を開いた時点のもの（件数とリポジトリの記録だけ。生のログは公開していない）
         </p>
-        <p className="text-sm text-zinc-600 dark:text-zinc-300">見出しを押すと開きます</p>
+        <p className="text-sm text-zinc-600 dark:text-zinc-300">見出しを押すと閉じます</p>
       </header>
 
       {/* 「証拠」の7つの区画。どれも details の中にマウントしたまま、見出しで開閉する（T-041） */}
