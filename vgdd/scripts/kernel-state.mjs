@@ -153,7 +153,58 @@ for (const rel of tree.filter((f) => /^docs\/tasks\/T-\d{3,4}-[^/]*\.md$/.test(f
 }
 const invState = { schema: 'vgdd.kernel-invariants.v1', generated_at: null, kernel_version, verified_by, invariants, pending_approvals };
 
-const state = { schema: 'vgdd.kernel-state.v1', generated_at: null, kernel_version, policy_version, stopped, judiciary, approvals, held, rulings, annulments, verdicts: { count: cnt(vcount), by_task: Object.fromEntries(Object.entries(by_task).sort().slice(-MAX_ITEMS)) }, disagreements, evidence, conformance };
+// p0.4.11（L3 の一部、D-66・D-67、T-042 の形）：予算の台帳の集計（budget・runs）を写しに足す。数と期間の名前と終わりの時刻だけで、
+//   実行の ID・票ごとの内訳・pid・理由は出さない。台帳は同じ場所（Z3 の bin）の ledger.mjs で読む（表示用。判断の根拠にしない）。
+//   台帳・上限が読めない、形が合わない数があれば、その項目を**出さない**（0 を作り足さない）。受け入れ（acceptance）はまだ記録がないので出さない。
+//   台帳の実行の状態との対応：reserved＝予約して起動の前（launching）、started＝起動して生きている、exited・settled＝終了と精算の記録がある
+//   （この台帳では終了の記録が精算を兼ねる）、liveness_unknown＝起動の後に終了の記録がないまま子がいない、usage_unknown＝利用量を読めず予約の全量で数えた。
+//   attempts は今の期間の作業員の試行の数（取り消しを除く）。上限は票ごと（attempts_per_ticket）なので、全体の上限は null。
+//   台帳のロックを周回ごとに1回、読み取りの間だけ取る（起動・精算の begin・finish と同じロック。待ちの上限は ledger.mjs の withLock）
+const SAFE = (n) => Number.isInteger(n) && n >= 0 && n <= Number.MAX_SAFE_INTEGER;
+const LIM = (n) => (n === null || SAFE(n));
+// 終わりの時刻は画面の検証（T-042）と同じ形と暦の検証（Codex の監査 major 1：2月30日・24時などを出すと画面が写し全体を拒む）
+const UNTIL_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(?:Z|([+-])(\d{2}):(\d{2}))$/;
+const untilValid = (v) => {
+  if (typeof v !== 'string' || v.length > 40) return false;
+  const m = UNTIL_RE.exec(v); if (!m) return false;
+  const [y, mo, d, h, mi, se] = m.slice(1, 7).map(Number);
+  if (mo < 1 || mo > 12) return false;
+  const last = new Date(0); last.setUTCFullYear(y, mo, 0);
+  if (d < 1 || d > last.getUTCDate() || h > 23 || mi > 59 || se > 59) return false;
+  if (m[7] !== undefined && (Number(m[8]) > 23 || Number(m[9]) > 59)) return false;
+  return !Number.isNaN(Date.parse(v));
+};
+let budget; let runs;
+try {
+  const ledgerFile = path.join(HERE, 'ledger.mjs');
+  if (fs.existsSync(ledgerFile)) {
+    process.env.VGDD_Z3_DIR = Z3;   // ledger.mjs は読み込みの時点で Z3 の場所を決める
+    const L = await import(ledgerFile);
+    // 予算と実行の件数は、台帳の同じ読み取り（ロックの下で1回）から作る（Codex の監査 major 2：別の時点の集計を混ぜない）
+    const { limits, runs: allRuns } = L.snapshot();
+    const pid = limits?.period_id ?? null;
+    const s = L.summarize(allRuns, limits);
+    const all = allRuns.filter((r) => r.period === pid);
+    const n = (pred) => all.filter(pred).length;
+    // 作業員の数は今の期間の実行だけ（Codex の監査 major 3。T-042 は集計の対象を period_id の期間と決めている）。
+    //   起動の判断（ledger.mjs の summarize）は、期間をまたいで動いている作業員も数える（ここは表示だけ）
+    const workersActive = n((r) => r.kind === 'worker' && (r.state === 'launching' || r.state === 'started'));
+    const b = { period_id: pid, until: limits?.until ?? null,
+      tokens: { settled: s.settled, reserved: s.reserved, unknown_runs: s.unknown_runs, limit: limits?.tokens_total ?? null },
+      judge_calls: { used: s.judge_used, limit: limits?.judge_calls ?? null },
+      attempts: { used: n((r) => r.kind === 'worker' && r.state !== 'cancelled'), limit: null },
+      workers: { active: workersActive, limit: limits?.workers ?? null } };
+    const okB = typeof pid === 'string' && pid.length >= 1 && pid.length <= 40 && (b.until === null || untilValid(b.until))
+      && [b.tokens.settled, b.tokens.reserved, b.tokens.unknown_runs, b.judge_calls.used, b.attempts.used, b.workers.active].every(SAFE)
+      && [b.tokens.limit, b.judge_calls.limit, b.workers.limit].every(LIM);
+    const fin = n((r) => r.state === 'finished');
+    const r = { requested: all.length, reserved: n((x) => x.state === 'launching'), started: n((x) => x.state === 'started'), exited: fin, settled: fin,
+      cancelled: n((x) => x.state === 'cancelled'), liveness_unknown: n((x) => x.state === 'ended_unrecorded'), usage_unknown: s.unknown_runs };
+    if (okB) { budget = b; if (Object.values(r).every(SAFE)) runs = r; }
+  }
+} catch { budget = undefined; runs = undefined; }   // 台帳の破損・ロックの取り残し・上限なし：出さない
+
+const state = { schema: 'vgdd.kernel-state.v1', generated_at: null, kernel_version, policy_version, stopped, judiciary, approvals, held, rulings, annulments, verdicts: { count: cnt(vcount), by_task: Object.fromEntries(Object.entries(by_task).sort().slice(-MAX_ITEMS)) }, disagreements, evidence, conformance, ...(budget ? { budget } : {}), ...(runs ? { runs } : {}) };
 
 // 書き出し（Codex の指摘 #7）：出力先の親と祖先（--repo の中）がシンボリックリンクでない実のディレクトリであることを確かめ、
 //   同じディレクトリに推測できない名前の一時ディレクトリを排他的に作って（mkdtemp）、その中に排他的に書き（wx）、rename する。
