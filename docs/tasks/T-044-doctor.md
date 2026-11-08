@@ -1,7 +1,7 @@
 ---
 id: T-044
 title: 読み取りだけの導入診断（scripts/doctor.mjs）を足す。必要なコマンド・版・設定・保護・写しの一致を、秘密を出さずに確かめる
-status: review
+status: blocked
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -114,3 +114,5 @@ held の後、立法補佐が候補で `node scripts/doctor.mjs` と `--json` �
   - **試験**：上の2点を試験に足す（`--repo` が存在しない・記号リンク・通常のファイルの3通りで、4・5・7・8 が「リポジトリの場所を読めない」の fail になり、7 が `--z3` なしなら skip、終了コードが 1、出力に一時フォルダのパスが出ないこと）。`npm run -s test`・`typecheck`・`lint` を通す。`node --test scripts/doctor.test.mjs` も動かして報告に書く（判定の条件ではない）
 
 - 2026-11-08T13:36:31+0900 night-runner: 作業員の実装を前検査で確認（HEAD 8d2c6b4）。status → review で再申請（試行 1）
+
+- 2026-11-08T13:41:29+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
