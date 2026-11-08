@@ -214,7 +214,7 @@ try {
   const since = /^\d{1,12}$/.test(sinceTxt) ? Number(sinceTxt) : NaN;
   if (Number.isSafeInteger(since)) {
     const merges = new Map();   // 票 → 最新の統合 { sha, at }
-    for (const line of (git('log', 'main', '--format=%H%x09%an%x09%ct%x09%s', '-n', '5000').stdout || '').split('\n')) {
+    for (const line of (git('log', 'main', '--format=%H%x09%an%x09%ct%x09%s').stdout || '').split('\n')) {
       const [sha, an, ct, subj] = line.split('\t');
       const m = (subj || '').match(/^gate-runner: (T-\d{3,4}) を統合/);
       if (an === 'gate-runner' && m && /^[0-9a-f]{40}$/.test(sha || '') && !merges.has(m[1])) merges.set(m[1], { sha, at: Number(ct) });

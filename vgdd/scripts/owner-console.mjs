@@ -92,7 +92,7 @@ function heldOf(task) {
 }
 function mergeCommitOf(task) {
   // 裁判所（gate-runner）の名で main に入った、この票の統合のコミット（最新）
-  const r = git('log', 'main', '--format=%H%x09%an%x09%ct%x09%s', '-n', '5000');
+  const r = git('log', 'main', '--format=%H%x09%an%x09%ct%x09%s');
   for (const line of (r.stdout || '').split('\n')) {
     const [sha, an, ct, subj] = line.split('\t');
     if (an === 'gate-runner' && SHA_RE.test(sha || '') && (subj || '').startsWith(`gate-runner: ${task} を統合`)) return { sha, at: Number(ct) };
@@ -198,6 +198,14 @@ async function perform(f) {
     if (prev.length && prev.some((a) => a.phase === 'received' && (a.action !== action || (a.task || null) !== (needsTask ? task : null)))) return { ok: false, msg: '同じ操作の ID で別の操作が記録されている。実行しない', dup: true };
     if (prev.some((a) => a.phase === 'done')) { const d = prev.find((a) => a.phase === 'done'); return { ok: d.ok, msg: `同じ操作はすでに実行した（前の結果：${d.ok ? '成功' : '失敗'}。${d.msg || ''}）`, dup: true }; }
     if (prev.length) return { ok: false, msg: 'この操作は受け付けた後に結果が記録されていない（結果が不明）。状態を見てから、新しく操作する', dup: true };
+    // 停止は全件の照合（view）を待たない。STOP の有無だけを見る（Codex の2回目の監査 major：停止を一覧の照合に待たせない）
+    if (action === 'stop') {
+      if (stopped()) return { ok: false, msg: 'すでに停止中' };
+      appendAction({ action_id: aid, phase: 'received', action, task: null, target: null });
+      const rs = await run('kernel-stop.sh', [`Owner Console から停止（${aid.slice(0, 8)}）`], 30000);
+      appendAction({ action_id: aid, phase: 'done', ok: rs.ok, rc: rs.rc, msg: rs.msg });
+      return rs;
+    }
     // 実行の直前に、今の状態で確かめ直す（画面を出した後の変化）。承認と統合は、子のスクリプトにも対象を渡して、子の中でも照合させる
     const v = view(); const row = needsTask ? v.rows.find((r) => r.id === task) : null;
     if (needsTask && !row) return { ok: false, msg: '票が main にない' };
@@ -207,14 +215,14 @@ async function perform(f) {
       if (!a) pre = `いまの工程（${row.stage}）ではこの操作はできない`;
       else if (a.why) pre = a.why;
       else if (!a.target || a.target !== target) pre = '画面を出した後に対象が変わった。画面を開き直して確かめる';
-    } else if (action === 'stop' && v.stop) pre = 'すでに停止中';
-    else if (action === 'resume' && !v.stop) pre = '停止していない';
+    } else if (action === 'resume' && !v.stop) pre = '停止していない';
     if (pre) return { ok: false, msg: pre };
     appendAction({ action_id: aid, phase: 'received', action, task: needsTask ? task : null, target: needsTask ? target : null });
     let res;
     if (action === 'approve') res = await run('approve-spec.sh', [task, '--yes', '--expect', target, '--note', `owner-console ${aid}`], 60000);
-    else if (action === 'release') res = await run('release.sh', ['--expect-request', target, task], 600000);
-    else if (action === 'stop') res = await run('kernel-stop.sh', [`Owner Console から停止（${aid.slice(0, 8)}）`], 30000);
+    // 統合は時間で打ち切らない（Codex の2回目の監査 major：release.sh は main に組み合わせてから検査するので、途中で止めると検査していない統合が残りうる。
+    //   release.sh 自身の取り消し（undo）と錠に任せ、窓口は終わるのを待つ）
+    else if (action === 'release') res = await run('release.sh', ['--expect-request', target, task], 0);
     // 再開は点検だけ。停止の後に main に入ったコミットの受け入れ（--accept-main）は、対象の一覧を固定できないので窓口では行わない（端末で。Codex の監査 major）
     else if (action === 'resume') {
       res = await run('kernel-resume.sh', [`Owner Console から再開（${aid.slice(0, 8)}）`], 120000);
