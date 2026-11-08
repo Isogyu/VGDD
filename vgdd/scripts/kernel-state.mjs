@@ -129,7 +129,7 @@ const INV_STATUS = new Set(['enforced', 'partial', 'not_applicable']);
 let capsInv = []; try { capsInv = JSON.parse(capsSrc.stdout).invariants || []; } catch { /* なし */ }
 // 不変条件ごとの結果は、今の法律の版を稼働中の実装（z3）で試した記録のときだけ使う（別の版・原本の結果を今の検証済みに見せない。#7）
 const implSha = (() => {   // run.mjs --record と同じ並びで、稼働中の Z3 の実装の指紋を作る（照合にだけ使い、出さない）
-  const files = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh', 'ledger.mjs', 'metered.sh', 'budget-set.sh', 'night-runner.sh', 'review-constitution.sh', 'approve-spec.sh', 'kernel-stop.sh', 'kernel-resume.sh', 'launcher.sh', 'prior-record.mjs', 'launch-intake.mjs'].map((f) => path.join(Z3, 'bin', f)).concat([path.join(Z3, 'hooks/policy.mjs'), path.join(Z3, 'hooks/verify-chain.mjs')]);
+  const files = ['gate-runner.sh', 'judge.sh', 'judge-codex.sh', 'release.sh', 'spec-digest.mjs', 'kernel-state.mjs', 'sandboxed-run.sh', 'ledger.mjs', 'metered.sh', 'budget-set.sh', 'night-runner.sh', 'review-constitution.sh', 'approve-spec.sh', 'kernel-stop.sh', 'kernel-resume.sh', 'launcher.sh', 'prior-record.mjs', 'launch-intake.mjs', 'owner-console.mjs'].map((f) => path.join(Z3, 'bin', f)).concat([path.join(Z3, 'hooks/policy.mjs'), path.join(Z3, 'hooks/verify-chain.mjs')]);
   return crypto.createHash('sha256').update(files.map((f) => { try { return fs.readFileSync(f, 'utf8'); } catch { return '<なし>'; } }).join('\n--\n'), 'utf8').digest('hex');
 })();
 const confCurrent = !!conf && conf.impl === 'z3' && ver(conf.kernel_version) !== null && conf.kernel_version === kernel_version && conf.impl_sha256 === implSha;
@@ -155,7 +155,7 @@ const invState = { schema: 'vgdd.kernel-invariants.v1', generated_at: null, kern
 
 // p0.4.11（L3 の一部、D-66・D-67、T-042 の形）：予算の台帳の集計（budget・runs）を写しに足す。数と期間の名前と終わりの時刻だけで、
 //   実行の ID・票ごとの内訳・pid・理由は出さない。台帳は同じ場所（Z3 の bin）の ledger.mjs で読む（表示用。判断の根拠にしない）。
-//   台帳・上限が読めない、形が合わない数があれば、その項目を**出さない**（0 を作り足さない）。受け入れ（acceptance）はまだ記録がないので出さない。
+//   台帳・上限が読めない、形が合わない数があれば、その項目を**出さない**（0 を作り足さない）。受け入れ（acceptance）は p0.4.12 から下で出す。
 //   台帳の実行の状態との対応：reserved＝予約して起動の前（launching）、started＝起動して生きている、exited・settled＝終了と精算の記録がある
 //   （この台帳では終了の記録が精算を兼ねる）、liveness_unknown＝起動の後に終了の記録がないまま子がいない、usage_unknown＝利用量を読めず予約の全量で数えた。
 //   attempts は今の期間の作業員の試行の数（取り消しを除く）。上限は票ごと（attempts_per_ticket）なので、全体の上限は null。
@@ -204,7 +204,33 @@ try {
   }
 } catch { budget = undefined; runs = undefined; }   // 台帳の破損・ロックの取り残し・上限なし：出さない
 
-const state = { schema: 'vgdd.kernel-state.v1', generated_at: null, kernel_version, policy_version, stopped, judiciary, approvals, held, rulings, annulments, verdicts: { count: cnt(vcount), by_task: Object.fromEntries(Object.entries(by_task).sort().slice(-MAX_ITEMS)) }, disagreements, evidence, conformance, ...(budget ? { budget } : {}), ...(runs ? { runs } : {}) };
+// p0.4.12（D-68）：受け入れ（acceptance）。オーナーの操作の窓口（owner-console.mjs）が Z3 の evidence/acceptance.jsonl に記録した、
+//   票の ID と統合のコミット。数え始めの時刻（console/acceptance_since）より後に裁判所の名で統合した票だけを対象にし、
+//   最新の統合のコミットに受け入れがあれば accepted、なければ pending。写しに出すのは票の ID と件数だけ（SHA は出さない）。
+//   数え始めの時刻がなければ（窓口を一度も起動していない）出さない
+let acceptance;
+try {
+  const sinceTxt = fs.readFileSync(path.join(Z3, 'console/acceptance_since'), 'utf8').trim();
+  const since = /^\d{1,12}$/.test(sinceTxt) ? Number(sinceTxt) : NaN;
+  if (Number.isSafeInteger(since)) {
+    const merges = new Map();   // 票 → 最新の統合 { sha, at }
+    for (const line of (git('log', 'main', '--format=%H%x09%an%x09%ct%x09%s', '-n', '5000').stdout || '').split('\n')) {
+      const [sha, an, ct, subj] = line.split('\t');
+      const m = (subj || '').match(/^gate-runner: (T-\d{3,4}) を統合/);
+      if (an === 'gate-runner' && m && /^[0-9a-f]{40}$/.test(sha || '') && !merges.has(m[1])) merges.set(m[1], { sha, at: Number(ct) });
+    }
+    const acc = new Map();
+    for (const a of lines(path.join(EV, 'acceptance.jsonl'))) if (TASK_RE.test(a.task) && /^[0-9a-f]{40}$/.test(a.merge || '')) acc.set(a.task, a.merge);
+    const accepted = []; const pending = [];
+    for (const [task, m] of [...merges.entries()].sort()) {
+      if (!(m.at >= since)) continue;
+      if (acc.get(task) === m.sha) accepted.push(task); else pending.push(task);
+    }
+    acceptance = { accepted_count: accepted.length, pending_count: pending.length, accepted: accepted.slice(-500), pending: pending.slice(-500) };
+  }
+} catch { acceptance = undefined; }
+
+const state = { schema: 'vgdd.kernel-state.v1', generated_at: null, kernel_version, policy_version, stopped, judiciary, approvals, held, rulings, annulments, verdicts: { count: cnt(vcount), by_task: Object.fromEntries(Object.entries(by_task).sort().slice(-MAX_ITEMS)) }, disagreements, evidence, conformance, ...(budget ? { budget } : {}), ...(runs ? { runs } : {}), ...(acceptance ? { acceptance } : {}) };
 
 // 書き出し（Codex の指摘 #7）：出力先の親と祖先（--repo の中）がシンボリックリンクでない実のディレクトリであることを確かめ、
 //   同じディレクトリに推測できない名前の一時ディレクトリを排他的に作って（mkdtemp）、その中に排他的に書き（wx）、rename する。
