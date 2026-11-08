@@ -1,9 +1,9 @@
 {
   "schema": "vgdd.board.v1",
-  "generated_at": "2026-11-08T10:34:57.548+09:00",
+  "generated_at": "2026-11-08T10:40:23.355+09:00",
   "totals": {
     "tickets": 46,
-    "merged": 43,
+    "merged": 44,
     "rejected": 42,
     "blocked": 0,
     "disagreements": 17
@@ -399,10 +399,10 @@
     {
       "id": "T-043",
       "title": "初心者向けの要件確認（/requirements）を足す。固定の質問・回答・未解決の事項・受け入れ条件の候補を LLM から独立したデータで持ち、票の下書きの文を出す",
-      "status": "review",
+      "status": "merged",
       "estimate_h": 3,
       "returns": 2,
-      "merged_at": null,
+      "merged_at": "2026-11-08T10:40:20+0900",
       "disagreements": 0
     },
     {
