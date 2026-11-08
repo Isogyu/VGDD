@@ -1,7 +1,7 @@
 ---
 id: T-046
 title: 予算の表の割合にも3桁ごとの区切りを付け、表の見出しと列名の文字を表と同じ大きさにする（T-045 の Codex の minor 2件）
-status: review
+status: merged
 requirements: [A0, A1, A2, A3]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-68]   # 記録用。司法には渡さない
@@ -65,3 +65,5 @@ held の後、オーナーの操作の窓口の画面から統合し、受け入
 - 2026-11-08T13:11:03+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
 
 - 2026-11-08T13:11:03+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-08T13:18:12+0900 release: status → merged（main=f9d08a4899a8。夜間の判定に合格した候補 490f47e91191 を、オーナーが朝に承認して統合）
