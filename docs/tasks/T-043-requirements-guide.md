@@ -1,7 +1,7 @@
 ---
 id: T-043
 title: 初心者向けの要件確認（/requirements）を足す。固定の質問・回答・未解決の事項・受け入れ条件の候補を LLM から独立したデータで持ち、票の下書きの文を出す
-status: review
+status: merged
 requirements: [A0, A1, A2, A3, A4, A5, A6, A7]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -125,3 +125,5 @@ held の後、立法補佐が候補で確かめる（build は作業員の sandb
 - 10:1x 09:22 の不合格の原因は、04:09 から main の `vgdd/kernel/history.json` が公開の要約の形を超え、アプリの試験2件が落ちていたこと（2e5c5b5 で直った）で、実装でも §2 でもない。この差し戻しは、オーナーの承認で取り消し済み（annulments.jsonl。オーナーが知らせた）。行政の長が、今の main（b621094）で `npm run -s test` が 977 件合格すること、HEAD `7b8b493` が今の main と衝突しないこと（`git merge-tree`）を確かめた。コードは変えず、HEAD `7b8b493` のまま申請し直す
 
 - 2026-11-08T10:18:26+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
+
+- 2026-11-08T10:40:20+0900 release: status → merged（main=c259696ead5b。夜間の判定に合格した候補 7c7af1ad9b72 を、オーナーが朝に承認して統合）
