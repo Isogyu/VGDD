@@ -22,7 +22,7 @@
    PATH="/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin:$PATH" ~/tsubuyaki-z3/bin/gate-runner.sh --hold
    ```
    （`CODEX_EXTRA_ARGS` を付けて起動しているなら、モデルの指定 `--model 名前` だけにする。ほかの引数があると Codex の司法は「使えない」になる）
-   **別の端末で起動の窓口を起動する**：
+   **同じ Mac のターミナルの別のタブで、起動の窓口を起動する**（gate-runner と同じく常駐して端末を占める）：
    ```bash
    PATH="/Applications/ChatGPT.app/Contents/Resources/codex-cli/bin:$PATH" ~/tsubuyaki-z3/bin/launcher.sh
    ```
