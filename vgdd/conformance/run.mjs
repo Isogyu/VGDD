@@ -1435,6 +1435,7 @@ function groupOC() {
   write(path.join(repo, 'docs/tasks/T-990-probe.md'), tk('T-990', 'ready'));
   write(path.join(repo, 'docs/tasks/T-991-done.md'), tk('T-991', 'merged').replace('## 1. 目的', '## 1. 目的') + '\n## 3. 開発用テスト\n\n画面 /governance を開き、表の割合を確かめる（試験の確かめ方）\n\n## 6. 記録\n\n- **確かめていない**：375px の幅（試験の未確認）\n');
   write(path.join(repo, 'docs/tasks/T-993-returned.md'), tk('T-993', 'in_progress'));
+  write(path.join(repo, 'docs/tasks/T-995-split.md'), tk('T-995', 'blocked'));
   write(path.join(repo, 'docs/tasks/T-992-held.md'), tk('T-992', 'review'));
   write(path.join(repo, 'merge-requests/launch/.gitkeep'), '');
   sh('git', ['-C', repo, 'init', '-q', '-b', 'main']);
@@ -1451,10 +1452,17 @@ function groupOC() {
   const stub = (name, body) => { write(path.join(z, 'bin', name), `#!/bin/bash\necho "${name} $* REPO=$VGDD_REPO" >> '${path.join(z, 'calls.log')}'\n${body}\n`); fs.chmodSync(path.join(z, 'bin', name), 0o755); };
   stub('approve-spec.sh', `touch '${z}/approved-'"$1"; exit 0`);
   stub('release.sh', 'exit 0');
+  stub('rule.sh', `printf '%s\\n' "{\\"task\\":\\"$1\\",\\"sha\\":\\"$2\\",\\"decision\\":\\"merge\\"}" >> '${z}/evidence/rulings.jsonl'; exit 0`);
   stub('kernel-stop.sh', `[ -f '${z}/stop-fails' ] && { echo "失敗の理由（試験）" >&2; exit 1; }; printf '%s\\n' "$1" > '${z}/STOP'; exit 0`);
   stub('kernel-resume.sh', `rm -f '${z}/STOP'; exit 0`);
   write(path.join(z, 'approved-T-992'), '');   // held の票は承認済み
   write(path.join(z, 'approved-T-993'), '');
+  write(path.join(z, 'approved-T-995'), '');
+  { const reqSha = sh('git', ['-C', repo, 'rev-parse', 'HEAD']).stdout.trim(); const c12 = reqSha.slice(0, 12);
+    fs.appendFileSync(path.join(z, 'evidence/gate_events.jsonl'), [{ ts: '2026-11-08T10:41:00+0900', type: 'candidate', task: 'T-995', request: c12, main: 'x', candidate: c12 }, { ts: '2026-11-08T10:42:00+0900', type: 'disagreement', task: 'T-995', judge: 'APPROVED', codex: 'CHANGES_REQUIRED', judge_major: 0, codex_major: 1 }].map((x) => JSON.stringify(x)).join('\n') + '\n');
+    fs.mkdirSync(path.join(z, 'evidence/verdicts'), { recursive: true });
+    write(path.join(z, `evidence/verdicts/T-995-${c12}.json`), JSON.stringify({ final_verdict: 'APPROVED', judge_parse_ok: true, reason_text: '理由の本文（試験）' }));
+    write(path.join(z, `evidence/verdicts/T-995-${c12}-codex-judge.json`), JSON.stringify({ final_verdict: 'CHANGES_REQUIRED', parse_ok: true, codex: { findings: [{ reason: '指摘の理由の本文（試験）' }] } })); }
   write(path.join(z, 'launch/T-993.log'), '[2026-11-08T10:00:00+0900] night-runner 起動 run_id=x\n[2026-11-08T10:21:15+0900] T-993: 同じ重い指摘で続けて差し戻された。自動修正を止めて人へ戻す\n');
   write(path.join(z, 'evidence/held.jsonl'), JSON.stringify({ ts: '2026-11-08T10:00:00+0900', task: 'T-992', request: 'b'.repeat(40), candidate: 'c'.repeat(40), judge: 'APPROVED', codex: 'APPROVED', security: 'APPROVED' }) + '\n');
   // 運転の台本（非同期の HTTP を別のプロセスで動かし、結果を JSON で返す）
@@ -1522,6 +1530,20 @@ html = await page(); out.returnedStartAfterApprove = formsOf(html).some((x) => x
   L('finish', '--run', run, '--code', '0', '--usage-file', z + '/usage.json', '--format', 'claude'); }
 html = await page(); const st3 = formsOf(html).find((x) => x.action === 'start' && x.task === 'T-993');
 out.overrunDisabled = !!st3 && st3.disabled && /予算の超過あり/.test(html);
+{ const tp = (await req('GET', '/t/T-995', { headers: { Cookie: cookie } })).body;
+  out.tPage = /判断待ち（重大な不一致）/.test(tp) && /まだ main に統合されていない/.test(tp) && /Claude judge/.test(tp) && /<b class="ok">合格<\\/b>/.test(tp) && /<b class="ng">差し戻し<\\/b>/.test(tp) && !/理由の本文（試験）/.test(tp) && !tp.includes(TOKEN) && !/\\/Users\\/|vgdd-conf-oc/.test(tp);
+  const rf = formsOf(tp).find((x) => x.action === 'rule');
+  out.ruleTarget = rf?.target;
+  const rr = await post({ ...rf, back: '/t/T-995' });
+  out.ruleMsg = msg(rr); out.ruleBack = (rr.headers.location || '').split('?')[0];
+  out.ruleCall = (fs.readFileSync(z + '/calls.log', 'utf8').match(/rule.sh T-995 [0-9a-f]{40} merge /g) || []).length;
+  const tp2 = (await req('GET', '/t/T-995', { headers: { Cookie: cookie } })).body;
+  out.ruledStage = /裁定済み（行政の長の再申請待ち）/.test(tp2) && !formsOf(tp2).some((x) => x.action === 'rule');
+  out.inbox = (await req('GET', '/inbox', { headers: { Cookie: cookie } })).status; out.env = (await req('GET', '/env', { headers: { Cookie: cookie } })).status;
+  out.noTask = (await req('GET', '/t/T-9999', { headers: { Cookie: cookie } })).status;
+  const evilBack = await post({ ...formsOf(tp2).find((x) => x.action === 'stop'), action_id: '7'.repeat(32), back: 'https://evil.example/' });
+  out.evilBack = (evilBack.headers.location || '').split('?')[0];
+  fs.rmSync(z + '/STOP', { force: true }); }
 const unk = '9'.repeat(32); fs.appendFileSync(z + '/console/owner_actions.jsonl', JSON.stringify({ action_id: unk, phase: 'received', action: 'stop' }) + '\\n');
 // 取り残されたロック（持ち主が動いていない）では実行せず理由を出す。生きている持ち主のロックの間も、停止は別のロックで実行できる
 fs.mkdirSync(z + '/console/.action.lock'); fs.writeFileSync(z + '/console/.action.lock/pid', '999999\\n');
@@ -1537,7 +1559,7 @@ fs.writeFileSync(z + '/stop-fails', '');
 html = await page(); f = formsOf(html); const sp = f.find((x) => x.action === 'stop');
 out.stopFail = msg(await post(sp));
 out.stopFileAfterFail = fs.existsSync(z + '/STOP');
-out.callsStop = (fs.readFileSync(z + '/calls.log', 'utf8').match(/kernel-stop.sh/g) || []).length;   // 停止の成功1回（ロックの間）＋失敗1回
+out.callsStop = (fs.readFileSync(z + '/calls.log', 'utf8').match(/kernel-stop.sh/g) || []).length;   // 停止の成功2回（ロックの間・戻り先の判例）＋失敗1回
 out.arbitrary = msg(await post({ csrf: f[0].csrf, action_id: '8'.repeat(32), action: 'shell', task: 'T-990', target: 'rm -rf /' }));
 out.actionsLog = fs.readFileSync(z + '/console/owner_actions.jsonl', 'utf8');
 p.kill(); console.log(JSON.stringify(out));
@@ -1557,7 +1579,7 @@ p.kill(); console.log(JSON.stringify(out));
     o.releaseForm && o.releaseTarget === 'b'.repeat(40) && /未実行/.test(o.releaseWrong) && /成功/.test(o.release1) && o.callsRelease === 1, JSON.stringify({ t: o.releaseTarget, w: o.releaseWrong, r: o.release1, n: o.callsRelease }));
   record('OC', 'OC7', '受け入れ：統合のコミットに結び付けて Z3 に記録し、受け入れ済みの票には受け入れの操作を出さない',
     o.acceptTarget === mergeSha && /成功/.test(o.accept1) && o.acceptance.includes(`"merge":"${mergeSha}"`) && o.acceptance.includes('"task":"T-991"') && o.acceptedGone, JSON.stringify({ t: o.acceptTarget, a: o.accept1 }));
-  record('OC', 'OC8', '受け付けた後に結果のない操作の ID（途中で窓口が終わった）は、結果が不明として実行し直さない', /結果が不明/.test(o.unknown) && o.callsStop === 2, JSON.stringify({ u: o.unknown, stops: o.callsStop }));
+  record('OC', 'OC8', '受け付けた後に結果のない操作の ID（途中で窓口が終わった）は、結果が不明として実行し直さない', /結果が不明/.test(o.unknown) && o.callsStop === 3, JSON.stringify({ u: o.unknown, stops: o.callsStop }));
   // OC13（p0.4.12a）：ブラウザは Referrer-Policy が no-referrer の画面からのフォームの送信で Origin を null にする（Fetch の仕様）。窓口の画面は
   //   same-origin を返し、本物のブラウザの送信に同じ Origin が付くようにする。Origin が null の送信は拒む
   record('OC', 'OC13', '画面の Referrer-Policy は same-origin（no-referrer ではブラウザが Origin を null にして正しい操作を拒んでしまう）。Origin が null の送信は拒む',
@@ -1566,6 +1588,11 @@ p.kill(); console.log(JSON.stringify(out));
     o.returnedStage && o.returnedNoStart && o.returnedStartAfterApprove, JSON.stringify({ s: o.returnedStage, n: o.returnedNoStart, a: o.returnedStartAfterApprove }));
   record('OC', 'OC15', '受け入れの前に、票の §3（確かめ方）と §6 の「確かめていない」の行を出す', o.checkShown, String(o.checkShown));
   record('OC', 'OC16', '予算の超過があれば、開始のボタンを理由（予算の超過あり）つきで押せなくする', o.overrunDisabled, String(o.overrunDisabled));
+  record('OC', 'OC17', '票の画面（/t/T-NNN）：重大な不一致を「判断待ち（重大な不一致）」と出し、未統合の帯と judge・Codex の結論を同じ並びで出す。理由の本文・合言葉・パスは出さない',
+    o.tPage && o.inbox === 200 && o.env === 200 && o.noTask === 404, JSON.stringify({ t: o.tPage, i: o.inbox, e: o.env, n: o.noTask }));
+  record('OC', 'OC18', '裁定：重大な不一致の申請の完全な SHA を rule.sh に渡して記録し（裁定だけでは統合しない）、その後は「裁定済み（再申請待ち）」と出して裁定のボタンを出さない。結果は元の票の画面に戻る',
+    /^[0-9a-f]{40}$/.test(o.ruleTarget || '') && /成功/.test(o.ruleMsg) && /裁定だけでは統合しない|統合は統合の操作で/.test(o.ruleMsg) && o.ruleCall === 1 && o.ruledStage && o.ruleBack === '/t/T-995', JSON.stringify({ t: o.ruleTarget, m: o.ruleMsg, n: o.ruleCall, s: o.ruledStage, b: o.ruleBack }));
+  record('OC', 'OC19', '操作の後の戻り先は窓口の中の決まった場所だけ（外のサイトの URL は / に置き換える）', o.evilBack === '/', o.evilBack);
   record('OC', 'OC12', 'ロック：持ち主の動いていないロックは取り残しとして出し、消さずに実行しない。ほかの操作のロックの間も停止は実行できる。再開は点検だけで --accept-main を渡さない',
     /ロックが残っている/.test(o.staleLock) && /動いていない/.test(o.staleLock) && /成功/.test(o.stopWhileBusy) && o.stoppedWhileBusy && o.noAcceptMain && /成功/.test(o.resume) && !/accept-main/.test(o.resumeArgs), JSON.stringify({ l: o.staleLock, s: o.stopWhileBusy, r: o.resumeArgs }));
   record('OC', 'OC9', 'スクリプトが失敗したら失敗と出し、成功にしない（停止の失敗で STOP はなく、結果の記録は ok: false）',
