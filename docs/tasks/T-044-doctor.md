@@ -1,7 +1,7 @@
 ---
 id: T-044
 title: 読み取りだけの導入診断（scripts/doctor.mjs）を足す。必要なコマンド・版・設定・保護・写しの一致を、秘密を出さずに確かめる
-status: blocked
+status: review
 requirements: [A0, A1, A2, A3, A4, A5]   # この票の §2（requirements_source: ticket）
 requirements_source: ticket
 related_requirements: [D-66, D-67]   # 記録用。司法には渡さない
@@ -10,8 +10,8 @@ estimate_h: 1.5
 time_limit_min: 120
 security_review: true          # 環境を読むスクリプト。秘密を出さないことを確かめる
 unattended: false
-branch: worktree-agent-adc14f6c46adfd541
-worker: W44
+branch: launch/night-2026-11-08-11679/T-044
+worker: night-worker
 files_allowed:
   - scripts/doctor.mjs                                # 新設：読み取りだけの診断
   - scripts/doctor.test.mjs                           # 新設：純粋関数の試験（node:test）
@@ -116,3 +116,5 @@ held の後、立法補佐が候補で `node scripts/doctor.mjs` と `--json` �
 - 2026-11-08T13:36:31+0900 night-runner: 作業員の実装を前検査で確認（HEAD 8d2c6b4）。status → review で再申請（試行 1）
 
 - 2026-11-08T13:41:29+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
+
+- 14:2x オーナーの指示で、同じ HEAD（7769f42、ブランチ `launch/night-2026-11-08-11679/T-044`。差分は `scripts/doctor.mjs`・`scripts/doctor.test.mjs` の2ファイル、+1359）のまま、コードを変えずに申請し直す（行政の長）。status → review
