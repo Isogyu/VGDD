@@ -118,3 +118,5 @@ held の後、立法補佐が候補で `node scripts/doctor.mjs` と `--json` �
 - 2026-11-08T13:41:29+0900 gate-runner: status → blocked（judge と Codex の判定が重大な指摘で分かれた（judge=APPROVED/0 件, codex=CHANGES_REQUIRED/1 件）。オーナーの裁定へ）
 
 - 14:2x オーナーの指示で、同じ HEAD（7769f42、ブランチ `launch/night-2026-11-08-11679/T-044`。差分は `scripts/doctor.mjs`・`scripts/doctor.test.mjs` の2ファイル、+1359）のまま、コードを変えずに申請し直す（行政の長）。status → review
+
+- 2026-11-08T14:25:11+0900 gate-runner: status → review（判定に合格（judge=APPROVED codex=APPROVED）。夜間のため統合せず、朝のオーナーの承認を待つ）
