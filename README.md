@@ -53,6 +53,7 @@ AI に開発を任せる範囲が広がるほど、人は「何を作らせる�
 | 期間中に作った：題材のアプリ | つぶやき業務ログ（`/`） | `src/` |
 | 他社の道具：Claude Code | **開発の中心**。行政の長・作業員・テスト担当・Claude の司法を動かす（立法補佐は別のアカウントの Claude）。権限ルール、PreToolUse フック、sandbox、worktree の仕組みは Claude Code のもの | Anthropic |
 | 他社の道具：Codex | **別系統**の司法・監査と、設計の相談 | OpenAI |
+| 開催前に作った：設計の出発点 | VGDD Phase 1 技術仕様書 v0.1（2026-11-01 作成。開催中はリポジトリの外に置き、コンペの終了後の 2026-11-10 に追加。コードではない） | [`docs/design/vgdd-phase1-spec-v0.1.md`](docs/design/vgdd-phase1-spec-v0.1.md) |
 | 他社の道具：`sandbox-exec` | 裁判所の監査の sandbox（呼び出すスクリプトは自作） | Apple（macOS） |
 
 ### Claude Code が開発の中心だった根拠
